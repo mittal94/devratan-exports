@@ -67,15 +67,13 @@ function FYBar({selected,onChange,counts}){ return <div style={{display:"flex",a
 
 function Logo({size=36}){
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100">
-      <circle cx="50" cy="46" r="38" fill="none" stroke="#4a90d9" strokeWidth="6"/>
-      <path d="M72,78 Q90,82 95,75" fill="none" stroke="#2255a4" strokeWidth="5" strokeLinecap="round"/>
-      <ellipse cx="50" cy="48" rx="28" ry="26" fill="url(#lg)"/>
-      <defs><radialGradient id="lg" cx="60%" cy="40%"><stop offset="0%" stopColor="#4a90d9"/><stop offset="100%" stopColor="#1a3070"/></radialGradient></defs>
-      <circle cx="43" cy="39" r="3" fill="#0a1a4a"/>
-      <path d="M35,52 Q29,57 27,63" fill="none" stroke="#0a1a4a" strokeWidth="3" strokeLinecap="round"/>
-      <path d="M37,38 Q32,46 37,54" fill="none" stroke="#0a1a4a" strokeWidth="2" strokeLinecap="round"/>
-    </svg>
+    <img 
+      src="https://raw.githubusercontent.com/mittal94/devratan-exports/refs/heads/main/Devratan%20Enterprises%20Logo_2_Devratan%20Enterprises%20Logo_2.svg"
+      alt="Devratan Enterprises LLP"
+      width={size}
+      height={size}
+      style={{objectFit:"contain"}}
+    />
   );
 }
 
@@ -400,6 +398,7 @@ export default function App(){
   const [viewShipId,setViewShipId]=useState(null);
   const [showUsers,setShowUsers]=useState(false);
   const [showChangePwd,setShowChangePwd]=useState(false);
+  const [showImport,setShowImport]=useState(false);
   const [shareText,setShareText]=useState(null);
   const [deleteId,setDeleteId]=useState(null);
   const [search,setSearch]=useState("");
@@ -517,7 +516,17 @@ export default function App(){
     setSaving(false);
   };
 
-  const profitCalc=useMemo(()=>calcProfit(profitForm),[profitForm]);
+  const doImport=rows=>{
+    const ex=new Set(ships.map(s=>s.invoice_no));
+    const nr=rows.filter(r=>!ex.has(r.invoice_no));
+    Promise.all(nr.map(r=>sb("shipments",{method:"POST",body:JSON.stringify(r)}))).then(()=>{loadAll();setShowImport(false);alert(`✅ Imported ${nr.length} new shipment(s). ${rows.length-nr.length} duplicate(s) skipped.`);}).catch(e=>alert("Error: "+e.message));
+  };
+
+  const IMPORT_HDRS=["Invoice No","Invoice Date (YYYY-MM-DD)","Buyer Name","Buyer Country","Product","Port of Loading","Port of Discharge","Shipping Bill No","Shipping Bill Date (YYYY-MM-DD)","Port Code","BL No","BL Date (YYYY-MM-DD)","Qty (MT)","Rate Per MT (USD)","Delivery Terms (CIF/FOB)","Exchange Rate","IGST (INR)","FOB Value (USD)","RODTEP Amount (INR)","RODTEP Status","GST Status","Remarks"];
+  const IMPORT_SAMPLE=[["INV-2627-001","2026-04-10","Sample Buyer","UAE","Basmati Rice 1121","Mundra","Dubai (Jebel Ali)","SB000001","2026-04-08","INMUN1","BL000001","2026-04-12","25","900","CIF","84.5","0","21000","18000","Pending","Pending",""]];
+  const dlCSV2=(name,csv)=>{const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([csv],{type:'text/csv'})),download:name});a.click();};
+  const escv=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const toCSV2=(h,r)=>[h.map(escv).join(','),...r.map(x=>x.map(escv).join(','))].join('\n');
   const shipCalc=useMemo(()=>calcShip(shipForm),[shipForm]);
   const selectedBC=bcs.find(b=>b.id===shipForm.bc_id)||null;
   const viewShip=ships.find(s=>s.id===viewShipId)||null;
@@ -556,6 +565,7 @@ export default function App(){
       <div style={{background:"linear-gradient(135deg,#1e3a5f 0%,#1e5799 100%)",color:"#fff",padding:"0 16px",display:"flex",alignItems:"center",justifyContent:"space-between",height:58,boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}><Logo size={36}/><div><div style={{fontWeight:800,fontSize:14,letterSpacing:0.8}}>{COMPANY.name}</div><div style={{fontSize:9.5,opacity:0.7}}>{COMPANY.tagline}</div></div></div>
         <div style={{display:"flex",alignItems:"center",gap:7}}>
+          {canEdit&&<button onClick={()=>setShowImport(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:600}}>📥 Import</button>}
           {canEdit&&<button onClick={exportCSV} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:600}}>📤 Export</button>}
           <button onClick={shareAll} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:600}}>📱 Share</button>
           {isAdmin&&<button onClick={()=>setShowUsers(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:600}}>👥 Users</button>}
@@ -777,6 +787,35 @@ export default function App(){
       {showProfit&&<ProfitFormModal fy={fy} editId={editProfitId} form={profitForm} calc={profitCalc} fyShips={fyShips} setF={setPF} onSelectInvoice={selectProfitInv} onSave={saveProfit} onClose={()=>setShowProfit(false)} saving={saving}/>}
       {showBC&&<BCModal bc={editBC} allShips={ships} token={session?.access_token} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
       {viewShipId&&<DetailModal shipment={viewShip} bc={viewShip?getBC(viewShip):null} onClose={()=>setViewShipId(null)}/>}
+      {showImport&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:12}}>
+          <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:620,maxHeight:"93vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{margin:0,color:"#1e3a5f"}}>📥 Import Shipment Data</h3><button onClick={()=>setShowImport(false)} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button></div>
+            <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:14,marginBottom:14}}>
+              <p style={{margin:"0 0 8px",fontSize:13,fontWeight:600,color:"#1d4ed8"}}>Step 1: Download the import template</p>
+              <p style={{margin:"0 0 10px",fontSize:12,color:"#374151"}}>Fill your data in this CSV. Do not change column headers. Dates: YYYY-MM-DD.</p>
+              <button onClick={()=>dlCSV2("Devratan_Import_Template.csv",toCSV2(IMPORT_HDRS,IMPORT_SAMPLE))} style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:7,padding:"8px 16px",cursor:"pointer",fontWeight:600,fontSize:13}}>⬇️ Download Template (CSV)</button>
+            </div>
+            <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:14,marginBottom:14}}>
+              <p style={{margin:"0 0 8px",fontSize:13,fontWeight:600,color:"#15803d"}}>Step 2: Upload your filled CSV</p>
+              <input type="file" accept=".csv,.txt" onChange={e=>{
+                const file=e.target.files[0];if(!file)return;
+                const reader=new FileReader();
+                reader.onload=ev=>{
+                  try{
+                    const lines=ev.target.result.split(/\r?\n/).filter(l=>l.trim());
+                    const rows=lines.slice(1).map(line=>{const cols=[],cur={v:"",q:false};for(const ch of line){if(ch==='"'){cur.q=!cur.q;}else if(ch===','&&!cur.q){cols.push(cur.v.trim());cur.v="";}else cur.v+=ch;}cols.push(cur.v.trim());return cols.map(c=>c.replace(/^"|"$/g,""));}).filter(r=>r[0]);
+                    const mapped=rows.map(r=>({invoice_no:r[0]||"",invoice_date:r[1]||null,buyer_name:r[2]||"",buyer_country:r[3]||"",product:r[4]||"",port_of_loading:r[5]||"",port_of_discharge:r[6]||"",shipping_bill_no:r[7]||"",shipping_bill_date:r[8]||null,port_code:r[9]||"",bl_no:r[10]||"",bl_date:r[11]||null,qty:r[12]||null,rate_per_mt:r[13]||null,delivery_terms:r[14]||"CIF",exchange_rate:r[15]||null,igst:r[16]||0,fob_value_usd:r[17]||null,rodtep_amount:r[18]||null,rodtep_status:r[19]||"Pending",gst_status:r[20]||"Pending",remarks:r[21]||"",bc_id:null}));
+                    if(window.confirm(`Import ${mapped.length} shipment(s)?`)){doImport(mapped);}
+                  }catch(ex){alert("Error reading file. Please use the template.");}
+                };
+                reader.readAsText(file);
+              }} style={{fontSize:13}}/>
+            </div>
+            <button onClick={()=>setShowImport(false)} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Close</button>
+          </div>
+        </div>
+      )}
       {showUsers&&<UserModal users={users} token={session?.access_token} onClose={()=>setShowUsers(false)} onRefresh={loadAll}/>}
       {showChangePwd&&<ChangePasswordModal token={session?.access_token} onClose={()=>setShowChangePwd(false)}/>}
       {shareText&&<ShareModal text={shareText} onClose={()=>setShareText(null)}/>}
