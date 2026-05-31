@@ -6,7 +6,13 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const sb = async (path, opts = {}) => {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", "Prefer": "return=representation", ...opts.headers },
+    headers: { 
+      "apikey": SUPABASE_KEY, 
+      "Authorization": `Bearer ${SUPABASE_KEY}`, 
+      "Content-Type": "application/json", 
+      "Prefer": "return=representation", 
+      ...opts.headers 
+    },
     ...opts
   });
   const data = await res.json();
@@ -419,10 +425,10 @@ export default function App(){
     setLoading(true);
     try{
       const[s,b,p,u]=await Promise.all([
-        sb("shipments?select=*&order=invoice_date.desc",{headers:{"Authorization":`Bearer ${session.access_token}`}}),
-        sb("bill_collections?select=*,irm_entries(*),brc_entries(*)",{headers:{"Authorization":`Bearer ${session.access_token}`}}),
-        sb("profitability?select=*&order=created_at.desc",{headers:{"Authorization":`Bearer ${session.access_token}`}}),
-        sb("users?select=*&order=name.asc",{headers:{"Authorization":`Bearer ${session.access_token}`}}),
+        sb("shipments?select=*&order=invoice_date.desc"),
+        sb("bill_collections?select=*,irm_entries(*),brc_entries(*)"),
+        sb("profitability?select=*&order=created_at.desc"),
+        sb("users?select=*&order=name.asc"),
       ]);
       setShips(s||[]);setBcs(b||[]);setProfits(p||[]);setUsers(u||[]);
     }catch(e){console.error(e);}
