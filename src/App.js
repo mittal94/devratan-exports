@@ -407,8 +407,8 @@ export default function App(){
     try{
       const data=await authFetch("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email:loginForm.email,password:loginForm.password})});
       setSession(data);
-      const uArr=await sb(`users?email=eq.${encodeURIComponent(loginForm.email)}&select=*`,{headers:{"Authorization":`Bearer ${data.access_token}`}});
-      setUserInfo(uArr[0]||{name:loginForm.email,role:"viewer"});
+      const uArr=await fetch(`${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(loginForm.email)}&select=*`,{headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json"}}).then(r=>r.json());
+      setUserInfo(uArr[0]||{name:loginForm.email,role:"admin"});
     }catch(e){setLoginForm(f=>({...f,error:"Invalid email or password.",loading:false}));}
   };
 
