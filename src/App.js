@@ -583,14 +583,14 @@ export default function App(){
 
       {loading&&<div style={{background:"#eff6ff",borderBottom:"1px solid #bfdbfe",padding:"8px 20px",fontSize:13,color:"#1d4ed8",textAlign:"center"}}>🔄 Loading data...</div>}
 
-      <div style={{padding:"18px 16px",maxWidth:1400,margin:"0 auto"}}>
+      <div style={{padding:"12px",maxWidth:1400,margin:"0 auto"}}>
         {tab==="dashboard"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12,marginBottom:18}}>
               <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:18}}>Dashboard</h2><p style={{margin:0,fontSize:12,color:"#64748b"}}>FY {fy} · Live cloud data</p></div>
               <FYBar selected={fy} onChange={setFy} counts={fyCounts}/>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:22}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:18}}>
               {[{l:"Total Shipments",v:totals.count,i:"📦",c:"#1e3a5f"},{l:"Invoice Value (USD)",v:fU(totals.invUSD),i:"🧾",c:"#0369a1"},{l:"Invoice Value (INR)",v:fR(totals.invINR),i:"₹",c:"#7c3aed"},{l:"FOB Value (USD)",v:fU(totals.fobUSD),i:"🚢",c:"#0891b2"},{l:"Payment Rcvd (USD)",v:fU(totals.paidUSD),i:"✅",c:"#16a34a"},{l:"Payment Rcvd (INR)",v:fR(totals.paidINR),i:"✅",c:"#15803d"},{l:"Balance Due (USD)",v:fU(totals.bal),i:"⏳",c:totals.bal>0?"#dc2626":"#16a34a"},{l:"BRC Pending",v:totals.brcPend,i:"🔴",c:"#d97706"},{l:"RODTEP Pending",v:totals.rodPend,i:"📋",c:"#d97706"},{l:"GST Pending",v:totals.gstPend,i:"📋",c:"#d97706"}].map((x,i)=>(
                 <div key={i} style={{background:"#fff",borderRadius:10,padding:"13px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderLeft:`4px solid ${x.c}`}}>
                   <div style={{fontSize:17}}>{x.i}</div><div style={{fontSize:14,fontWeight:700,color:x.c,margin:"3px 0 2px",wordBreak:"break-all"}}>{x.v}</div><div style={{fontSize:10.5,color:"#64748b"}}>{x.l}</div>
