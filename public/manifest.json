@@ -1,0 +1,18 @@
+{
+  "short_name": "Devratan",
+  "name": "Devratan Enterprises LLP - Export Manager",
+  "description": "Rice Export Shipment Manager",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/mittal94/devratan-exports/refs/heads/main/Devratan%20Enterprises%20Logo_2_Devratan%20Enterprises%20Logo_2.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1e3a5f",
+  "background_color": "#1e3a5f",
+  "orientation": "portrait-primary"
+}
