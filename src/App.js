@@ -151,17 +151,17 @@ function ChangePwdModal({onClose}){
 }
 
 function BCModal({bc,allShips,onSave,onClose,saving}){
-  const mkIRM=()=>({id:Date.now()+Math.random(),irmNo:"",irmDate:"",irmAmtUSD:"",exchangeRate:"",irmAmtINR:0});
+  const mkIRM=()=>({id:Date.now()+Math.random(),irmNo:"",irmDate:"",irmAmtUSD:"",exchangeRate:"",irmAmtINR:0,intermediaryChargesUSD:""});
   const mkBRC=()=>({id:Date.now()+Math.random(),brcNo:"",brcDate:"",brcAmtUSD:""});
   const [form,setForm]=useState(()=>{
-    if(bc){return{...bc,irm_entries:bc.irm_entries?.map(i=>({id:i.id,irmNo:i.irm_no,irmDate:i.irm_date,irmAmtUSD:i.irm_amt_usd,exchangeRate:i.exchange_rate,irmAmtINR:i.irm_amt_inr}))||[mkIRM()],brc_entries:bc.brc_entries?.map(b=>({id:b.id,brcNo:b.brc_no,brcDate:b.brc_date,brcAmtUSD:b.brc_amt_usd}))||[mkBRC()]};}
+    if(bc){return{...bc,irm_entries:bc.irm_entries?.map(i=>({id:i.id,irmNo:i.irm_no,irmDate:i.irm_date,irmAmtUSD:i.irm_amt_usd,exchangeRate:i.exchange_rate,irmAmtINR:i.irm_amt_inr,intermediaryChargesUSD:i.intermediary_charges_usd||0}))||[mkIRM()],brc_entries:bc.brc_entries?.map(b=>({id:b.id,brcNo:b.brc_no,brcDate:b.brc_date,brcAmtUSD:b.brc_amt_usd}))||[mkBRC()]};}
     return{id:null,bank_name:"SBI",bc_no:"",bc_date:"",linked_invoices:[],irm_entries:[mkIRM()],brc_entries:[mkBRC()],total_amt_usd:0,total_amt_inr:0};
   });
   const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
   const updIRM=(id,k,v)=>setForm(f=>({...f,irm_entries:f.irm_entries.map(i=>{if(i.id!==id)return i;const u={...i,[k]:v};if(k==="irmAmtUSD"||k==="exchangeRate")u.irmAmtINR=n(k==="irmAmtUSD"?v:u.irmAmtUSD)*n(k==="exchangeRate"?v:u.exchangeRate);return u;})}));
   const updBRC=(id,k,v)=>setForm(f=>({...f,brc_entries:f.brc_entries.map(b=>b.id!==id?b:{...b,[k]:v})}));
   const togInv=inv=>sf("linked_invoices",form.linked_invoices?.includes(inv)?form.linked_invoices.filter(x=>x!==inv):[...(form.linked_invoices||[]),inv]);
-  const totUSD=form.irm_entries?.reduce((s,i)=>s+n(i.irmAmtUSD),0)||0;
+  const totUSD=form.irm_entries?.reduce((s,i)=>s+n(i.irmAmtUSD)+n(i.intermediaryChargesUSD),0)||0;
   const totINR=form.irm_entries?.reduce((s,i)=>s+n(i.irmAmtINR),0)||0;
   const save=()=>{if(!form.bc_no){alert("BC No required.");return;}onSave({...form,total_amt_usd:totUSD,total_amt_inr:totINR});};
   return(
@@ -181,7 +181,7 @@ function BCModal({bc,allShips,onSave,onClose,saving}){
           <div key={irm.id} style={{background:"#f8fafc",borderRadius:10,padding:14,marginBottom:10,border:"1px solid #e2e8f0"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{fontWeight:700,color:"#1e3a5f",fontSize:13}}>IRM #{idx+1}</span>{form.irm_entries.length>1&&<button onClick={()=>setForm(f=>({...f,irm_entries:f.irm_entries.filter(i=>i.id!==irm.id)}))} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>Remove</button>}</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-              {[["irmNo","IRM No","text"],["irmDate","IRM Date","date"],["irmAmtUSD","IRM Amt (USD)","number"],["exchangeRate","Exchange Rate","number"]].map(([k,l,t])=><div key={k}><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label><input type={t} value={irm[k]||""} onChange={e=>updIRM(irm.id,k,e.target.value)} style={iS} step={t==="number"?"any":undefined}/></div>)}
+              {[["irmNo","IRM No","text"],["irmDate","IRM Date","date"],["irmAmtUSD","IRM Amt (USD)","number"],["exchangeRate","Exchange Rate","number"],["intermediaryChargesUSD","Intermediary Charges (USD)","number"]].map(([k,l,t])=><div key={k}><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label><input type={t} value={irm[k]||""} onChange={e=>updIRM(irm.id,k,e.target.value)} style={iS} step={t==="number"?"any":undefined}/></div>)}
               <div><label style={{fontSize:11.5,fontWeight:600,color:"#0369a1",display:"block",marginBottom:3}}>IRM Amt (INR) Auto</label><input readOnly value={fR(irm.irmAmtINR||0)} style={cS}/></div>
             </div>
           </div>
@@ -459,6 +459,8 @@ export default function App(){
     setSaving(true);
     try{
       const payload={...profitForm};delete payload.id;delete payload.created_at;
+      const numFields=["invoice_amt_inr","payment_received_inr","rice_purchase_val","pp_bags_purchase_val","local_transport","ocean_freight","cha_clearing","shipping_line_charges","inspect_agency","coc_ectn","other_exp"];
+      numFields.forEach(f=>{if(payload[f]===""||payload[f]===undefined)payload[f]=null;else payload[f]=Number(payload[f])||null;});
       if(editProfitId){await sb(`profitability?id=eq.${editProfitId}`,{method:"PATCH",body:JSON.stringify(payload)});}
       else{await sb("profitability",{method:"POST",body:JSON.stringify(payload)});}
       await loadAll();setShowProfit(false);
@@ -482,7 +484,7 @@ export default function App(){
         const res=await sb("bill_collections",{method:"POST",body:JSON.stringify({bank_name:bcData.bank_name,bc_no:bcData.bc_no,bc_date:bcData.bc_date,linked_invoices:bcData.linked_invoices,total_amt_usd:bcData.total_amt_usd,total_amt_inr:bcData.total_amt_inr})});
         bcId=res[0]?.id;
       }
-      if(irm_entries?.length){await sb("irm_entries",{method:"POST",body:JSON.stringify(irm_entries.map(i=>({bc_id:bcId,irm_no:i.irmNo||i.irm_no||"",irm_date:i.irmDate||i.irm_date||null,irm_amt_usd:n(i.irmAmtUSD||i.irm_amt_usd),exchange_rate:n(i.exchangeRate||i.exchange_rate),irm_amt_inr:n(i.irmAmtINR||i.irm_amt_inr)})))});}
+      if(irm_entries?.length){await sb("irm_entries",{method:"POST",body:JSON.stringify(irm_entries.map(i=>({bc_id:bcId,irm_no:i.irmNo||i.irm_no||"",irm_date:i.irmDate||i.irm_date||null,irm_amt_usd:n(i.irmAmtUSD||i.irm_amt_usd),exchange_rate:n(i.exchangeRate||i.exchange_rate),irm_amt_inr:n(i.irmAmtINR||i.irm_amt_inr),intermediary_charges_usd:n(i.intermediaryChargesUSD||i.intermediary_charges_usd||0)})))});}
       if(brc_entries?.length){await sb("brc_entries",{method:"POST",body:JSON.stringify(brc_entries.map(b=>({bc_id:bcId,brc_no:b.brcNo||b.brc_no||"",brc_date:b.brcDate||b.brc_date||null,brc_amt_usd:n(b.brcAmtUSD||b.brc_amt_usd)})))});}
       await loadAll();setShowBC(false);setEditBC(null);
     }catch(e){alert("Error saving BC: "+e.message);}
