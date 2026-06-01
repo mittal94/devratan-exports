@@ -1,18 +1,11 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 
-/* ── Supabase Config ─────────────────────────────────────────────────────── */
 const SUPABASE_URL = "https://jqbagmezerzgewxaqtpt.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxYmFnbWV6ZXJ6Z2V3eGFxdHB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjMxMjIsImV4cCI6MjA5NTc5OTEyMn0.HAG23sw41cMXiyrnTC2-9dTZn5bO0oXMc69XKwB3IkU";
 
 const sb = async (path, opts = {}) => {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: { 
-      "apikey": SUPABASE_KEY, 
-      "Authorization": `Bearer ${SUPABASE_KEY}`, 
-      "Content-Type": "application/json", 
-      "Prefer": "return=representation", 
-      ...opts.headers 
-    },
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", "Prefer": "return=representation", ...opts.headers },
     ...opts
   });
   const data = await res.json();
@@ -30,17 +23,15 @@ const authFetch = async (path, opts = {}, token) => {
   return data;
 };
 
-/* ── Constants ───────────────────────────────────────────────────────────── */
-const COMPANY   = { name: "DEVRATAN ENTERPRISES LLP", tagline: "We Create Not Produce", address: "Off No 206, II Floor, Indore Trade Center, Madhumilan Square, Indore MP 452001" };
-const ALL_FYS   = ["2020-21","2021-22","2022-23","2023-24","2024-25","2025-26","2026-27"];
-const CURR_FY   = "2026-27";
-const BANKS     = ["SBI","INDUSIND"];
+const COMPANY = { name: "DEVRATAN ENTERPRISES LLP", tagline: "We Create Not Produce", address: "Off No 206, II Floor, Indore Trade Center, Madhumilan Square, Indore MP 452001" };
+const ALL_FYS = ["2020-21","2021-22","2022-23","2023-24","2024-25","2025-26","2026-27"];
+const CURR_FY = "2026-27";
+const BANKS = ["SBI","INDUSIND"];
 const DEL_TERMS = ["CIF","FOB"];
 const RODTEP_ST = ["Pending","Received","Error"];
-const GST_ST    = ["Pending","Received","Error"];
+const GST_ST = ["Pending","Received","Error"];
 const COUNTRIES = ["Afghanistan","Albania","Algeria","Andorra","Angola","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Cambodia","Cameroon","Canada","Chad","Chile","China","Colombia","Congo (DRC)","Costa Rica","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominican Republic","Ecuador","Egypt","El Salvador","Estonia","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Guatemala","Guinea","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Ivory Coast","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kuwait","Laos","Latvia","Lebanon","Libya","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Mauritania","Mauritius","Mexico","Moldova","Mongolia","Morocco","Mozambique","Myanmar","Namibia","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","Norway","Oman","Pakistan","Palestine","Panama","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saudi Arabia","Senegal","Serbia","Sierra Leone","Singapore","Slovakia","Slovenia","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Togo","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Uganda","Ukraine","UAE","UK","USA","Uruguay","Uzbekistan","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
 
-/* ── Helpers ─────────────────────────────────────────────────────────────── */
 const getFY = d => { if(!d)return CURR_FY; const dt=new Date(d),y=dt.getFullYear(),m=dt.getMonth()+1; return m>=4?`${y}-${String(y+1).slice(2)}`:`${y-1}-${String(y).slice(2)}`; };
 const n = v => Number(v)||0;
 const fi = (v,d=2) => n(v).toLocaleString("en-IN",{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -49,33 +40,22 @@ const fR = v => "₹"+fi(v);
 const calcShip = s => { const inv=n(s.qty)*n(s.rate_per_mt); return { invoiceAmtUSD:inv, invoiceAmtINR:inv*n(s.exchange_rate), grossTotal:inv*n(s.exchange_rate)+n(s.igst), fobValueINR:n(s.fob_value_usd)*n(s.exchange_rate) }; };
 const calcProfit = p => { const rice=n(p.rice_purchase_val),interest=rice*0.01,bankCh=n(p.payment_received_inr)*0.0011,totalFOB=n(p.cha_clearing)+n(p.shipping_line_charges)+n(p.inspect_agency)+n(p.coc_ectn)+n(p.other_exp),totalCIF=rice+n(p.pp_bags_purchase_val)+n(p.local_transport)+interest+bankCh+n(p.ocean_freight)+totalFOB; return {interest,bankCh,totalFOB,totalCIF,profit:n(p.payment_received_inr)-totalCIF}; };
 
-/* ── Styles ──────────────────────────────────────────────────────────────── */
 const iS = {width:"100%",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px",fontSize:13,outline:"none",boxSizing:"border-box",background:"#f8fafc"};
 const cS = {...iS,background:"#e0f2fe",color:"#0369a1",fontWeight:600,cursor:"not-allowed"};
 const bMap = {Received:{bg:"#dcfce7",color:"#16a34a"},Pending:{bg:"#fef3c7",color:"#d97706"},Error:{bg:"#fee2e2",color:"#dc2626"},admin:{bg:"#dbeafe",color:"#1d4ed8"},accountant:{bg:"#f3e8ff",color:"#7c3aed"},viewer:{bg:"#f1f5f9",color:"#64748b"}};
 
-/* ── CSV helpers ─────────────────────────────────────────────────────────── */
 const esc = v => `"${String(v??'').replace(/"/g,'""')}"`;
 const toCSV = (h,r) => [h.map(esc).join(','),...r.map(x=>x.map(esc).join(','))].join('\n');
 const dlCSV = (name,csv) => { const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([csv],{type:'text/csv'})),download:name}); a.click(); };
 
-/* ── Sub Components ──────────────────────────────────────────────────────── */
+const IMPORT_HDRS = ["Invoice No","Invoice Date (YYYY-MM-DD)","Buyer Name","Buyer Country","Product","Port of Loading","Port of Discharge","Shipping Bill No","Shipping Bill Date (YYYY-MM-DD)","Port Code","BL No","BL Date (YYYY-MM-DD)","Qty (MT)","Rate Per MT (USD)","Delivery Terms (CIF/FOB)","Exchange Rate","IGST (INR)","FOB Value (USD)","RODTEP Amount (INR)","RODTEP Status","GST Status","Remarks"];
+const IMPORT_SAMPLE = [["INV-2627-001","2026-04-10","Sample Buyer","UAE","Basmati Rice 1121","Mundra","Dubai (Jebel Ali)","SB000001","2026-04-08","INMUN1","BL000001","2026-04-12","25","900","CIF","84.5","0","21000","18000","Pending","Pending",""]];
+
 function Badge({val,map}){ const m=map||bMap,c=m[val]||{bg:"#f1f5f9",color:"#64748b"}; return <span style={{background:c.bg,color:c.color,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{val||"—"}</span>; }
 function Row({l,v,bold,col}){ return <div style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid #f8fafc",fontSize:12.5}}><span style={{color:"#64748b"}}>{l}</span><span style={{fontWeight:bold?700:600,color:col||"#1e293b"}}>{v}</span></div>; }
 function SH({t,color="#1e3a5f",bg="#f1f5f9"}){ return <div style={{fontSize:12.5,fontWeight:700,color,background:bg,borderRadius:6,padding:"6px 10px",marginBottom:10,marginTop:14}}>{t}</div>; }
 function FYBar({selected,onChange,counts}){ return <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:12,fontWeight:600,color:"#64748b",whiteSpace:"nowrap"}}>FY:</span><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{ALL_FYS.map(fy=><button key={fy} onClick={()=>onChange(fy)} style={{background:selected===fy?"linear-gradient(135deg,#1e3a5f,#16a34a)":"#f1f5f9",color:selected===fy?"#fff":"#64748b",border:"none",borderRadius:20,padding:"4px 11px",cursor:"pointer",fontWeight:selected===fy?700:500,fontSize:11.5,boxShadow:selected===fy?"0 2px 8px rgba(30,58,95,0.25)":"none"}}>FY {fy}{counts[fy]>0?` (${counts[fy]})`:"" }</button>)}</div></div>; }
-
-function Logo({size=36}){
-  return (
-    <img 
-      src="https://raw.githubusercontent.com/mittal94/devratan-exports/refs/heads/main/Devratan%20Enterprises%20Logo_2_Devratan%20Enterprises%20Logo_2.svg"
-      alt="Devratan Enterprises LLP"
-      width={size}
-      height={size}
-      style={{objectFit:"contain"}}
-    />
-  );
-}
+function Logo({size=36}){ return <img src="https://raw.githubusercontent.com/mittal94/devratan-exports/refs/heads/main/Devratan%20Enterprises%20Logo_2_Devratan%20Enterprises%20Logo_2.svg" alt="Devratan" width={size} height={size} style={{objectFit:"contain"}}/> }
 
 function ShareModal({text,onClose}){
   return (
@@ -94,74 +74,59 @@ function ShareModal({text,onClose}){
   );
 }
 
-function UserModal({users,token,onClose,onRefresh}){
-  const [form,setForm] = useState({name:"",email:"",role:"viewer",password:""});
-  const [loading,setLoading] = useState(false);
-  const [msg,setMsg] = useState("");
-  const [editId,setEditId] = useState(null);
-  const saveUser = async () => {
-    if(!form.name||!form.email||!form.role){setMsg("Name, email and role required.");return;}
+function UserModal({users,onClose,onRefresh}){
+  const [form,setForm]=useState({name:"",email:"",role:"viewer",password:""});
+  const [loading,setLoading]=useState(false);
+  const [msg,setMsg]=useState("");
+  const [editId,setEditId]=useState(null);
+  const saveUser=async()=>{
+    if(!form.name||!form.email){setMsg("Name and email required.");return;}
     setLoading(true);
-    try {
+    try{
       if(editId){
         await sb(`users?id=eq.${editId}`,{method:"PATCH",body:JSON.stringify({name:form.name,role:form.role})});
-        setMsg("User updated!");
-      } else {
+        setMsg("✅ User updated!");
+      }else{
         await authFetch("/auth/v1/admin/users",{method:"POST",headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`},body:JSON.stringify({email:form.email,password:form.password||"Devratan@2526",email_confirm:true})});
         await sb("users",{method:"POST",body:JSON.stringify({name:form.name,email:form.email,role:form.role})});
-        setMsg("User created! Password: "+(form.password||"Devratan@2526"));
+        setMsg("✅ User created! Password: "+(form.password||"Devratan@2526"));
       }
-      setForm({name:"",email:"",role:"viewer",password:""});
-      setEditId(null);
-      onRefresh();
-    } catch(e){ setMsg("Error: "+e.message); }
+      setForm({name:"",email:"",role:"viewer",password:""});setEditId(null);onRefresh();
+    }catch(e){setMsg("Error: "+e.message);}
     setLoading(false);
   };
-  const deleteUser = async (id,email) => {
-    if(!window.confirm(`Delete user ${email}?`))return;
+  const deleteUser=async(id,email)=>{
+    if(!window.confirm(`Delete ${email}?`))return;
     setLoading(true);
-    try{ await sb(`users?id=eq.${id}`,{method:"DELETE"}); setMsg("Deleted."); onRefresh(); }
-    catch(e){ setMsg("Error: "+e.message); }
+    try{await sb(`users?id=eq.${id}`,{method:"DELETE"});setMsg("✅ Deleted.");onRefresh();}
+    catch(e){setMsg("Error: "+e.message);}
     setLoading(false);
   };
-  const startEdit = u => { setEditId(u.id); setForm({name:u.name,email:u.email,role:u.role,password:""}); };
-  return (
+  return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:12}}>
       <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:680,maxHeight:"93vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{margin:0,color:"#1e3a5f"}}>👥 User Management</h3><button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button></div>
         <SH t="Current Users"/>
-        <div style={{marginBottom:16}}>
-          {users.map(u=>(
-            <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"#f8fafc",borderRadius:8,marginBottom:8}}>
-              <div><div style={{fontWeight:600,color:"#1e293b",fontSize:13}}>{u.name}</div><div style={{fontSize:12,color:"#64748b"}}>{u.email}</div></div>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <Badge val={u.role}/>
-                <button onClick={()=>startEdit(u)} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:12}}>Edit</button>
-                <button onClick={()=>deleteUser(u.id,u.email)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:12}}>Delete</button>
-              </div>
+        {users.map(u=>(
+          <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"#f8fafc",borderRadius:8,marginBottom:8,flexWrap:"wrap",gap:8}}>
+            <div><div style={{fontWeight:600,color:"#1e293b",fontSize:13}}>{u.name}</div><div style={{fontSize:12,color:"#64748b"}}>{u.email}</div></div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <Badge val={u.role}/>
+              <button onClick={()=>{setEditId(u.id);setForm({name:u.name,email:u.email,role:u.role,password:""});}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:12}}>Edit</button>
+              <button onClick={()=>deleteUser(u.id,u.email)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:12}}>Delete</button>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
         <SH t={editId?"✏️ Edit User":"➕ Add New User"}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
           {[["name","Full Name","text"],["email","Email","email"],["password","Password (default: Devratan@2526)","password"]].map(([k,l,t])=>(
-            <div key={k}>
-              <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label>
-              <input type={t} value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={iS} disabled={editId&&k==="email"}/>
-            </div>
+            <div key={k}><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label><input type={t} value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={iS} disabled={editId&&k==="email"}/></div>
           ))}
-          <div>
-            <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Role</label>
-            <select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={iS}>
-              <option value="admin">Admin</option>
-              <option value="accountant">Accountant</option>
-              <option value="viewer">Viewer</option>
-            </select>
-          </div>
+          <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Role</label><select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={iS}><option value="admin">Admin</option><option value="accountant">Accountant</option><option value="viewer">Viewer</option></select></div>
         </div>
         {msg&&<div style={{background:msg.includes("Error")?"#fee2e2":"#dcfce7",color:msg.includes("Error")?"#dc2626":"#16a34a",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:12}}>{msg}</div>}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-          {editId&&<button onClick={()=>{setEditId(null);setForm({name:"",email:"",role:"viewer",password:""});}} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600}}>Cancel</button>}
+          {editId&&<button onClick={()=>{setEditId(null);setForm({name:"",email:"",role:"viewer",password:""}); }} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600}}>Cancel</button>}
           <button onClick={saveUser} disabled={loading} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 22px",cursor:"pointer",fontWeight:700}}>{loading?"Saving...":editId?"Update":"Add User"}</button>
         </div>
       </div>
@@ -170,29 +135,23 @@ function UserModal({users,token,onClose,onRefresh}){
 }
 
 function ChangePasswordModal({token,onClose}){
-  const [form,setForm] = useState({newPass:"",confirm:""});
-  const [msg,setMsg] = useState("");
-  const [loading,setLoading] = useState(false);
-  const save = async () => {
+  const [form,setForm]=useState({newPass:"",confirm:""});
+  const [msg,setMsg]=useState("");
+  const [loading,setLoading]=useState(false);
+  const save=async()=>{
     if(form.newPass.length<8){setMsg("Min 8 characters.");return;}
     if(form.newPass!==form.confirm){setMsg("Passwords do not match.");return;}
     setLoading(true);
-    try{
-      await authFetch("/auth/v1/user",{method:"PUT",body:JSON.stringify({password:form.newPass})},token);
-      setMsg("✅ Password changed!");
-      setTimeout(onClose,2000);
-    }catch(e){setMsg("Error: "+e.message);}
+    try{await authFetch("/auth/v1/user",{method:"PUT",body:JSON.stringify({password:form.newPass})},token);setMsg("✅ Password changed!");setTimeout(onClose,2000);}
+    catch(e){setMsg("Error: "+e.message);}
     setLoading(false);
   };
-  return (
+  return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:12}}>
       <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{margin:0,color:"#1e3a5f"}}>🔑 Change Password</h3><button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button></div>
         {[["newPass","New Password","password"],["confirm","Confirm Password","password"]].map(([k,l,t])=>(
-          <div key={k} style={{marginBottom:12}}>
-            <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label>
-            <input type={t} value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={iS}/>
-          </div>
+          <div key={k} style={{marginBottom:12}}><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label><input type={t} value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={iS}/></div>
         ))}
         {msg&&<div style={{background:msg.includes("Error")?"#fee2e2":"#dcfce7",color:msg.includes("Error")?"#dc2626":"#16a34a",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:12}}>{msg}</div>}
         <button onClick={save} disabled={loading} style={{width:"100%",background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"10px 0",cursor:"pointer",fontWeight:700}}>{loading?"Saving...":"Change Password"}</button>
@@ -214,14 +173,13 @@ function BCModal({bc,allShips,onSave,onClose,saving}){
   const togInv=inv=>sf("linked_invoices",form.linked_invoices?.includes(inv)?form.linked_invoices.filter(x=>x!==inv):[...(form.linked_invoices||[]),inv]);
   const totUSD=form.irm_entries?.reduce((s,i)=>s+n(i.irmAmtUSD),0)||0;
   const totINR=form.irm_entries?.reduce((s,i)=>s+n(i.irmAmtINR),0)||0;
-  const save=()=>{if(!form.bc_no){alert("BC No required.");return;}onSave({...form,total_amt_usd:totUSD,total_amt_inr:totINR});};
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:12}}>
       <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:820,maxHeight:"95vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><h3 style={{margin:0,color:"#1e3a5f",fontSize:17}}>{bc?"✏️ Edit":"➕ Create"} Bill Collection</h3><button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button></div>
         <SH t="🏦 Collection Details"/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-          <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Bank</label><select value={form.bank_name||"SBI"} onChange={e=>sf("bank_name",e.target.value)} style={iS}>{["SBI","INDUSIND"].map(b=><option key={b}>{b}</option>)}</select></div>
+          <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Bank</label><select value={form.bank_name||"SBI"} onChange={e=>sf("bank_name",e.target.value)} style={iS}>{BANKS.map(b=><option key={b}>{b}</option>)}</select></div>
           <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>BC No *</label><input value={form.bc_no||""} onChange={e=>sf("bc_no",e.target.value)} style={iS}/></div>
           <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>BC Date</label><input type="date" value={form.bc_date||""} onChange={e=>sf("bc_date",e.target.value)} style={iS}/></div>
         </div>
@@ -231,7 +189,7 @@ function BCModal({bc,allShips,onSave,onClose,saving}){
         {form.irm_entries?.map((irm,idx)=>(
           <div key={irm.id} style={{background:"#f8fafc",borderRadius:10,padding:14,marginBottom:10,border:"1px solid #e2e8f0"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{fontWeight:700,color:"#1e3a5f",fontSize:13}}>IRM #{idx+1}</span>{form.irm_entries.length>1&&<button onClick={()=>setForm(f=>({...f,irm_entries:f.irm_entries.filter(i=>i.id!==irm.id)}))} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>Remove</button>}</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               {[["irmNo","IRM No","text"],["irmDate","IRM Date","date"],["irmAmtUSD","IRM Amt (USD)","number"],["exchangeRate","Exchange Rate","number"]].map(([k,l,t])=><div key={k}><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label><input type={t} value={irm[k]||""} onChange={e=>updIRM(irm.id,k,e.target.value)} style={iS} step={t==="number"?"any":undefined}/></div>)}
               <div><label style={{fontSize:11.5,fontWeight:600,color:"#0369a1",display:"block",marginBottom:3}}>IRM Amt (INR) — Auto</label><input readOnly value={fR(irm.irmAmtINR||0)} style={cS}/></div>
             </div>
@@ -252,7 +210,7 @@ function BCModal({bc,allShips,onSave,onClose,saving}){
         </div>
         <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20}}>
           <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
-          <button onClick={save} disabled={saving} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 24px",cursor:"pointer",fontWeight:700}}>{saving?"Saving...":"Save BC"}</button>
+          <button onClick={()=>{if(!form.bc_no){alert("BC No required.");return;}onSave({...form,total_amt_usd:totUSD,total_amt_inr:totINR});}} disabled={saving} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 24px",cursor:"pointer",fontWeight:700}}>{saving?"Saving...":"Save BC"}</button>
         </div>
       </div>
     </div>
@@ -264,7 +222,7 @@ function DetailModal({shipment,bc,onClose}){
   const s=shipment,c=calcShip(s);
   const brcNos=bc?bc.brc_entries?.map(b=>b.brc_no).filter(Boolean).join(", "):"—";
   const brcDates=bc?bc.brc_entries?.map(b=>b.brc_date).filter(Boolean).join(", "):"—";
-  const rows=[["FY",`FY ${getFY(s.invoice_date)}`],["Invoice Date",s.invoice_date],["Buyer",s.buyer_name],["Country",s.buyer_country],["Product",s.product],["Port of Loading",s.port_of_loading],["Port of Discharge",s.port_of_discharge],["SB No",s.shipping_bill_no],["SB Date",s.shipping_bill_date],["Port Code",s.port_code],["BL No",s.bl_no],["BL Date",s.bl_date],["Qty (MT)",fi(s.qty)],["Rate/MT (USD)",fi(s.rate_per_mt)],["Delivery Terms",s.delivery_terms],["Invoice Amt (USD)",fU(c.invoiceAmtUSD)],["Exchange Rate",fi(s.exchange_rate)],["Invoice Amt (INR)",fR(c.invoiceAmtINR)],["IGST (INR)",fR(s.igst)],["Gross Total (INR)",fR(c.grossTotal)],["FOB (USD)",fU(s.fob_value_usd)],["FOB (INR)",fR(c.fobValueINR)],["RODTEP (INR)",fR(s.rodtep_amount)],["RODTEP Status",s.rodtep_status],["GST Status",s.gst_status],["Bill Collection No",bc?bc.bc_no:"—"],["BC Date",bc?bc.bc_date:"—"],["BRC No(s)",brcNos],["BRC Date(s)",brcDates],["Payment Rcvd (USD)",bc?fU(bc.total_amt_usd):"—"],["Payment Rcvd (INR)",bc?fR(bc.total_amt_inr):"—"],["Balance (USD)",bc?fU(c.invoiceAmtUSD-bc.total_amt_usd):fU(c.invoiceAmtUSD)],["Remarks",s.remarks||"—"]];
+  const rows=[["FY",`FY ${getFY(s.invoice_date)}`],["Invoice Date",s.invoice_date],["Buyer",s.buyer_name],["Country",s.buyer_country],["Product",s.product],["Port of Loading",s.port_of_loading],["Port of Discharge",s.port_of_discharge],["SB No",s.shipping_bill_no],["SB Date",s.shipping_bill_date],["Port Code",s.port_code],["BL No",s.bl_no],["BL Date",s.bl_date],["Qty (MT)",fi(s.qty)],["Rate/MT",fi(s.rate_per_mt)],["Delivery Terms",s.delivery_terms],["Invoice Amt (USD)",fU(c.invoiceAmtUSD)],["Exchange Rate",fi(s.exchange_rate)],["Invoice Amt (INR)",fR(c.invoiceAmtINR)],["IGST (INR)",fR(s.igst)],["Gross Total (INR)",fR(c.grossTotal)],["FOB (USD)",fU(s.fob_value_usd)],["FOB (INR)",fR(c.fobValueINR)],["RODTEP (INR)",fR(s.rodtep_amount)],["RODTEP Status",s.rodtep_status],["GST Status",s.gst_status],["Bill Collection No",bc?bc.bc_no:"—"],["BC Date",bc?bc.bc_date:"—"],["BRC No(s)",brcNos],["BRC Date(s)",brcDates],["Payment Rcvd (USD)",bc?fU(bc.total_amt_usd):"—"],["Payment Rcvd (INR)",bc?fR(bc.total_amt_inr):"—"],["Balance (USD)",bc?fU(c.invoiceAmtUSD-bc.total_amt_usd):fU(c.invoiceAmtUSD)],["Remarks",s.remarks||"—"]];
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:150,padding:12}}>
       <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:680,maxHeight:"93vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
@@ -276,38 +234,47 @@ function DetailModal({shipment,bc,onClose}){
 }
 
 function ProfitabilityContent({fy,fyProfits,canEdit,canDelete,openAddProfit,openEditProfit,onDelete}){
-  const totP=fyProfits.reduce((a,p)=>{const c=calcProfit(p);a.invINR+=n(p.invoice_amt_inr);a.paidINR+=n(p.payment_received_inr);a.totalCIF+=c.totalCIF;a.profit+=c.profit;return a;},{invINR:0,paidINR:0,totalCIF:0,profit:0});
+  const totP=fyProfits.reduce((a,p)=>{
+    try{
+      const c=calcProfit(p);
+      a.invINR+=n(p.invoice_amt_inr);
+      a.paidINR+=n(p.payment_received_inr);
+      a.totalCIF+=c.totalCIF;
+      a.profit+=c.profit;
+    }catch(e){}
+    return a;
+  },{invINR:0,paidINR:0,totalCIF:0,profit:0});
   return(
     <>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:12,marginBottom:20}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
         {[{l:"Invoice Value (INR)",v:fR(totP.invINR),c:"#0369a1"},{l:"Payment Received (INR)",v:fR(totP.paidINR),c:"#15803d"},{l:"Total CIF Cost (INR)",v:fR(totP.totalCIF),c:"#d97706"},{l:"Net Profit (INR)",v:fR(totP.profit),c:totP.profit>=0?"#16a34a":"#dc2626"}].map((x,i)=>(
-          <div key={i} style={{background:"#fff",borderRadius:10,padding:"13px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderTop:`3px solid ${x.c}`}}>
-            <div style={{fontSize:15,fontWeight:700,color:x.c,wordBreak:"break-all"}}>{x.v}</div>
+          <div key={i} style={{background:"#fff",borderRadius:10,padding:"12px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderTop:`3px solid ${x.c}`}}>
+            <div style={{fontSize:14,fontWeight:700,color:x.c,wordBreak:"break-all"}}>{x.v}</div>
             <div style={{fontSize:11,color:"#64748b",marginTop:3}}>{x.l}</div>
           </div>
         ))}
       </div>
       {fyProfits.length===0
-        ?<div style={{background:"#fff",borderRadius:12,padding:50,textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:10}}>📊</div><div style={{fontSize:15,fontWeight:600,marginBottom:6}}>No entries for FY {fy}</div>{canEdit&&<button onClick={openAddProfit} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600,marginTop:10}}>+ Add First Entry</button>}</div>
-        :<div style={{display:"grid",gap:14}}>
+        ?<div style={{background:"#fff",borderRadius:12,padding:40,textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:10}}>📊</div><div style={{fontSize:15,fontWeight:600,marginBottom:6}}>No entries for FY {fy}</div>{canEdit&&<button onClick={openAddProfit} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600,marginTop:10}}>+ Add First Entry</button>}</div>
+        :<div style={{display:"grid",gap:12}}>
           {fyProfits.map(p=>{
             const c=calcProfit(p);
             return(
               <div key={p.id} style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
-                <div style={{background:"linear-gradient(135deg,#1e3a5f,#1e5799)",padding:"11px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-                  <div><span style={{fontWeight:700,color:"#fff",fontSize:14}}>{p.invoice_no}</span><span style={{marginLeft:10,fontSize:12,color:"#93c5fd"}}>{p.invoice_date} · {p.buyer_name} → {p.port_of_discharge}</span></div>
+                <div style={{background:"linear-gradient(135deg,#1e3a5f,#1e5799)",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                  <div><span style={{fontWeight:700,color:"#fff",fontSize:13}}>{p.invoice_no}</span><span style={{marginLeft:8,fontSize:11,color:"#93c5fd"}}>{p.invoice_date} · {p.buyer_name}</span></div>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#93c5fd"}}>Net Profit</div><div style={{fontSize:17,fontWeight:700,color:c.profit>=0?"#86efac":"#fca5a5"}}>{fR(c.profit)}</div></div>
+                    <div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#93c5fd"}}>Net Profit</div><div style={{fontSize:16,fontWeight:700,color:c.profit>=0?"#86efac":"#fca5a5"}}>{fR(c.profit)}</div></div>
                     {canEdit&&<button onClick={()=>openEditProfit(p)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
                     {canDelete&&<button onClick={()=>onDelete(p.id)} style={{background:"rgba(220,38,38,0.3)",color:"#fca5a5",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
                   </div>
                 </div>
-                <div style={{padding:"12px 16px"}}>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(185px,1fr))",gap:12}}>
-                    <div style={{borderRight:"1px solid #f1f5f9",paddingRight:12}}><div style={{fontSize:11,fontWeight:700,color:"#0369a1",marginBottom:6,textTransform:"uppercase"}}>Revenue</div><Row l="Invoice Amt (INR)" v={fR(p.invoice_amt_inr)}/><Row l="Payment Rcvd (INR)" v={fR(p.payment_received_inr)}/></div>
-                    <div style={{borderRight:"1px solid #f1f5f9",paddingRight:12}}><div style={{fontSize:11,fontWeight:700,color:"#d97706",marginBottom:6,textTransform:"uppercase"}}>Direct Costs</div><Row l="Rice Purchase" v={fR(p.rice_purchase_val)}/><Row l="PP Bags" v={fR(p.pp_bags_purchase_val)}/><Row l="Local Transport" v={fR(p.local_transport)}/><Row l="Interest (1%)" v={fR(c.interest)}/><Row l="Bank Charges (0.11%)" v={fR(c.bankCh)}/><Row l="Ocean Freight" v={fR(p.ocean_freight)}/></div>
-                    <div style={{borderRight:"1px solid #f1f5f9",paddingRight:12}}><div style={{fontSize:11,fontWeight:700,color:"#7c3aed",marginBottom:6,textTransform:"uppercase"}}>FOB Costs</div><Row l="CHA & Clearing" v={fR(p.cha_clearing)}/><Row l="Shipping Line" v={fR(p.shipping_line_charges)}/><Row l="Inspection Agency" v={fR(p.inspect_agency)}/><Row l="COC/ECTN" v={fR(p.coc_ectn)}/><Row l="Other Exp" v={fR(p.other_exp)}/><Row l="Total FOB" v={fR(c.totalFOB)} bold col="#7c3aed"/></div>
-                    <div><div style={{fontSize:11,fontWeight:700,color:"#1e3a5f",marginBottom:6,textTransform:"uppercase"}}>Summary</div><Row l="Total CIF Cost" v={fR(c.totalCIF)} bold col="#d97706"/><Row l="Payment Rcvd" v={fR(p.payment_received_inr)} col="#15803d"/><Row l="Net Profit (INR)" v={fR(c.profit)} bold col={c.profit>=0?"#16a34a":"#dc2626"}/></div>
+                <div style={{padding:"10px 14px"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
+                    <div><div style={{fontSize:10,fontWeight:700,color:"#0369a1",marginBottom:4,textTransform:"uppercase"}}>Revenue</div><Row l="Invoice Amt" v={fR(p.invoice_amt_inr)}/><Row l="Payment Rcvd" v={fR(p.payment_received_inr)}/></div>
+                    <div><div style={{fontSize:10,fontWeight:700,color:"#d97706",marginBottom:4,textTransform:"uppercase"}}>Direct Costs</div><Row l="Rice Purchase" v={fR(p.rice_purchase_val)}/><Row l="PP Bags" v={fR(p.pp_bags_purchase_val)}/><Row l="Local Transport" v={fR(p.local_transport)}/><Row l="Interest (1%)" v={fR(c.interest)}/><Row l="Bank Ch (0.11%)" v={fR(c.bankCh)}/><Row l="Ocean Freight" v={fR(p.ocean_freight)}/></div>
+                    <div><div style={{fontSize:10,fontWeight:700,color:"#7c3aed",marginBottom:4,textTransform:"uppercase"}}>FOB Costs</div><Row l="CHA & Clearing" v={fR(p.cha_clearing)}/><Row l="Shipping Line" v={fR(p.shipping_line_charges)}/><Row l="Inspection" v={fR(p.inspect_agency)}/><Row l="COC/ECTN" v={fR(p.coc_ectn)}/><Row l="Other" v={fR(p.other_exp)}/><Row l="Total FOB" v={fR(c.totalFOB)} bold col="#7c3aed"/></div>
+                    <div><div style={{fontSize:10,fontWeight:700,color:"#1e3a5f",marginBottom:4,textTransform:"uppercase"}}>Summary</div><Row l="Total CIF" v={fR(c.totalCIF)} bold col="#d97706"/><Row l="Payment Rcvd" v={fR(p.payment_received_inr)} col="#15803d"/><Row l="Net Profit" v={fR(c.profit)} bold col={c.profit>=0?"#16a34a":"#dc2626"}/></div>
                   </div>
                 </div>
               </div>
@@ -325,47 +292,30 @@ function ProfitFormModal({fy,editId,form,calc,fyShips,setF,onSelectInvoice,onSav
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:12}}>
       <div style={{background:"#fff",borderRadius:14,padding:22,width:"100%",maxWidth:780,maxHeight:"93vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
-        <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>{editId?"✏️ Edit":"➕ Add"} Profitability Entry — FY {fy}</h3>
-        <p style={{margin:"0 0 14px",fontSize:11.5,color:"#64748b"}}>Select invoice to auto-fill. Blue = read-only.</p>
-        <SH t="📋 Invoice Selection *"/>
+        <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>{editId?"✏️ Edit":"➕ Add"} Profitability — FY {fy}</h3>
+        <SH t="📋 Invoice *"/>
         <div style={{marginBottom:14}}>
-          <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Invoice No *</label>
           <select value={form.invoice_no||""} onChange={e=>onSelectInvoice(e.target.value)} style={{...iS,borderColor:form.invoice_no?"#e2e8f0":"#dc2626"}}>
             <option value="">— Select Invoice —</option>
             {fyShips.map(s=><option key={s.id}>{s.invoice_no}</option>)}
           </select>
-          {!form.invoice_no&&<p style={{color:"#dc2626",fontSize:11,margin:"3px 0 0"}}>Mandatory</p>}
         </div>
-        <SH t="📥 Auto-filled from Shipment (Read Only)" color="#0369a1" bg="#e0f2fe"/>
+        <SH t="📥 Auto-filled (Read Only)" color="#0369a1" bg="#e0f2fe"/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-          {ro("Invoice Date",form.invoice_date||"—")}
-          {ro("Buyer Name",form.buyer_name||"—")}
-          {ro("Port of Discharge",form.port_of_discharge||"—")}
-          {ro("Invoice Amount (INR)",fR(form.invoice_amt_inr))}
-          {ro("Payment Received (INR)",fR(form.payment_received_inr))}
+          {ro("Invoice Date",form.invoice_date||"—")}{ro("Buyer",form.buyer_name||"—")}{ro("Port of Discharge",form.port_of_discharge||"—")}{ro("Invoice Amt (INR)",fR(form.invoice_amt_inr))}{ro("Payment Rcvd (INR)",fR(form.payment_received_inr))}
         </div>
         <SH t="💰 Direct Costs (INR)" color="#d97706" bg="#fef3c7"/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-          {fld("rice_purchase_val","Rice Purchase Value")}
-          {fld("pp_bags_purchase_val","PP Bags Purchase Value")}
-          {fld("local_transport","Local Transport")}
-          {ro("Interest (1% of Rice Purchase)",fR(calc.interest))}
-          {ro("Bank Charges (0.11% of Pmt Rcvd)",fR(calc.bankCh))}
-          {fld("ocean_freight","Ocean Freight Exp")}
+          {fld("rice_purchase_val","Rice Purchase Value")}{fld("pp_bags_purchase_val","PP Bags Purchase Value")}{fld("local_transport","Local Transport")}{ro("Interest (1%)",fR(calc.interest))}{ro("Bank Charges (0.11%)",fR(calc.bankCh))}{fld("ocean_freight","Ocean Freight")}
         </div>
         <SH t="🚢 FOB Cost Head (INR)" color="#7c3aed" bg="#f3e8ff"/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-          {fld("cha_clearing","CHA & Clearing Exp")}
-          {fld("shipping_line_charges","Shipping Line Other Charges")}
-          {fld("inspect_agency","Inspection Agency Exp")}
-          {fld("coc_ectn","COC / ECTN Exp")}
-          {fld("other_exp","Other Exp")}
-          {ro("Total FOB Cost",fR(calc.totalFOB))}
+          {fld("cha_clearing","CHA & Clearing")}{fld("shipping_line_charges","Shipping Line Charges")}{fld("inspect_agency","Inspection Agency")}{fld("coc_ectn","COC / ECTN")}{fld("other_exp","Other Exp")}{ro("Total FOB",fR(calc.totalFOB))}
         </div>
         <div style={{background:"#1e3a5f",borderRadius:10,padding:14,marginBottom:14,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-          <div><div style={{fontSize:10,color:"#93c5fd",marginBottom:1}}>Total CIF Cost</div><div style={{fontSize:17,fontWeight:700,color:"#fbbf24"}}>{fR(calc.totalCIF)}</div></div>
-          <div><div style={{fontSize:10,color:"#93c5fd",marginBottom:1}}>Payment Received</div><div style={{fontSize:17,fontWeight:700,color:"#fff"}}>{fR(form.payment_received_inr)}</div></div>
-          <div><div style={{fontSize:10,color:"#93c5fd",marginBottom:1}}>Net Profit</div><div style={{fontSize:17,fontWeight:700,color:calc.profit>=0?"#86efac":"#fca5a5"}}>{fR(calc.profit)}</div></div>
+          <div><div style={{fontSize:10,color:"#93c5fd",marginBottom:1}}>Total CIF</div><div style={{fontSize:16,fontWeight:700,color:"#fbbf24"}}>{fR(calc.totalCIF)}</div></div>
+          <div><div style={{fontSize:10,color:"#93c5fd",marginBottom:1}}>Payment Rcvd</div><div style={{fontSize:16,fontWeight:700,color:"#fff"}}>{fR(form.payment_received_inr)}</div></div>
+          <div><div style={{fontSize:10,color:"#93c5fd",marginBottom:1}}>Net Profit</div><div style={{fontSize:16,fontWeight:700,color:calc.profit>=0?"#86efac":"#fca5a5"}}>{fR(calc.profit)}</div></div>
         </div>
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
@@ -377,8 +327,8 @@ function ProfitFormModal({fy,editId,form,calc,fyShips,setF,onSelectInvoice,onSav
 }
 
 export default function App(){
-  const [session,setSession]=useState(null);
-  const [userInfo,setUserInfo]=useState(null);
+  const [session,setSession]=useState(()=>{ try{ const s=localStorage.getItem("sb_session"); return s?JSON.parse(s):null; }catch{return null;} });
+  const [userInfo,setUserInfo]=useState(()=>{ try{ const u=localStorage.getItem("sb_user"); return u?JSON.parse(u):null; }catch{return null;} });
   const [loginForm,setLoginForm]=useState({email:"",password:"",error:"",loading:false});
   const [tab,setTab]=useState("dashboard");
   const [fy,setFy]=useState(CURR_FY);
@@ -416,7 +366,6 @@ export default function App(){
       setUserInfo(uArr[0]||{name:loginForm.email,role:"admin"});
     }catch(e){setLoginForm(f=>({...f,error:"Invalid email or password.",loading:false}));}
   };
-
   const doLogout=()=>{setSession(null);setUserInfo(null);setShips([]);setBcs([]);setProfits([]);};
 
   const loadAll=useCallback(async()=>{
@@ -469,15 +418,11 @@ export default function App(){
   const saveShip=async()=>{
     if(!shipForm.invoice_no||!shipForm.buyer_name){alert("Invoice No and Buyer Name required.");return;}
     setSaving(true);
-    try{
-      const payload={...shipForm};delete payload.id;delete payload.created_at;
-      if(editShipId){await sb(`shipments?id=eq.${editShipId}`,{method:"PATCH",headers:{"Authorization":`Bearer ${session.access_token}`},body:JSON.stringify(payload)});}
-      else{await sb("shipments",{method:"POST",headers:{"Authorization":`Bearer ${session.access_token}`},body:JSON.stringify(payload)});}
-      await loadAll();setShowShipForm(false);
-    }catch(e){alert("Error: "+e.message);}
+    try{const payload={...shipForm};delete payload.id;delete payload.created_at;if(editShipId){await sb(`shipments?id=eq.${editShipId}`,{method:"PATCH",body:JSON.stringify(payload)});}else{await sb("shipments",{method:"POST",body:JSON.stringify(payload)});}await loadAll();setShowShipForm(false);}
+    catch(e){alert("Error: "+e.message);}
     setSaving(false);
   };
-  const deleteShip=async id=>{setSaving(true);try{await sb(`shipments?id=eq.${id}`,{method:"DELETE",headers:{"Authorization":`Bearer ${session.access_token}`}});await loadAll();setDeleteId(null);}catch(e){alert("Error: "+e.message);}setSaving(false);};
+  const deleteShip=async id=>{setSaving(true);try{await sb(`shipments?id=eq.${id}`,{method:"DELETE"});await loadAll();setDeleteId(null);}catch(e){alert("Error: "+e.message);}setSaving(false);};
 
   const openAddProfit=()=>{setProfitForm({...EMPTY_PROFIT});setEditProfitId(null);setShowProfit(true);};
   const openEditProfit=p=>{setProfitForm({...p});setEditProfitId(p.id);setShowProfit(true);};
@@ -486,31 +431,20 @@ export default function App(){
   const saveProfit=async()=>{
     if(!profitForm.invoice_no){alert("Invoice No required.");return;}
     setSaving(true);
-    try{
-      const payload={...profitForm};delete payload.id;delete payload.created_at;
-      if(editProfitId){await sb(`profitability?id=eq.${editProfitId}`,{method:"PATCH",headers:{"Authorization":`Bearer ${session.access_token}`},body:JSON.stringify(payload)});}
-      else{await sb("profitability",{method:"POST",headers:{"Authorization":`Bearer ${session.access_token}`},body:JSON.stringify(payload)});}
-      await loadAll();setShowProfit(false);
-    }catch(e){alert("Error: "+e.message);}
+    try{const payload={...profitForm};delete payload.id;delete payload.created_at;if(editProfitId){await sb(`profitability?id=eq.${editProfitId}`,{method:"PATCH",body:JSON.stringify(payload)});}else{await sb("profitability",{method:"POST",body:JSON.stringify(payload)});}await loadAll();setShowProfit(false);}
+    catch(e){alert("Error: "+e.message);}
     setSaving(false);
   };
-  const deleteProfit=async id=>{if(!window.confirm("Delete?"))return;setSaving(true);try{await sb(`profitability?id=eq.${id}`,{method:"DELETE",headers:{"Authorization":`Bearer ${session.access_token}`}});await loadAll();}catch(e){alert("Error: "+e.message);}setSaving(false);};
+  const deleteProfit=async id=>{if(!window.confirm("Delete?"))return;setSaving(true);try{await sb(`profitability?id=eq.${id}`,{method:"DELETE"});await loadAll();}catch(e){alert("Error: "+e.message);}setSaving(false);};
 
   const saveBC=async(bc)=>{
     setSaving(true);
     try{
-      const{irm_entries,brc_entries,...bcData}=bc;
-      let bcId=bc.id;
-      if(bcs.find(b=>b.id===bc.id)){
-        await sb(`bill_collections?id=eq.${bc.id}`,{method:"PATCH",headers:{"Authorization":`Bearer ${session.access_token}`},body:JSON.stringify({...bcData,id:undefined,created_at:undefined})});
-        await sb(`irm_entries?bc_id=eq.${bc.id}`,{method:"DELETE",headers:{"Authorization":`Bearer ${session.access_token}`}});
-        await sb(`brc_entries?bc_id=eq.${bc.id}`,{method:"DELETE",headers:{"Authorization":`Bearer ${session.access_token}`}});
-      }else{
-        const res=await sb("bill_collections",{method:"POST",headers:{"Authorization":`Bearer ${session.access_token}`},body:JSON.stringify({...bcData,id:undefined,created_at:undefined})});
-        bcId=res[0]?.id||bc.id;
-      }
-      if(irm_entries?.length){await sb("irm_entries",{method:"POST",headers:{"Authorization":`Bearer ${session.access_token}`},body:JSON.stringify(irm_entries.map(i=>({bc_id:bcId,irm_no:i.irmNo||i.irm_no,irm_date:i.irmDate||i.irm_date,irm_amt_usd:n(i.irmAmtUSD||i.irm_amt_usd),exchange_rate:n(i.exchangeRate||i.exchange_rate),irm_amt_inr:n(i.irmAmtINR||i.irm_amt_inr)})))});}
-      if(brc_entries?.length){await sb("brc_entries",{method:"POST",headers:{"Authorization":`Bearer ${session.access_token}`},body:JSON.stringify(brc_entries.map(b=>({bc_id:bcId,brc_no:b.brcNo||b.brc_no,brc_date:b.brcDate||b.brc_date,brc_amt_usd:n(b.brcAmtUSD||b.brc_amt_usd)})))});}
+      const{irm_entries,brc_entries,...bcData}=bc;let bcId=bc.id;
+      if(bcs.find(b=>b.id===bc.id)){await sb(`bill_collections?id=eq.${bc.id}`,{method:"PATCH",body:JSON.stringify({...bcData,id:undefined,created_at:undefined})});await sb(`irm_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});await sb(`brc_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});}
+      else{const res=await sb("bill_collections",{method:"POST",body:JSON.stringify({...bcData,id:undefined,created_at:undefined})});bcId=res[0]?.id||bc.id;}
+      if(irm_entries?.length){await sb("irm_entries",{method:"POST",body:JSON.stringify(irm_entries.map(i=>({bc_id:bcId,irm_no:i.irmNo||i.irm_no,irm_date:i.irmDate||i.irm_date,irm_amt_usd:n(i.irmAmtUSD||i.irm_amt_usd),exchange_rate:n(i.exchangeRate||i.exchange_rate),irm_amt_inr:n(i.irmAmtINR||i.irm_amt_inr)})))});}
+      if(brc_entries?.length){await sb("brc_entries",{method:"POST",body:JSON.stringify(brc_entries.map(b=>({bc_id:bcId,brc_no:b.brcNo||b.brc_no,brc_date:b.brcDate||b.brc_date,brc_amt_usd:n(b.brcAmtUSD||b.brc_amt_usd)})))});}
       await loadAll();setShowBC(false);setEditBC(null);
     }catch(e){alert("Error: "+e.message);}
     setSaving(false);
@@ -522,11 +456,7 @@ export default function App(){
     Promise.all(nr.map(r=>sb("shipments",{method:"POST",body:JSON.stringify(r)}))).then(()=>{loadAll();setShowImport(false);alert(`✅ Imported ${nr.length} new shipment(s). ${rows.length-nr.length} duplicate(s) skipped.`);}).catch(e=>alert("Error: "+e.message));
   };
 
-  const IMPORT_HDRS=["Invoice No","Invoice Date (YYYY-MM-DD)","Buyer Name","Buyer Country","Product","Port of Loading","Port of Discharge","Shipping Bill No","Shipping Bill Date (YYYY-MM-DD)","Port Code","BL No","BL Date (YYYY-MM-DD)","Qty (MT)","Rate Per MT (USD)","Delivery Terms (CIF/FOB)","Exchange Rate","IGST (INR)","FOB Value (USD)","RODTEP Amount (INR)","RODTEP Status","GST Status","Remarks"];
-  const IMPORT_SAMPLE=[["INV-2627-001","2026-04-10","Sample Buyer","UAE","Basmati Rice 1121","Mundra","Dubai (Jebel Ali)","SB000001","2026-04-08","INMUN1","BL000001","2026-04-12","25","900","CIF","84.5","0","21000","18000","Pending","Pending",""]];
-  const dlCSV2=(name,csv)=>{const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([csv],{type:'text/csv'})),download:name});a.click();};
-  const escv=v=>`"${String(v??'').replace(/"/g,'""')}"`;
-  const toCSV2=(h,r)=>[h.map(escv).join(','),...r.map(x=>x.map(escv).join(','))].join('\n');
+  const profitCalc=useMemo(()=>calcProfit(profitForm),[profitForm]);
   const shipCalc=useMemo(()=>calcShip(shipForm),[shipForm]);
   const selectedBC=bcs.find(b=>b.id===shipForm.bc_id)||null;
   const viewShip=ships.find(s=>s.id===viewShipId)||null;
@@ -534,100 +464,114 @@ export default function App(){
   const shareShip=s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);setShareText(`🌾 *${COMPANY.name}*\nShipment Summary\n${"─".repeat(35)}\nInvoice: *${s.invoice_no}*\nDate: ${s.invoice_date}\nBuyer: ${s.buyer_name} (${s.buyer_country})\nProduct: ${s.product}\nQty: ${s.qty} MT @ $${s.rate_per_mt}/MT | ${s.delivery_terms}\n${"─".repeat(35)}\nInvoice Amt: *${fU(c.invoiceAmtUSD)}*\nPayment Rcvd: *${bc?fU(bc.total_amt_usd):"—"}*\nBalance Due: *${fU(bal)}*\n${"─".repeat(35)}\nRODTEP: ${s.rodtep_status} | GST: ${s.gst_status}\nBRC: ${bc?bc.brc_entries?.map(b=>b.brc_no).join(", "):"Pending"}\n${"─".repeat(35)}\n${COMPANY.address}`);};
   const shareAll=()=>setShareText(`🌾 *${COMPANY.name}*\nFY ${fy} — Business Summary\n${"─".repeat(35)}\nShipments: ${totals.count}\nInvoice Value: *${fU(totals.invUSD)}*\nPayment Received: *${fU(totals.paidUSD)}*\nBalance Due: *${fU(totals.bal)}*\nBRC Pending: ${totals.brcPend} | RODTEP: ${totals.rodPend} | GST: ${totals.gstPend}\n${"─".repeat(35)}\n${COMPANY.address}`);
 
+  const exportCSV=()=>{const hdrs=["Invoice No","Date","Buyer","Country","Product","Port Load","Port Disch","SB No","SB Date","BL No","BL Date","Qty","Rate/MT","Terms","Inv(USD)","ExRate","Inv(INR)","IGST","Gross(INR)","FOB(USD)","FOB(INR)","RODTEP","RODTEP St","GST St","BC No","BRC No(s)","Pmt(USD)","Pmt(INR)","Balance(USD)"];const rows=fyShips.map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);return[s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.brc_entries?.map(b=>b.brc_no).join("; "):"",bc?fi(bc.total_amt_usd):"",bc?fi(bc.total_amt_inr):"",fi(bal)];});dlCSV(`Devratan_FY${fy}.csv`,toCSV(hdrs,rows));};
+
   const doSort=col=>{if(sortCol===col)setSortDir(d=>d==="asc"?"desc":"asc");else{setSortCol(col);setSortDir("asc");}};
   function Th({col,label,right}){return<th onClick={()=>doSort(col)} style={{padding:"9px 10px",textAlign:right?"right":"left",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",cursor:"pointer",whiteSpace:"nowrap",userSelect:"none",background:"#f8fafc"}}>{label}{sortCol===col?(sortDir==="asc"?" ↑":" ↓"):""}</th>;}
-
-  const exportCSV=()=>{const hdrs=["Invoice No","Date","Buyer","Country","Product","Port Load","Port Disch","SB No","SB Date","BL No","BL Date","Qty","Rate/MT","Terms","Inv(USD)","ExRate","Inv(INR)","IGST","Gross(INR)","FOB(USD)","FOB(INR)","RODTEP","RODTEP St","GST St","BC No","BRC No(s)","Pmt(USD)","Pmt(INR)","Balance(USD)"];const rows=fyShips.map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);return[s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.brc_entries?.map(b=>b.brc_no).join("; "):"",bc?fi(bc.total_amt_usd):"",bc?fi(bc.total_amt_inr):"",fi(bal)];});dlCSV(`Devratan_FY${fy}.csv`,toCSV(hdrs,rows));};
 
   const SHIP_SECTIONS=[{title:"📄 Invoice & Buyer",fields:[["invoice_no","Invoice No *","text"],["invoice_date","Invoice Date","date"],["buyer_name","Buyer Name *","text"],["buyer_country","Buyer Country","select",COUNTRIES]]},{title:"🚢 Shipping",fields:[["port_of_loading","Port of Loading","text"],["port_of_discharge","Port of Discharge","text"],["shipping_bill_no","Shipping Bill No","text"],["shipping_bill_date","SB Date","date"],["port_code","Port Code","text"],["bl_no","BL No","text"],["bl_date","BL Date","date"]]},{title:"💵 Commercial",fields:[["product","Product","text"],["delivery_terms","Delivery Terms","select",DEL_TERMS],["qty","Qty (MT)","number"],["rate_per_mt","Rate/MT (USD)","number"],["exchange_rate","Exchange Rate","number"],["igst","IGST (INR)","number"],["fob_value_usd","FOB Value (USD)","number"],["rodtep_amount","RODTEP Amt (INR)","number"],["rodtep_status","RODTEP Status","select",RODTEP_ST],["gst_status","GST Status","select",GST_ST]]}];
 
   if(!session)return(
-    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1e3a5f 0%,#16a34a 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif"}}>
-      <div style={{background:"#fff",borderRadius:16,padding:40,width:380,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1e3a5f 0%,#16a34a 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui,sans-serif",padding:16}}>
+      <div style={{background:"#fff",borderRadius:16,padding:32,width:"100%",maxWidth:380,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:24}}>
           <Logo size={64}/>
-          <h2 style={{margin:"10px 0 2px",color:"#1e3a5f",fontSize:20,fontWeight:800,letterSpacing:1}}>{COMPANY.name}</h2>
+          <h2 style={{margin:"10px 0 2px",color:"#1e3a5f",fontSize:18,fontWeight:800}}>{COMPANY.name}</h2>
           <p style={{color:"#64748b",fontSize:11,margin:"0 0 4px",fontStyle:"italic"}}>{COMPANY.tagline}</p>
-          <p style={{color:"#94a3b8",fontSize:10,margin:"0 0 20px"}}>{COMPANY.address}</p>
-          <p style={{color:"#374151",fontSize:14,margin:0,fontWeight:700}}>Export Manager</p>
+          <p style={{color:"#94a3b8",fontSize:10,margin:"0 0 16px"}}>{COMPANY.address}</p>
+          <p style={{color:"#374151",fontSize:14,margin:0,fontWeight:700}}>Export Manager — Sign In</p>
         </div>
         <div style={{marginBottom:14}}><label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Email</label><input type="email" value={loginForm.email} onChange={e=>setLoginForm(f=>({...f,email:e.target.value}))} style={iS} placeholder="your@email.com" onKeyDown={e=>e.key==="Enter"&&doLogin()}/></div>
         <div style={{marginBottom:16}}><label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Password</label><input type="password" value={loginForm.password} onChange={e=>setLoginForm(f=>({...f,password:e.target.value}))} style={iS} onKeyDown={e=>e.key==="Enter"&&doLogin()}/></div>
         {loginForm.error&&<p style={{color:"#dc2626",fontSize:12,marginBottom:10}}>{loginForm.error}</p>}
         <button onClick={doLogin} disabled={loginForm.loading} style={{width:"100%",background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"12px 0",fontWeight:700,fontSize:15,cursor:"pointer"}}>{loginForm.loading?"Signing in...":"Sign In"}</button>
-        <p style={{textAlign:"center",fontSize:11.5,color:"#64748b",marginTop:16}}>🔒 Secure login · Data stored in cloud</p>
+        <p style={{textAlign:"center",fontSize:11,color:"#64748b",marginTop:14}}>🔒 Secure · Cloud Database</p>
       </div>
     </div>
   );
 
   return(
     <div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"system-ui,sans-serif"}}>
-      <div style={{background:"linear-gradient(135deg,#1e3a5f 0%,#1e5799 100%)",color:"#fff",padding:"0 16px",display:"flex",alignItems:"center",justifyContent:"space-between",height:58,boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}><Logo size={36}/><div><div style={{fontWeight:800,fontSize:14,letterSpacing:0.8}}>{COMPANY.name}</div><div style={{fontSize:9.5,opacity:0.7}}>{COMPANY.tagline}</div></div></div>
-        <div style={{display:"flex",alignItems:"center",gap:7}}>
-          {canEdit&&<button onClick={()=>setShowImport(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:600}}>📥 Import</button>}
-          {canEdit&&<button onClick={exportCSV} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:600}}>📤 Export</button>}
-          <button onClick={shareAll} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:600}}>📱 Share</button>
-          {isAdmin&&<button onClick={()=>setShowUsers(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:600}}>👥 Users</button>}
-          <button onClick={()=>setShowChangePwd(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:600}}>🔑</button>
-          <span style={{fontSize:11}}>👤 {userInfo?.name} <span style={{background:"rgba(255,255,255,0.2)",borderRadius:4,padding:"1px 5px",fontSize:9,marginLeft:3}}>{userInfo?.role}</span></span>
-          <button onClick={doLogout} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 9px",cursor:"pointer",fontSize:11}}>Logout</button>
+
+      {/* Header — 2 rows for mobile */}
+      <div style={{background:"linear-gradient(135deg,#1e3a5f 0%,#1e5799 100%)",color:"#fff",boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
+        {/* Row 1: Logo + User */}
+        <div style={{padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <Logo size={32}/>
+            <div>
+              <div style={{fontWeight:800,fontSize:11,letterSpacing:0.3,lineHeight:1.2}}>{COMPANY.name}</div>
+              <div style={{fontSize:9,opacity:0.7}}>{COMPANY.tagline}</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:10,opacity:0.9}}>{userInfo?.name?.split(" ")[0]}</span>
+            <span style={{background:"rgba(255,255,255,0.2)",borderRadius:4,padding:"1px 6px",fontSize:9}}>{userInfo?.role}</span>
+            <button onClick={doLogout} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:10}}>Logout</button>
+          </div>
+        </div>
+        {/* Row 2: Action buttons */}
+        <div style={{padding:"0 12px 8px",display:"flex",gap:6,flexWrap:"wrap"}}>
+          {canEdit&&<button onClick={()=>setShowImport(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📥 Import</button>}
+          {canEdit&&<button onClick={exportCSV} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📤 Export</button>}
+          <button onClick={shareAll} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📱 Share</button>
+          {isAdmin&&<button onClick={()=>setShowUsers(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>👥 Users</button>}
+          <button onClick={()=>setShowChangePwd(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>🔑 Password</button>
         </div>
       </div>
 
-      <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",padding:"0 16px",display:"flex",overflowX:"auto"}}>
-        {[["dashboard","📊 Dashboard"],["shipments","📦 Shipment Register"],["profitability","💰 Profitability"],["bcmanager","🏦 Bill Collections"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setTab(k)} style={{background:"none",border:"none",borderBottom:tab===k?"3px solid #1e3a5f":"3px solid transparent",color:tab===k?"#1e3a5f":"#64748b",padding:"13px 16px",cursor:"pointer",fontWeight:tab===k?700:500,fontSize:13,whiteSpace:"nowrap"}}>{l}</button>
+      {/* Tabs */}
+      <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+        {[["dashboard","📊 Dashboard"],["shipments","📦 Register"],["profitability","💰 P&L"],["bcmanager","🏦 Bill Coll."]].map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)} style={{background:"none",border:"none",borderBottom:tab===k?"3px solid #1e3a5f":"3px solid transparent",color:tab===k?"#1e3a5f":"#64748b",padding:"11px 14px",cursor:"pointer",fontWeight:tab===k?700:500,fontSize:12,whiteSpace:"nowrap",flex:"1 0 auto"}}>{l}</button>
         ))}
       </div>
 
-      {loading&&<div style={{background:"#eff6ff",borderBottom:"1px solid #bfdbfe",padding:"8px 20px",fontSize:13,color:"#1d4ed8",textAlign:"center"}}>🔄 Loading data...</div>}
+      {loading&&<div style={{background:"#eff6ff",borderBottom:"1px solid #bfdbfe",padding:"8px 16px",fontSize:13,color:"#1d4ed8",textAlign:"center"}}>🔄 Loading data...</div>}
 
       <div style={{padding:"12px",maxWidth:1400,margin:"0 auto"}}>
+
+        {/* DASHBOARD */}
         {tab==="dashboard"&&(
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12,marginBottom:18}}>
-              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:18}}>Dashboard</h2><p style={{margin:0,fontSize:12,color:"#64748b"}}>FY {fy} · Live cloud data</p></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
+              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Dashboard</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>FY {fy} · Live cloud data</p></div>
               <FYBar selected={fy} onChange={setFy} counts={fyCounts}/>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:18}}>
               {[{l:"Total Shipments",v:totals.count,i:"📦",c:"#1e3a5f"},{l:"Invoice Value (USD)",v:fU(totals.invUSD),i:"🧾",c:"#0369a1"},{l:"Invoice Value (INR)",v:fR(totals.invINR),i:"₹",c:"#7c3aed"},{l:"FOB Value (USD)",v:fU(totals.fobUSD),i:"🚢",c:"#0891b2"},{l:"Payment Rcvd (USD)",v:fU(totals.paidUSD),i:"✅",c:"#16a34a"},{l:"Payment Rcvd (INR)",v:fR(totals.paidINR),i:"✅",c:"#15803d"},{l:"Balance Due (USD)",v:fU(totals.bal),i:"⏳",c:totals.bal>0?"#dc2626":"#16a34a"},{l:"BRC Pending",v:totals.brcPend,i:"🔴",c:"#d97706"},{l:"RODTEP Pending",v:totals.rodPend,i:"📋",c:"#d97706"},{l:"GST Pending",v:totals.gstPend,i:"📋",c:"#d97706"}].map((x,i)=>(
-                <div key={i} style={{background:"#fff",borderRadius:10,padding:"13px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderLeft:`4px solid ${x.c}`}}>
-                  <div style={{fontSize:17}}>{x.i}</div><div style={{fontSize:14,fontWeight:700,color:x.c,margin:"3px 0 2px",wordBreak:"break-all"}}>{x.v}</div><div style={{fontSize:10.5,color:"#64748b"}}>{x.l}</div>
+                <div key={i} style={{background:"#fff",borderRadius:10,padding:"12px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderLeft:`4px solid ${x.c}`}}>
+                  <div style={{fontSize:16}}>{x.i}</div><div style={{fontSize:13,fontWeight:700,color:x.c,margin:"3px 0 2px",wordBreak:"break-all"}}>{x.v}</div><div style={{fontSize:10,color:"#64748b"}}>{x.l}</div>
                 </div>
               ))}
             </div>
-            <h3 style={{color:"#1e3a5f",marginBottom:10,fontSize:14}}>📅 Year-wise Summary</h3>
-            <div style={{background:"#fff",borderRadius:12,overflow:"auto",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:22}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead><tr style={{background:"#f8fafc"}}>{["Financial Year","Shipments","Invoice Value (USD)","FOB Value (USD)","Payment Received (USD)","Balance Due (USD)"].map(h=><th key={h} style={{padding:"10px 14px",textAlign:h.includes("Year")||h==="Shipments"?"left":"right",color:"#64748b",fontWeight:600,fontSize:12,borderBottom:"1px solid #e2e8f0"}}>{h}</th>)}</tr></thead>
+            <h3 style={{color:"#1e3a5f",marginBottom:8,fontSize:13}}>📅 Year-wise Summary</h3>
+            <div style={{background:"#fff",borderRadius:12,overflow:"auto",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:18}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead><tr style={{background:"#f8fafc"}}>{["FY","Ships","Invoice(USD)","Pmt(USD)","Balance"].map(h=><th key={h} style={{padding:"9px 10px",textAlign:h==="FY"||h==="Ships"?"left":"right",color:"#64748b",fontWeight:600,fontSize:11,borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                 <tbody>{allYears.map(row=>(
                   <tr key={row.fy} onClick={()=>setFy(row.fy)} style={{borderBottom:"1px solid #f1f5f9",cursor:"pointer",background:fy===row.fy?"#eff6ff":"transparent"}}>
-                    <td style={{padding:"9px 14px",fontWeight:700,color:fy===row.fy?"#1e3a5f":"#374151"}}>{fy===row.fy&&"▶ "}FY {row.fy}{row.fy===CURR_FY&&<span style={{marginLeft:6,fontSize:10,background:"#dcfce7",color:"#16a34a",borderRadius:10,padding:"1px 7px"}}>Current</span>}</td>
-                    <td style={{padding:"9px 14px"}}>{row.count||"—"}</td>
-                    <td style={{padding:"9px 14px",textAlign:"right",fontWeight:600}}>{row.count>0?fU(row.inv):"—"}</td>
-                    <td style={{padding:"9px 14px",textAlign:"right"}}>{row.count>0?fU(row.fob):"—"}</td>
-                    <td style={{padding:"9px 14px",textAlign:"right",color:"#16a34a"}}>{row.count>0?fU(row.paid):"—"}</td>
-                    <td style={{padding:"9px 14px",textAlign:"right",color:row.bal>0?"#dc2626":"#16a34a"}}>{row.count>0?fU(row.bal):"—"}</td>
+                    <td style={{padding:"8px 10px",fontWeight:700,color:fy===row.fy?"#1e3a5f":"#374151",whiteSpace:"nowrap"}}>{fy===row.fy&&"▶ "}FY {row.fy}{row.fy===CURR_FY&&<span style={{marginLeft:4,fontSize:9,background:"#dcfce7",color:"#16a34a",borderRadius:10,padding:"1px 5px"}}>Now</span>}</td>
+                    <td style={{padding:"8px 10px"}}>{row.count||"—"}</td>
+                    <td style={{padding:"8px 10px",textAlign:"right",fontWeight:600}}>{row.count>0?fU(row.inv):"—"}</td>
+                    <td style={{padding:"8px 10px",textAlign:"right",color:"#16a34a"}}>{row.count>0?fU(row.paid):"—"}</td>
+                    <td style={{padding:"8px 10px",textAlign:"right",color:row.bal>0?"#dc2626":"#16a34a"}}>{row.count>0?fU(row.bal):"—"}</td>
                   </tr>
                 ))}</tbody>
               </table>
             </div>
-            <h3 style={{color:"#1e3a5f",marginBottom:10,fontSize:14}}>Recent Shipments — FY {fy}</h3>
-            {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:30,textAlign:"center",color:"#94a3b8"}}>No shipments for FY {fy}.</div>:
+            <h3 style={{color:"#1e3a5f",marginBottom:8,fontSize:13}}>Recent Shipments — FY {fy}</h3>
+            {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:24,textAlign:"center",color:"#94a3b8"}}>No shipments for FY {fy}.</div>:
             <div style={{background:"#fff",borderRadius:12,overflow:"auto",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:700}}>
-                <thead><tr style={{background:"#f8fafc"}}>{["Invoice No","Date","Buyer","Product","Inv.(USD)","Pmt(USD)","Balance",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:12,borderBottom:"1px solid #e2e8f0"}}>{h}</th>)}</tr></thead>
-                <tbody>{fyShips.slice(0,8).map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);return(
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:500}}>
+                <thead><tr style={{background:"#f8fafc"}}>{["Invoice No","Buyer","Inv.(USD)","Balance",""].map(h=><th key={h} style={{padding:"9px 10px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:11,borderBottom:"1px solid #e2e8f0"}}>{h}</th>)}</tr></thead>
+                <tbody>{fyShips.slice(0,6).map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);return(
                   <tr key={s.id} style={{borderBottom:"1px solid #f1f5f9"}}>
-                    <td style={{padding:"9px 12px",fontWeight:600,color:"#1e3a5f"}}>{s.invoice_no}</td>
-                    <td style={{padding:"9px 12px",color:"#64748b"}}>{s.invoice_date}</td>
-                    <td style={{padding:"9px 12px"}}>{s.buyer_name}</td>
-                    <td style={{padding:"9px 12px",color:"#64748b"}}>{s.product}</td>
-                    <td style={{padding:"9px 12px",fontWeight:600}}>{fU(c.invoiceAmtUSD)}</td>
-                    <td style={{padding:"9px 12px",color:"#16a34a",fontWeight:600}}>{bc?fU(bc.total_amt_usd):"—"}</td>
-                    <td style={{padding:"9px 12px",fontWeight:600,color:bal>0?"#dc2626":"#16a34a"}}>{fU(bal)}</td>
-                    <td style={{padding:"9px 12px"}}><button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>📱</button></td>
+                    <td style={{padding:"8px 10px",fontWeight:600,color:"#1e3a5f",whiteSpace:"nowrap"}}>{s.invoice_no}</td>
+                    <td style={{padding:"8px 10px"}}>{s.buyer_name}</td>
+                    <td style={{padding:"8px 10px",fontWeight:600}}>{fU(c.invoiceAmtUSD)}</td>
+                    <td style={{padding:"8px 10px",fontWeight:600,color:bal>0?"#dc2626":"#16a34a"}}>{fU(bal)}</td>
+                    <td style={{padding:"8px 10px"}}><button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>📱</button></td>
                   </tr>
                 );})}
                 </tbody>
@@ -636,25 +580,26 @@ export default function App(){
           </div>
         )}
 
+        {/* SHIPMENT REGISTER */}
         {tab==="shipments"&&(
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12,marginBottom:14}}>
-              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:18}}>Shipment Register</h2><p style={{margin:0,fontSize:12,color:"#64748b"}}>FY {fy} · {fyShips.length} shipment(s)</p></div>
-              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:12}}>
+              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Shipment Register</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>FY {fy} · {fyShips.length} shipment(s)</p></div>
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 <FYBar selected={fy} onChange={f=>{setFy(f);setSearch("");}} counts={fyCounts}/>
                 {canEdit&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"7px 13px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add</button>}
-                <button onClick={exportCSV} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:8,padding:"7px 11px",cursor:"pointer",fontWeight:600,fontSize:12}}>📤 Export</button>
+                <button onClick={exportCSV} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:8,padding:"7px 11px",cursor:"pointer",fontWeight:600,fontSize:12}}>📤</button>
                 <button onClick={loadAll} style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:8,padding:"7px 11px",cursor:"pointer",fontWeight:600,fontSize:12}}>🔄</button>
               </div>
             </div>
-            <div style={{marginBottom:12}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search..." style={{...iS,width:220,fontSize:13}}/></div>
-            {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:50,textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:10}}>📭</div><div style={{fontSize:15,fontWeight:600}}>No shipments for FY {fy}</div>{canEdit&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600,marginTop:12}}>+ Add First Shipment</button>}</div>:
+            <div style={{marginBottom:10}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search..." style={{...iS,fontSize:13}}/></div>
+            {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:40,textAlign:"center",color:"#94a3b8",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}><div style={{fontSize:36,marginBottom:10}}>📭</div><div style={{fontSize:15,fontWeight:600}}>No shipments for FY {fy}</div>{canEdit&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600,marginTop:12}}>+ Add First Shipment</button>}</div>:
             <>
               <div style={{background:"#fff",borderRadius:12,overflow:"auto",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5,minWidth:2400}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:2200}}>
                   <thead><tr>
                     <Th col="invoice_no" label="Invoice No"/><Th col="invoice_date" label="Date"/><Th col="buyer_name" label="Buyer"/><Th col="buyer_country" label="Country"/><Th col="product" label="Product"/><Th col="port_of_loading" label="Port Load"/><Th col="port_of_discharge" label="Port Disch"/><Th col="shipping_bill_no" label="SB No"/><Th col="shipping_bill_date" label="SB Date"/><Th col="port_code" label="Port Code"/><Th col="bl_no" label="BL No"/><Th col="bl_date" label="BL Date"/><Th col="qty" label="Qty(MT)" right/><Th col="rate_per_mt" label="Rate/MT" right/><Th col="delivery_terms" label="Terms"/><Th col="i1" label="Inv(USD)" right/><Th col="exchange_rate" label="ExRate" right/><Th col="i2" label="Inv(INR)" right/><Th col="igst" label="IGST" right/><Th col="i3" label="Gross(INR)" right/><Th col="fob_value_usd" label="FOB(USD)" right/><Th col="i4" label="FOB(INR)" right/><Th col="rodtep_amount" label="RODTEP(INR)" right/><Th col="rodtep_status" label="RODTEP"/><Th col="gst_status" label="GST"/><Th col="bc_no" label="BC No"/><Th col="bc_date" label="BC Date"/><Th col="brc_nos" label="BRC No(s)"/><Th col="brc_dates" label="BRC Dates"/><Th col="paid_usd" label="Pmt(USD)" right/><Th col="paid_inr" label="Pmt(INR)" right/><Th col="bal" label="Balance(USD)" right/>
-                    {canEdit&&<th style={{padding:"9px 10px",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",background:"#f8fafc",whiteSpace:"nowrap"}}>Actions</th>}
+                    {canEdit&&<th style={{padding:"9px 10px",color:"#64748b",fontWeight:600,fontSize:11,borderBottom:"1px solid #e2e8f0",background:"#f8fafc",whiteSpace:"nowrap"}}>Actions</th>}
                   </tr></thead>
                   <tbody>
                     {filtered.map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0),brcNos=bc?bc.brc_entries?.map(b=>b.brc_no).filter(Boolean).join(", "):"—",brcDts=bc?bc.brc_entries?.map(b=>b.brc_date).filter(Boolean).join(", "):"—";return(
@@ -701,16 +646,17 @@ export default function App(){
                   </tbody>
                 </table>
               </div>
-              <p style={{fontSize:11,color:"#94a3b8",marginTop:8}}>💡 Double-click any row for full details</p>
+              <p style={{fontSize:11,color:"#94a3b8",marginTop:6}}>💡 Double-click any row for full details</p>
             </>}
           </div>
         )}
 
+        {/* PROFITABILITY */}
         {tab==="profitability"&&(
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12,marginBottom:16}}>
-              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:18}}>Profitability Register</h2><p style={{margin:0,fontSize:12,color:"#64748b"}}>FY {fy}</p></div>
-              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
+              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Profitability Register</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>FY {fy}</p></div>
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 <FYBar selected={fy} onChange={setFy} counts={fyCounts}/>
                 {canEdit&&<button onClick={openAddProfit} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"7px 13px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add Entry</button>}
               </div>
@@ -719,23 +665,24 @@ export default function App(){
           </div>
         )}
 
+        {/* BILL COLLECTIONS */}
         {tab==="bcmanager"&&(
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:18}}>
-              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:18}}>🏦 Bill Collections</h2><p style={{margin:0,fontSize:12,color:"#64748b"}}>{bcs.length} total</p></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:14}}>
+              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>🏦 Bill Collections</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>{bcs.length} total</p></div>
               {canEdit&&<button onClick={()=>{setEditBC(null);setShowBC(true);}} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New BC</button>}
             </div>
-            {bcs.length===0&&<div style={{background:"#fff",borderRadius:12,padding:40,textAlign:"center",color:"#94a3b8"}}>No bill collections yet.</div>}
-            <div style={{display:"grid",gap:12}}>
+            {bcs.length===0&&<div style={{background:"#fff",borderRadius:12,padding:32,textAlign:"center",color:"#94a3b8"}}>No bill collections yet.</div>}
+            <div style={{display:"grid",gap:10}}>
               {bcs.map(bc=>(
-                <div key={bc.id} style={{background:"#fff",borderRadius:12,padding:18,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:12}}>
-                    <div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:3}}><span style={{fontWeight:700,color:"#1e3a5f",fontSize:15}}>{bc.bc_no}</span><Badge val={bc.bank_name} map={{SBI:{bg:"#dcfce7",color:"#16a34a"},INDUSIND:{bg:"#dbeafe",color:"#1d4ed8"}}}/></div><div style={{fontSize:12,color:"#64748b"}}>Date: {bc.bc_date} · Linked: {bc.linked_invoices?.join(", ")||"None"}</div></div>
-                    <div style={{display:"flex",gap:8,alignItems:"center"}}><div style={{textAlign:"right"}}><div style={{fontSize:17,fontWeight:700,color:"#16a34a"}}>{fU(bc.total_amt_usd)}</div><div style={{fontSize:12,color:"#15803d"}}>{fR(bc.total_amt_inr)}</div></div>{canEdit&&<button onClick={()=>{setEditBC(bc);setShowBC(true);}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}</div>
+                <div key={bc.id} style={{background:"#fff",borderRadius:12,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:10}}>
+                    <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontWeight:700,color:"#1e3a5f",fontSize:14}}>{bc.bc_no}</span><Badge val={bc.bank_name} map={{SBI:{bg:"#dcfce7",color:"#16a34a"},INDUSIND:{bg:"#dbeafe",color:"#1d4ed8"}}}/></div><div style={{fontSize:11,color:"#64748b"}}>Date: {bc.bc_date} · {bc.linked_invoices?.join(", ")||"No invoice linked"}</div></div>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}><div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:700,color:"#16a34a"}}>{fU(bc.total_amt_usd)}</div><div style={{fontSize:11,color:"#15803d"}}>{fR(bc.total_amt_inr)}</div></div>{canEdit&&<button onClick={()=>{setEditBC(bc);setShowBC(true);}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}</div>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                    <div><div style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5}}>IRM ENTRIES</div>{bc.irm_entries?.map((irm,i)=><div key={irm.id} style={{background:"#f8fafc",borderRadius:7,padding:"7px 10px",marginBottom:4,fontSize:12}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600}}>#{i+1} {irm.irm_no}</span><span style={{color:"#16a34a",fontWeight:600}}>{fU(irm.irm_amt_usd)}</span></div><div style={{color:"#64748b",marginTop:1}}>{irm.irm_date} · Rate: {irm.exchange_rate} · {fR(irm.irm_amt_inr)}</div></div>)}</div>
-                    <div><div style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:5}}>BRC ENTRIES</div>{bc.brc_entries?.map((brc,i)=><div key={brc.id} style={{background:"#f8fafc",borderRadius:7,padding:"7px 10px",marginBottom:4,fontSize:12}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600}}>#{i+1} {brc.brc_no||"—"}</span><span style={{color:"#0369a1",fontWeight:600}}>{fU(brc.brc_amt_usd)}</span></div><div style={{color:"#64748b",marginTop:1}}>Date: {brc.brc_date||"—"}</div></div>)}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div><div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>IRM ENTRIES</div>{bc.irm_entries?.map((irm,i)=><div key={irm.id} style={{background:"#f8fafc",borderRadius:6,padding:"6px 8px",marginBottom:3,fontSize:11}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600}}>{irm.irm_no}</span><span style={{color:"#16a34a",fontWeight:600}}>{fU(irm.irm_amt_usd)}</span></div><div style={{color:"#64748b"}}>{irm.irm_date} · {fR(irm.irm_amt_inr)}</div></div>)}</div>
+                    <div><div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>BRC ENTRIES</div>{bc.brc_entries?.map((brc,i)=><div key={brc.id} style={{background:"#f8fafc",borderRadius:6,padding:"6px 8px",marginBottom:3,fontSize:11}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600}}>{brc.brc_no||"—"}</span><span style={{color:"#0369a1",fontWeight:600}}>{fU(brc.brc_amt_usd)}</span></div><div style={{color:"#64748b"}}>Date: {brc.brc_date||"—"}</div></div>)}</div>
                   </div>
                 </div>
               ))}
@@ -744,95 +691,4 @@ export default function App(){
         )}
       </div>
 
-      {showShipForm&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:12}}>
-          <div style={{background:"#fff",borderRadius:14,padding:22,width:"100%",maxWidth:780,maxHeight:"93vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
-            <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>{editShipId?"✏️ Edit":"➕ Add"} Shipment</h3>
-            <p style={{margin:"0 0 14px",fontSize:11.5,color:"#64748b"}}>Saves to cloud database.</p>
-            {SHIP_SECTIONS.map(sec=>(
-              <div key={sec.title} style={{marginBottom:14}}>
-                <SH t={sec.title}/>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  {sec.fields.map(([key,label,type,opts])=>(
-                    <div key={key}>
-                      <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{label}</label>
-                      {type==="select"?<select value={shipForm[key]||""} onChange={e=>setSF(key,e.target.value)} style={iS}><option value="">Select...</option>{opts.map(o=><option key={o}>{o}</option>)}</select>:<input type={type} value={shipForm[key]||""} onChange={e=>setSF(key,e.target.value)} style={iS} step={type==="number"?"any":undefined}/>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-            <SH t="🏦 Bill Collection"/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"end",marginBottom:10}}>
-              <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Bill Collection No</label><select value={shipForm.bc_id||""} onChange={e=>setSF("bc_id",e.target.value?Number(e.target.value):null)} style={iS}><option value="">— Not linked —</option>{bcs.map(b=><option key={b.id} value={b.id}>{b.bc_no} ({b.bank_name}) — {fU(b.total_amt_usd)}</option>)}</select></div>
-              <button onClick={()=>setShowBC(true)} style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:7,padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>+ New BC</button>
-            </div>
-            {selectedBC&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:10,fontSize:12,marginBottom:12}}><b style={{color:"#15803d"}}>✅ {selectedBC.bc_no}</b> · Pmt: <b style={{color:"#16a34a"}}>{fU(selectedBC.total_amt_usd)}</b></div>}
-            {shipForm.invoice_date&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"7px 12px",marginBottom:12,fontSize:12,color:"#1d4ed8"}}>📅 FY: <b>{getFY(shipForm.invoice_date)}</b></div>}
-            <SH t="🔢 Auto-Calculated" color="#0369a1" bg="#e0f2fe"/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-              {[["Invoice Amount (USD)",fU(shipCalc.invoiceAmtUSD)],["Invoice Amount (INR)",fR(shipCalc.invoiceAmtINR)],["Gross Total (INR)",fR(shipCalc.grossTotal)],["FOB Value (INR)",fR(shipCalc.fobValueINR)]].map(([l,v])=>(
-                <div key={l}><label style={{fontSize:11.5,fontWeight:600,color:"#0369a1",display:"block",marginBottom:3}}>{l}</label><input readOnly value={v} style={cS}/></div>
-              ))}
-            </div>
-            <div style={{marginBottom:12}}><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Remarks</label><textarea value={shipForm.remarks||""} onChange={e=>setSF("remarks",e.target.value)} rows={2} style={{...iS,resize:"vertical"}}/></div>
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <button onClick={()=>setShowShipForm(false)} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
-              <button onClick={saveShip} disabled={saving} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 22px",cursor:"pointer",fontWeight:700}}>{saving?"Saving...":"Save Shipment"}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showProfit&&<ProfitFormModal fy={fy} editId={editProfitId} form={profitForm} calc={profitCalc} fyShips={fyShips} setF={setPF} onSelectInvoice={selectProfitInv} onSave={saveProfit} onClose={()=>setShowProfit(false)} saving={saving}/>}
-      {showBC&&<BCModal bc={editBC} allShips={ships} token={session?.access_token} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
-      {viewShipId&&<DetailModal shipment={viewShip} bc={viewShip?getBC(viewShip):null} onClose={()=>setViewShipId(null)}/>}
-      {showImport&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:12}}>
-          <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:620,maxHeight:"93vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{margin:0,color:"#1e3a5f"}}>📥 Import Shipment Data</h3><button onClick={()=>setShowImport(false)} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button></div>
-            <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:14,marginBottom:14}}>
-              <p style={{margin:"0 0 8px",fontSize:13,fontWeight:600,color:"#1d4ed8"}}>Step 1: Download the import template</p>
-              <p style={{margin:"0 0 10px",fontSize:12,color:"#374151"}}>Fill your data in this CSV. Do not change column headers. Dates: YYYY-MM-DD.</p>
-              <button onClick={()=>dlCSV2("Devratan_Import_Template.csv",toCSV2(IMPORT_HDRS,IMPORT_SAMPLE))} style={{background:"#1d4ed8",color:"#fff",border:"none",borderRadius:7,padding:"8px 16px",cursor:"pointer",fontWeight:600,fontSize:13}}>⬇️ Download Template (CSV)</button>
-            </div>
-            <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:14,marginBottom:14}}>
-              <p style={{margin:"0 0 8px",fontSize:13,fontWeight:600,color:"#15803d"}}>Step 2: Upload your filled CSV</p>
-              <input type="file" accept=".csv,.txt" onChange={e=>{
-                const file=e.target.files[0];if(!file)return;
-                const reader=new FileReader();
-                reader.onload=ev=>{
-                  try{
-                    const lines=ev.target.result.split(/\r?\n/).filter(l=>l.trim());
-                    const rows=lines.slice(1).map(line=>{const cols=[],cur={v:"",q:false};for(const ch of line){if(ch==='"'){cur.q=!cur.q;}else if(ch===','&&!cur.q){cols.push(cur.v.trim());cur.v="";}else cur.v+=ch;}cols.push(cur.v.trim());return cols.map(c=>c.replace(/^"|"$/g,""));}).filter(r=>r[0]);
-                    const mapped=rows.map(r=>({invoice_no:r[0]||"",invoice_date:r[1]||null,buyer_name:r[2]||"",buyer_country:r[3]||"",product:r[4]||"",port_of_loading:r[5]||"",port_of_discharge:r[6]||"",shipping_bill_no:r[7]||"",shipping_bill_date:r[8]||null,port_code:r[9]||"",bl_no:r[10]||"",bl_date:r[11]||null,qty:r[12]||null,rate_per_mt:r[13]||null,delivery_terms:r[14]||"CIF",exchange_rate:r[15]||null,igst:r[16]||0,fob_value_usd:r[17]||null,rodtep_amount:r[18]||null,rodtep_status:r[19]||"Pending",gst_status:r[20]||"Pending",remarks:r[21]||"",bc_id:null}));
-                    if(window.confirm(`Import ${mapped.length} shipment(s)?`)){doImport(mapped);}
-                  }catch(ex){alert("Error reading file. Please use the template.");}
-                };
-                reader.readAsText(file);
-              }} style={{fontSize:13}}/>
-            </div>
-            <button onClick={()=>setShowImport(false)} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Close</button>
-          </div>
-        </div>
-      )}
-      {showUsers&&<UserModal users={users} token={session?.access_token} onClose={()=>setShowUsers(false)} onRefresh={loadAll}/>}
-      {showChangePwd&&<ChangePasswordModal token={session?.access_token} onClose={()=>setShowChangePwd(false)}/>}
-      {shareText&&<ShareModal text={shareText} onClose={()=>setShareText(null)}/>}
-
-      {deleteId&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
-          <div style={{background:"#fff",borderRadius:12,padding:26,width:290,textAlign:"center"}}>
-            <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
-            <h3 style={{margin:"0 0 6px",color:"#1e3a5f"}}>Delete Shipment?</h3>
-            <p style={{color:"#64748b",fontSize:12,marginBottom:16}}>This cannot be undone.</p>
-            <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-              <button onClick={()=>setDeleteId(null)} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"7px 16px",cursor:"pointer",fontWeight:600}}>Cancel</button>
-              <button onClick={()=>deleteShip(deleteId)} disabled={saving} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",cursor:"pointer",fontWeight:700}}>{saving?"Deleting...":"Delete"}</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+      {/* SHIP FORM
