@@ -426,7 +426,14 @@ export default function App(){
     if(!shipForm.invoice_no||!shipForm.buyer_name){alert("Invoice No and Buyer Name required.");return;}
     setSaving(true);
     try{
-      const payload={...shipForm};delete payload.id;delete payload.created_at;
+      const payload={...shipForm};
+      delete payload.id;delete payload.created_at;
+      // Convert empty strings to null for numeric fields
+      const numFields=["qty","rate_per_mt","exchange_rate","igst","fob_value_usd","rodtep_amount"];
+      numFields.forEach(f=>{if(payload[f]===""||payload[f]===undefined)payload[f]=null; else payload[f]=Number(payload[f])||null;});
+      // Convert empty strings to null for date fields
+      const dateFields=["invoice_date","shipping_bill_date","bl_date"];
+      dateFields.forEach(f=>{if(payload[f]===""||payload[f]===undefined)payload[f]=null;});
       if(editShipId){await sb(`shipments?id=eq.${editShipId}`,{method:"PATCH",body:JSON.stringify(payload)});}
       else{await sb("shipments",{method:"POST",body:JSON.stringify(payload)});}
       await loadAll();setShowShipForm(false);
@@ -701,7 +708,7 @@ export default function App(){
                 <div key={bc.id} style={{background:"#fff",borderRadius:12,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:10}}>
                     <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontWeight:700,color:"#1e3a5f",fontSize:14}}>{bc.bc_no}</span><Badge val={bc.bank_name} map={{SBI:{bg:"#dcfce7",color:"#16a34a"},INDUSIND:{bg:"#dbeafe",color:"#1d4ed8"}}}/></div><div style={{fontSize:11,color:"#64748b"}}>Date: {bc.bc_date} · Linked: {bc.linked_invoices?.join(", ")||"None"}</div></div>
-                    <div style={{display:"flex",gap:6,alignItems:"center"}}><div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:700,color:"#16a34a"}}>{fU(bc.total_amt_usd)}</div><div style={{fontSize:11,color:"#15803d"}}>{fR(bc.total_amt_inr)}</div></div>{canEdit&&<button onClick={()=>{setEditBC(bc);setShowBC(true);}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}</div>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}><div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:700,color:"#16a34a"}}>{fU(bc.total_amt_usd)}</div><div style={{fontSize:11,color:"#15803d"}}>{fR(bc.total_amt_inr)}</div></div>{canEdit&&<button onClick={()=>{setEditBC(bc);setShowBC(true);}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}{canDelete&&<button onClick={async()=>{if(!window.confirm(`Delete BC ${bc.bc_no}?`))return;try{await sb(`brc_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});await sb(`irm_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});await sb(`bill_collections?id=eq.${bc.id}`,{method:"DELETE"});await loadAll();}catch(e){alert("Error: "+e.message);}}} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}</div>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                     <div><div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>IRM ENTRIES</div>{bc.irm_entries?.map((irm,i)=><div key={irm.id} style={{background:"#f8fafc",borderRadius:6,padding:"6px 8px",marginBottom:3,fontSize:11}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600}}>#{i+1} {irm.irm_no}</span><span style={{color:"#16a34a",fontWeight:600}}>{fU(irm.irm_amt_usd)}</span></div><div style={{color:"#64748b"}}>{irm.irm_date} · {fR(irm.irm_amt_inr)}</div></div>)}</div>
