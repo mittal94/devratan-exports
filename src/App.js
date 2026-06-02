@@ -872,6 +872,44 @@ function ProfitFormModal({fy,editId,form,calc,fyShips,setF,onSelectInvoice,onSav
 }
 
 
+
+// ─── Small helper components for approval UI ─────────────────────────────────
+function ApprovalBtn({pendings,onClick}){
+  const cnt=pendings.filter(p=>p.status==="pending").length;
+  return(
+    <button onClick={onClick} style={{background:cnt>0?"rgba(239,68,68,0.8)":"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+      ✅ Approvals{cnt>0&&<span style={{background:"#fbbf24",color:"#1e3a5f",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,marginLeft:5}}>{cnt}</span>}
+    </button>
+  );
+}
+
+function MyRequestsBtn({pendings,userId,onClick}){
+  const mine=pendings.filter(p=>p.submitted_by===userId);
+  const rej=mine.filter(p=>p.status==="rejected").length;
+  const pend=mine.filter(p=>p.status==="pending").length;
+  return(
+    <button onClick={onClick} style={{background:rej>0?"rgba(239,68,68,0.8)":pend>0?"rgba(251,191,36,0.8)":"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+      📋 My Requests{(rej>0||pend>0)&&<span style={{background:"#fff",color:"#1e3a5f",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,marginLeft:5}}>{rej>0?rej:pend}</span>}
+    </button>
+  );
+}
+
+function JuniorPendingBanner({pendings,userId,onViewRejected}){
+  const myPend=pendings.filter(p=>p.submitted_by===userId&&p.status==="pending");
+  const myRej=pendings.filter(p=>p.submitted_by===userId&&p.status==="rejected");
+  if(!myPend.length&&!myRej.length) return null;
+  return(
+    <>
+      {myPend.length>0&&<div style={{background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"8px 14px",marginBottom:8,fontSize:12,color:"#92400e",fontWeight:600}}>
+        ⏳ {myPend.length} entry(s) waiting for approval
+      </div>}
+      {myRej.length>0&&<div style={{background:"#fee2e2",border:"1px solid #fca5a5",borderRadius:8,padding:"8px 14px",marginBottom:8,fontSize:12,color:"#dc2626",fontWeight:600,cursor:"pointer"}} onClick={onViewRejected}>
+        ❌ {myRej.length} entry(s) rejected — tap to view reason
+      </div>}
+    </>
+  );
+}
+
 // ─── Approvals Modal ─────────────────────────────────────────────────────────
 function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships}){
   const isJunior=userInfo?.role==="junior_accountant";
@@ -1294,12 +1332,8 @@ export default function App(){
           {canEdit&&<button onClick={()=>setShowImport(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📥 Import</button>}
           <button onClick={shareAll} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📱 Share</button>
           {isAdmin&&<button onClick={()=>setShowUsers(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>👥 Users</button>}
-          {(isAdmin||isSeniorAccountant)&&(()=>{const cnt=pendings.filter(p=>p.status==="pending").length;return(<button onClick={()=>setShowApprovals(true)} style={{background:cnt>0?"rgba(239,68,68,0.8)":"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600,position:"relative"}}>
-            ✅ Approvals{cnt>0&&<span style={{background:"#fbbf24",color:"#1e3a5f",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,marginLeft:5}}>{cnt}</span>}
-          </button>);})()}
-          {isJuniorAccountant&&(()=>{const mine=pendings.filter(p=>p.submitted_by===userInfo?.id);const rej=mine.filter(p=>p.status==="rejected").length;const pend=mine.filter(p=>p.status==="pending").length;return(<button onClick={()=>setShowApprovals(true)} style={{background:rej>0?"rgba(239,68,68,0.8)":pend>0?"rgba(251,191,36,0.8)":"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
-            📋 My Requests{(rej>0||pend>0)&&<span style={{background:"#fff",color:"#1e3a5f",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,marginLeft:5}}>{rej>0?rej:pend}</span>}
-          </button>);})()}
+          {(isAdmin||isSeniorAccountant)&&<ApprovalBtn pendings={pendings} onClick={()=>setShowApprovals(true)}/>}
+          {isJuniorAccountant&&<MyRequestsBtn pendings={pendings} userId={userInfo?.id} onClick={()=>setShowApprovals(true)}/>}
           <button onClick={()=>setShowChangePwd(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>🔑 Password</button>
           <button onClick={loadAll} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>🔄 Refresh</button>
         </div>
@@ -1317,6 +1351,59 @@ export default function App(){
 
       <div style={{padding:"12px",maxWidth:1400,margin:"0 auto"}}>
 
+        {tab==="dashboard"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
+              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Dashboard</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>FY {fy} · Live cloud data</p></div>
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                <FYBar selected={fy} onChange={setFy} counts={fyCounts}/>
+                <button onClick={()=>setExportModal("dashboard")} style={{background:"#1e3a5f",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:11}}>📄 Export</button>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:18}}>
+              {[{l:"Shipments",v:totals.count,i:"📦",c:"#1e3a5f",click:()=>{setTab("shipments");setDashFilter(null);}},
+                {l:"Invoice (USD)",v:fU(totals.invUSD),i:"🧾",c:"#0369a1",click:null},
+                {l:"Invoice (INR)",v:fR(totals.invINR),i:"₹",c:"#7c3aed",click:null},
+                {l:"FOB (USD)",v:fU(totals.fobUSD),i:"🚢",c:"#0891b2",click:null},
+                {l:"Pmt Rcvd (USD)",v:fU(totals.paidUSD),i:"✅",c:"#16a34a",click:null},
+                {l:"Pmt Rcvd (INR)",v:fR(totals.paidINR),i:"✅",c:"#15803d",click:null},
+                {l:"Balance (USD)",v:fU(totals.bal),i:"⏳",c:totals.bal>0?"#dc2626":"#16a34a",click:null},
+                {l:"BRC Pending",v:totals.brcPend,i:"🔴",c:"#d97706",click:()=>{setTab("shipments");setDashFilter("brc");}},
+                {l:"RODTEP Pending",v:totals.rodPend,i:"📋",c:"#d97706",click:()=>{setTab("shipments");setDashFilter("rodtep");}},
+                {l:"GST Pending",v:totals.gstPend,i:"📋",c:"#d97706",click:()=>{setTab("shipments");setDashFilter("gst");}}
+              ].map((x,i)=>(
+                <div key={i} onClick={x.click||undefined} style={{background:"#fff",borderRadius:10,padding:"12px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderLeft:`4px solid ${x.c}`,cursor:x.click?"pointer":"default",transition:"box-shadow 0.15s"}}>
+                  <div style={{fontSize:16}}>{x.i}</div><div style={{fontSize:13,fontWeight:700,color:x.c,margin:"3px 0 2px",wordBreak:"break-all"}}>{x.v}</div>
+                  <div style={{fontSize:10,color:"#64748b"}}>{x.l}{x.click&&<span style={{marginLeft:4,fontSize:9,color:"#0369a1"}}>↗ view</span>}</div>
+                </div>
+              ))}
+            </div>
+            <h3 style={{color:"#1e3a5f",marginBottom:8,fontSize:13}}>Year-wise Summary</h3>
+            <div style={{background:"#fff",borderRadius:12,overflow:"auto",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:18}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead><tr style={{background:"#f8fafc"}}>{["FY","Ships","Invoice(USD)","Pmt(USD)","Balance(USD)"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:h==="FY"||h==="Ships"?"left":"right",color:"#64748b",fontWeight:600,fontSize:11,borderBottom:"1px solid #e2e8f0"}}>{h}</th>)}</tr></thead>
+                <tbody>{allYears.map(row=>(
+                  <tr key={row.fy} onClick={()=>setFy(row.fy)} style={{borderBottom:"1px solid #f1f5f9",cursor:"pointer",background:fy===row.fy?"#eff6ff":"transparent"}}>
+                    <td style={{padding:"8px 10px",fontWeight:700,color:fy===row.fy?"#1e3a5f":"#374151",fontSize:11}}>{fy===row.fy&&"▶ "}FY {row.fy}{row.fy===CURR_FY&&<span style={{marginLeft:4,fontSize:9,background:"#dcfce7",color:"#16a34a",borderRadius:10,padding:"1px 5px"}}>Current</span>}</td>
+                    <td style={{padding:"8px 10px",fontSize:11}}>{row.count||"—"}</td>
+                    <td style={{padding:"8px 10px",textAlign:"right",fontWeight:600,fontSize:11}}>{row.count>0?fU(row.inv):"—"}</td>
+                    <td style={{padding:"8px 10px",textAlign:"right",color:"#16a34a",fontSize:11}}>{row.count>0?fU(row.paid):"—"}</td>
+                    <td style={{padding:"8px 10px",textAlign:"right",color:row.bal>0?"#dc2626":"#16a34a",fontSize:11}}>{row.count>0?fU(row.bal):"—"}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <h3 style={{color:"#1e3a5f",marginBottom:8,fontSize:13}}>Recent Shipments — FY {fy}</h3>
+            {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:20,textAlign:"center",color:"#94a3b8",fontSize:13}}>No shipments for FY {fy}.</div>:
+            <div style={{background:"#fff",borderRadius:12,overflow:"auto",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:500}}>
+                <thead><tr style={{background:"#f8fafc"}}>{["Invoice No","Buyer","Inv.(USD)","Balance",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:11,borderBottom:"1px solid #e2e8f0"}}>{h}</th>)}</tr></thead>
+                <tbody>{fyShips.slice(0,8).map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);return(
+                  <tr key={s.id} style={{borderBottom:"1px solid #f1f5f9"}}>
+                    <td style={{padding:"8px 10px",fontWeight:600,color:"#1e3a5f",fontSize:11}}>{s.invoice_no}</td>
+                    <td style={{padding:"8px 10px",fontSize:11}}>{s.buyer_name}</td>
+                    <td style={{padding:"8px 10px",fontWeight:600,fontSize:11}}>{fU(c.invoiceAmtUSD)}</td>
+                    <td style={{padding:"8px 10px",fontWeight:600,color:bal>0?"#dc2626":"#16a34a",fontSize:11}}>{fU(bal)}</td>
                     <td style={{padding:"8px 10px"}}><button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>📱</button></td>
                   </tr>
                 );})}
@@ -1336,14 +1423,7 @@ export default function App(){
                 {canAddShipment&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add</button>}
               </div>
             </div>
-            {isJuniorAccountant&&(()=>{const myPend=pendings.filter(p=>p.submitted_by===userInfo?.id&&p.status==="pending");const myRej=pendings.filter(p=>p.submitted_by===userInfo?.id&&p.status==="rejected");return(<>
-              {myPend.length>0&&<div style={{background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"8px 14px",marginBottom:8,fontSize:12,color:"#92400e",fontWeight:600}}>
-                ⏳ {myPend.length} entry(s) waiting for approval
-              </div>}
-              {myRej.length>0&&<div style={{background:"#fee2e2",border:"1px solid #fca5a5",borderRadius:8,padding:"8px 14px",marginBottom:8,fontSize:12,color:"#dc2626",fontWeight:600,cursor:"pointer"}} onClick={()=>setShowApprovals(true)}>
-                ❌ {myRej.length} entry(s) rejected — tap to view reason
-              </div>}
-            </>)})()}
+            {isJuniorAccountant&&<JuniorPendingBanner pendings={pendings} userId={userInfo?.id} onViewRejected={()=>setShowApprovals(true)}/>}
             {dashFilter&&<div style={{background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"8px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12}}>
               <span style={{fontWeight:600,color:"#92400e"}}>
                 {dashFilter==="brc"?"🔴 Showing: BRC Pending shipments":dashFilter==="rodtep"?"📋 Showing: RODTEP Pending shipments":"📋 Showing: GST Pending shipments"}
