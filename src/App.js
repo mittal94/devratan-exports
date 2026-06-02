@@ -2,6 +2,57 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 
 const SUPABASE_URL = "https://jqbagmezerzgewxaqtpt.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxYmFnbWV6ZXJ6Z2V3eGFxdHB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjMxMjIsImV4cCI6MjA5NTc5OTEyMn0.HAG23sw41cMXiyrnTC2-9dTZn5bO0oXMc69XKwB3IkU";
+const R2_WORKER = "https://devratan-r2-worker.mittal94.workers.dev";
+
+// ─── Document config ───────────────────────────────────────────────────────
+const SHIP_DOCS = [
+  {key:"master_file",       label:"Master File",              accept:".xls,.xlsm,.xlsx",          maxMB:10},
+  {key:"signed_contract",   label:"Signed Contract",          accept:".pdf,.jpg,.jpeg",            maxMB:7},
+  {key:"signed_proforma",   label:"Signed Proforma",          accept:".pdf,.jpg,.jpeg",            maxMB:3},
+  {key:"export_invoice",    label:"Export/Custom Invoice",    accept:".pdf,.jpg,.jpeg",            maxMB:3},
+  {key:"shipping_bill",     label:"Shipping Bill",            accept:".pdf,.jpg,.jpeg",            maxMB:5},
+  {key:"commercial_invoice",label:"Commercial Invoice",       accept:".pdf,.jpg,.jpeg",            maxMB:3},
+  {key:"packing_list",      label:"Packing List",             accept:".pdf,.jpg,.jpeg",            maxMB:2},
+  {key:"bill_of_lading",    label:"Bill of Lading",           accept:".pdf,.jpg,.jpeg",            maxMB:10},
+  {key:"phyto_certificate", label:"Phyto Certificate",        accept:".pdf,.jpg,.jpeg",            maxMB:3},
+  {key:"fumigation_cert",   label:"Fumigation Certificate",   accept:".pdf,.jpg,.jpeg",            maxMB:3},
+  {key:"health_certificate",label:"Health Certificate",       accept:".pdf,.jpg,.jpeg",            maxMB:2},
+  {key:"cert_of_origin",    label:"Certificate of Origin",    accept:".pdf,.jpg,.jpeg",            maxMB:3},
+  {key:"weight_quality",    label:"Weight & Quality Cert",    accept:".pdf,.jpg,.jpeg",            maxMB:3},
+  {key:"insurance",         label:"Insurance",                accept:".pdf,.jpg,.jpeg",            maxMB:3},
+  {key:"coc_ectn_doc",      label:"COC/ECTN",                 accept:".pdf,.jpg,.jpeg",            maxMB:3},
+  {key:"pesticide_report",  label:"Pesticide Report",         accept:".pdf,.jpg,.jpeg",            maxMB:3},
+  {key:"other_doc",         label:"Other",                    accept:".pdf,.jpg,.jpeg",            maxMB:5},
+];
+
+const BC_DOCS = [
+  {key:"bc_ref_copy",   label:"BC Reference Copy",   accept:".pdf", maxMB:3},
+];
+
+const r2Upload = async (folder, docKey, file) => {
+  const ext = file.name.split(".").pop();
+  const key = `${folder}/${docKey}/${docKey}.${ext}`;
+  const res = await fetch(`${R2_WORKER}/${key}`, {
+    method:"PUT", headers:{"Content-Type":file.type||"application/octet-stream"},
+    body: file
+  });
+  if(!res.ok) throw new Error("Upload failed");
+  return key;
+};
+
+const r2Delete = async (key) => {
+  const res = await fetch(`${R2_WORKER}/${key}`, {method:"DELETE"});
+  if(!res.ok) throw new Error("Delete failed");
+};
+
+const r2List = async (folder) => {
+  const res = await fetch(`${R2_WORKER}/list/${folder}`);
+  if(!res.ok) return [];
+  const data = await res.json();
+  return data.files||[];
+};
+
+const r2ViewUrl = (key) => `${R2_WORKER}/${key}`;
 
 const sb = async (path, opts = {}) => {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -741,7 +792,241 @@ function BCModal({bc,allShips,onSave,onClose,saving}){
   );
 }
 
-function DetailModal({shipment,bc,onClose}){
+
+// ─── Ship Documents Modal ────────────────────────────────────────────────────
+function ShipDocsModal({shipment, canUpload, canDelete, onClose}){
+  const [files, setFiles] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState({});
+  const [deleting, setDeleting] = useState({});
+  const fileRefs = useRef({});
+  const folder = `shipments/${shipment.invoice_no}`;
+
+  const loadFiles = async () => {
+    setLoading(true);
+    try {
+      const list = await r2List(folder);
+      const map = {};
+      list.forEach(f => { map[f.docType] = f; });
+      setFiles(map);
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadFiles(); }, []);
+
+  const handleUpload = async (docKey, file, maxMB, accept) => {
+    // Validate format
+    const ext = "."+file.name.split(".").pop().toLowerCase();
+    const allowed = accept.split(",");
+    if(!allowed.includes(ext)) { alert(`Invalid format. Allowed: ${accept}`); return; }
+    // Validate size
+    if(file.size > maxMB*1024*1024) { alert(`File too large. Max size: ${maxMB}MB`); return; }
+    setUploading(u => ({...u, [docKey]:true}));
+    try {
+      // Delete old if exists
+      if(files[docKey]) await r2Delete(files[docKey].key);
+      await r2Upload(folder, docKey, file);
+      await loadFiles();
+    } catch(e) { alert("Upload failed: "+e.message); }
+    setUploading(u => ({...u, [docKey]:false}));
+  };
+
+  const handleDelete = async (docKey) => {
+    if(!window.confirm("Delete this document?")) return;
+    setDeleting(d => ({...d, [docKey]:true}));
+    try {
+      await r2Delete(files[docKey].key);
+      await loadFiles();
+    } catch(e) { alert("Delete failed: "+e.message); }
+    setDeleting(d => ({...d, [docKey]:false}));
+  };
+
+  const fmtSize = bytes => bytes < 1024*1024 ? (bytes/1024).toFixed(0)+"KB" : (bytes/1024/1024).toFixed(1)+"MB";
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:10}}>
+      <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:640,maxHeight:"95vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
+        <div style={{background:"linear-gradient(135deg,#1e3a5f,#1e5799)",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
+          <div>
+            <div style={{fontWeight:700,color:"#fff",fontSize:14}}>📁 Documents — {shipment.invoice_no}</div>
+            <div style={{fontSize:11,color:"#93c5fd"}}>{shipment.buyer_name} · {shipment.invoice_date}</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
+        </div>
+
+        {loading ? (
+          <div style={{padding:30,textAlign:"center",color:"#64748b"}}>Loading documents...</div>
+        ) : (
+          <div style={{padding:14}}>
+            <div style={{display:"grid",gap:8}}>
+              {SHIP_DOCS.map(doc => {
+                const uploaded = files[doc.key];
+                const isUploading = uploading[doc.key];
+                const isDeleting = deleting[doc.key];
+                return(
+                  <div key={doc.key} style={{background:uploaded?"#f0fdf4":"#f8fafc",border:`1px solid ${uploaded?"#86efac":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{doc.label}</div>
+                      <div style={{fontSize:10,color:"#94a3b8"}}>{doc.accept.replace(/\./g,"").toUpperCase()} · Max {doc.maxMB}MB</div>
+                      {uploaded && (
+                        <div style={{fontSize:10,color:"#16a34a",marginTop:2}}>
+                          ✅ {fmtSize(uploaded.size)} · {new Date(uploaded.uploaded).toLocaleDateString("en-IN")}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                      {uploaded && (
+                        <a href={r2ViewUrl(uploaded.key)} target="_blank" rel="noreferrer" style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none"}}>
+                          👁 View
+                        </a>
+                      )}
+                      {canUpload && (
+                        <>
+                          <input
+                            type="file"
+                            accept={doc.accept}
+                            ref={el => fileRefs.current[doc.key]=el}
+                            onChange={e => { const f=e.target.files[0]; if(f) handleUpload(doc.key,f,doc.maxMB,doc.accept); e.target.value=""; }}
+                            style={{display:"none"}}
+                          />
+                          <button
+                            onClick={() => fileRefs.current[doc.key]?.click()}
+                            disabled={isUploading}
+                            style={{background:uploaded?"#fef3c7":"#dcfce7",color:uploaded?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}
+                          >
+                            {isUploading?"⏳":uploaded?"🔄 Replace":"⬆ Upload"}
+                          </button>
+                        </>
+                      )}
+                      {canDelete && uploaded && (
+                        <button
+                          onClick={() => handleDelete(doc.key)}
+                          disabled={isDeleting}
+                          style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}
+                        >
+                          {isDeleting?"⏳":"🗑"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{marginTop:12,padding:"10px 12px",background:"#eff6ff",borderRadius:8,fontSize:11,color:"#1d4ed8"}}>
+              📌 {Object.keys(files).length} of {SHIP_DOCS.length} documents uploaded
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── BC Documents Modal ──────────────────────────────────────────────────────
+function BCDocsModal({bc, canUpload, canDelete, onClose}){
+  const [files, setFiles] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState({});
+  const [deleting, setDeleting] = useState({});
+  const fileRefs = useRef({});
+  const folder = `bc/${bc.bc_no}`;
+
+  const loadFiles = async () => {
+    setLoading(true);
+    try {
+      const list = await r2List(folder);
+      const map = {};
+      list.forEach(f => { map[f.docType] = f; });
+      setFiles(map);
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadFiles(); }, []);
+
+  const handleUpload = async (docKey, file, maxMB) => {
+    if(file.size > maxMB*1024*1024){ alert(`File too large. Max size: ${maxMB}MB`); return; }
+    if(!file.name.match(/\.pdf$/i)){ alert("Only PDF files allowed."); return; }
+    setUploading(u=>({...u,[docKey]:true}));
+    try {
+      if(files[docKey]) await r2Delete(files[docKey].key);
+      await r2Upload(folder, docKey, file);
+      await loadFiles();
+    } catch(e){ alert("Upload failed: "+e.message); }
+    setUploading(u=>({...u,[docKey]:false}));
+  };
+
+  const handleDelete = async (docKey) => {
+    if(!window.confirm("Delete this document?")) return;
+    setDeleting(d=>({...d,[docKey]:true}));
+    try { await r2Delete(files[docKey].key); await loadFiles(); }
+    catch(e){ alert("Delete failed: "+e.message); }
+    setDeleting(d=>({...d,[docKey]:false}));
+  };
+
+  const fmtSize = bytes => bytes<1024*1024?(bytes/1024).toFixed(0)+"KB":(bytes/1024/1024).toFixed(1)+"MB";
+
+  // Build full doc list: BC ref + IRM wise + BRC wise
+  const allDocs = [
+    ...BC_DOCS,
+    ...(bc.irm_entries||[]).map((irm,i) => ({key:`irm_${i}`, label:`IRM Copy — ${irm.irm_no||"IRM #"+(i+1)}`, accept:".pdf", maxMB:3})),
+    ...(bc.brc_entries||[]).map((brc,i) => ({key:`brc_${i}`, label:`BRC Copy — ${brc.brc_no||"BRC #"+(i+1)}`, accept:".pdf", maxMB:3})),
+  ];
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:10}}>
+      <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:580,maxHeight:"95vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
+        <div style={{background:"linear-gradient(135deg,#15803d,#16a34a)",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
+          <div>
+            <div style={{fontWeight:700,color:"#fff",fontSize:14}}>📁 BC Documents — {bc.bc_no}</div>
+            <div style={{fontSize:11,color:"#bbf7d0"}}>{bc.bank_name} · {bc.bc_date||"—"}</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
+        </div>
+        {loading?(
+          <div style={{padding:30,textAlign:"center",color:"#64748b"}}>Loading documents...</div>
+        ):(
+          <div style={{padding:14}}>
+            <div style={{display:"grid",gap:8}}>
+              {allDocs.map(doc=>{
+                const uploaded=files[doc.key];
+                const isUploading=uploading[doc.key];
+                const isDeleting=deleting[doc.key];
+                return(
+                  <div key={doc.key} style={{background:uploaded?"#f0fdf4":"#f8fafc",border:`1px solid ${uploaded?"#86efac":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{doc.label}</div>
+                      <div style={{fontSize:10,color:"#94a3b8"}}>PDF only · Max {doc.maxMB}MB</div>
+                      {uploaded&&<div style={{fontSize:10,color:"#16a34a",marginTop:2}}>✅ {fmtSize(uploaded.size)} · {new Date(uploaded.uploaded).toLocaleDateString("en-IN")}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                      {uploaded&&<a href={r2ViewUrl(uploaded.key)} target="_blank" rel="noreferrer" style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none"}}>👁 View</a>}
+                      {canUpload&&(
+                        <>
+                          <input type="file" accept=".pdf" ref={el=>fileRefs.current[doc.key]=el} onChange={e=>{const f=e.target.files[0];if(f)handleUpload(doc.key,f,doc.maxMB);e.target.value="";}} style={{display:"none"}}/>
+                          <button onClick={()=>fileRefs.current[doc.key]?.click()} disabled={isUploading} style={{background:uploaded?"#fef3c7":"#dcfce7",color:uploaded?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+                            {isUploading?"⏳":uploaded?"🔄 Replace":"⬆ Upload"}
+                          </button>
+                        </>
+                      )}
+                      {canDelete&&uploaded&&<button onClick={()=>handleDelete(doc.key)} disabled={isDeleting} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>{isDeleting?"⏳":"🗑"}</button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{marginTop:12,padding:"10px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
+              📌 {Object.keys(files).length} of {allDocs.length} documents uploaded
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DetailModal({shipment,bc,onClose,onViewDocs}){
   if(!shipment)return <span/>;
   const s=shipment,c=calcShip(s);
   const brcNos=bc?bc.brc_entries?.map(b=>b.brc_no).filter(Boolean).join(", "):"—";
@@ -754,6 +1039,7 @@ function DetailModal({shipment,bc,onClose}){
           <h3 style={{margin:0,color:"#1e3a5f"}}>{s.invoice_no}</h3>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>exportShipmentPDF(s,bc)} style={{background:"#eff6ff",color:"#1d4ed8",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>📄 PDF</button>
+            <button onClick={onViewDocs} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>📁 Docs</button>
             <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>Close</button>
           </div>
         </div>
@@ -1063,6 +1349,8 @@ export default function App(){
   const [users,setUsers]=useState([]);
   const [pendings,setPendings]=useState([]);
   const [showApprovals,setShowApprovals]=useState(false);
+  const [shipDocsId,setShipDocsId]=useState(null);
+  const [bcDocsId,setBCDocsId]=useState(null);
   const [loading,setLoading]=useState(false);
   const [showShipForm,setShowShipForm]=useState(false);
   const [editShipId,setEditShipId]=useState(null);
@@ -1479,6 +1767,7 @@ export default function App(){
                         {(canAddShipment)&&<td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
                           {canEditShipment&&<button onClick={()=>openEditShip(s)} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>Edit</button>}
                           <button onClick={()=>exportShipmentPDF(s,getBC(s))} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📄</button>
+                          <button onClick={()=>setShipDocsId(s.id)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📁</button>
                           <button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📱</button>
                           {canDelete&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
                         </td>}
@@ -1524,6 +1813,7 @@ export default function App(){
                     <div style={{display:"flex",gap:6,alignItems:"center"}}>
                       <div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:700,color:"#16a34a"}}>{fU(bc.total_amt_usd)}</div><div style={{fontSize:11,color:"#15803d"}}>{fR(bc.total_amt_inr)}</div></div>
                       <button onClick={()=>exportBCPDF(bc)} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📄 PDF</button>
+                      <button onClick={()=>setBCDocsId(bc.id)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📁 Docs</button>
                       {canEdit&&<button onClick={()=>{setEditBC(bc);setShowBC(true);}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
                       {canDelete&&<button onClick={async()=>{if(!window.confirm(`Delete BC ${bc.bc_no}?`))return;try{await sb(`brc_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});await sb(`irm_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});await sb(`bill_collections?id=eq.${bc.id}`,{method:"DELETE"});await loadAll();}catch(e){alert("Error: "+e.message);}}} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
                     </div>
@@ -1580,7 +1870,7 @@ export default function App(){
 
       {showProfit&&<ProfitFormModal fy={fy} editId={editProfitId} form={profitForm} calc={profitCalc} fyShips={fyShips} setF={setPF} onSelectInvoice={selectProfitInv} onSave={saveProfit} onClose={()=>setShowProfit(false)} saving={saving}/>}
       {showBC&&<BCModal bc={editBC} allShips={ships} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
-      {viewShipId&&<DetailModal shipment={viewShip} bc={viewShip?getBC(viewShip):null} onClose={()=>setViewShipId(null)}/>}
+      {viewShipId&&<DetailModal shipment={viewShip} bc={viewShip?getBC(viewShip):null} onClose={()=>setViewShipId(null)} onViewDocs={()=>setShipDocsId(viewShipId)}/>}
       {showUsers&&<UserModal users={users} onClose={()=>setShowUsers(false)} onRefresh={loadAll}/>}
       {showChangePwd&&<ChangePwdModal onClose={()=>setShowChangePwd(false)}/>}
       {shareText&&<ShareModal text={shareText} onClose={()=>setShareText(null)}/>}
@@ -1596,6 +1886,8 @@ export default function App(){
         />
       )}
 
+      {shipDocsId&&ships.find(x=>x.id===shipDocsId)&&<ShipDocsModal shipment={ships.find(x=>x.id===shipDocsId)} canUpload={canEdit} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setShipDocsId(null)}/>}
+      {bcDocsId&&bcs.find(x=>x.id===bcDocsId)&&<BCDocsModal bc={bcs.find(x=>x.id===bcDocsId)} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBCDocsId(null)}/>}
       {showApprovals&&<ApprovalsModal pendings={pendings} userInfo={userInfo} onClose={()=>setShowApprovals(false)} onRefresh={loadAll} ships={ships}/>}
 
       {deleteId&&(
