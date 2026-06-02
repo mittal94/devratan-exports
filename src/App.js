@@ -871,6 +871,148 @@ function ProfitFormModal({fy,editId,form,calc,fyShips,setF,onSelectInvoice,onSav
   );
 }
 
+
+// ─── Approvals Modal ─────────────────────────────────────────────────────────
+function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships}){
+  const isJunior=userInfo?.role==="junior_accountant";
+  const isAdmin=userInfo?.role==="admin";
+  const isSenior=userInfo?.role==="senior_accountant";
+  const canReview=isAdmin||isSenior;
+  const [rejectNote,setRejectNote]=useState("");
+  const [rejectId,setRejectId]=useState(null);
+  const [saving,setSaving]=useState(false);
+  const [activeTab,setActiveTab]=useState("pending");
+
+  const myItems=isJunior?pendings.filter(p=>p.submitted_by===userInfo?.id):pendings;
+  const shown=myItems.filter(p=>p.status===activeTab);
+
+  const approve=async(pc)=>{
+    setSaving(true);
+    try{
+      if(pc.action==="add"){
+        await fetch(`${SUPABASE_URL}/rest/v1/shipments`,{method:"POST",headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json","Prefer":"return=representation"},body:JSON.stringify(pc.new_data)});
+      } else if(pc.action==="edit"&&pc.record_id){
+        await fetch(`${SUPABASE_URL}/rest/v1/shipments?id=eq.${pc.record_id}`,{method:"PATCH",headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json","Prefer":"return=representation"},body:JSON.stringify(pc.new_data)});
+      } else if(pc.action==="delete"&&pc.record_id){
+        await fetch(`${SUPABASE_URL}/rest/v1/shipments?id=eq.${pc.record_id}`,{method:"DELETE",headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json"}});
+      }
+      await fetch(`${SUPABASE_URL}/rest/v1/pending_changes?id=eq.${pc.id}`,{method:"PATCH",headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json","Prefer":"return=representation"},body:JSON.stringify({status:"approved",reviewed_by_name:userInfo.name,reviewed_at:new Date().toISOString()})});
+      await onRefresh();
+    }catch(e){alert("Error: "+e.message);}
+    setSaving(false);
+  };
+
+  const reject=async(pc)=>{
+    if(!rejectNote.trim()){alert("Please enter a rejection reason.");return;}
+    setSaving(true);
+    try{
+      await fetch(`${SUPABASE_URL}/rest/v1/pending_changes?id=eq.${pc.id}`,{method:"PATCH",headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json","Prefer":"return=representation"},body:JSON.stringify({status:"rejected",reviewed_by_name:userInfo.name,reviewed_at:new Date().toISOString(),rejection_note:rejectNote})});
+      setRejectId(null);setRejectNote("");
+      await onRefresh();
+    }catch(e){alert("Error: "+e.message);}
+    setSaving(false);
+  };
+
+  const actionColors={add:{bg:"#dcfce7",color:"#16a34a",label:"New Entry"},edit:{bg:"#dbeafe",color:"#1d4ed8",label:"Edit"},delete:{bg:"#fee2e2",color:"#dc2626",label:"Delete"}};
+  const statusColors={pending:{bg:"#fef3c7",color:"#d97706"},approved:{bg:"#dcfce7",color:"#16a34a"},rejected:{bg:"#fee2e2",color:"#dc2626"}};
+  const tabs=canReview?["pending","approved","rejected"]:["pending","approved","rejected"];
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:12}}>
+      <div style={{background:"#fff",borderRadius:14,padding:20,width:"100%",maxWidth:680,maxHeight:"93vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div>
+            <h3 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:15}}>{isJunior?"My Requests":"Approval Inbox"}</h3>
+            <p style={{margin:0,fontSize:11,color:"#64748b"}}>{canReview?"Review and approve/reject entries submitted by junior accountant":"Track status of your submitted entries"}</p>
+          </div>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:"flex",gap:4,marginBottom:14,borderBottom:"2px solid #f1f5f9",paddingBottom:4}}>
+          {tabs.map(t=>{
+            const cnt=(isJunior?pendings.filter(p=>p.submitted_by===userInfo?.id):pendings).filter(p=>p.status===t).length;
+            return(<button key={t} onClick={()=>setActiveTab(t)} style={{background:"none",border:"none",borderBottom:activeTab===t?"2px solid #1e3a5f":"2px solid transparent",color:activeTab===t?"#1e3a5f":"#64748b",padding:"6px 14px",cursor:"pointer",fontWeight:activeTab===t?700:500,fontSize:12,textTransform:"capitalize",marginBottom:-5}}>
+              {t} {cnt>0&&<span style={{background:t==="pending"?"#fef3c7":t==="rejected"?"#fee2e2":"#dcfce7",color:t==="pending"?"#d97706":t==="rejected"?"#dc2626":"#16a34a",borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:700,marginLeft:3}}>{cnt}</span>}
+            </button>);
+          })}
+        </div>
+
+        {shown.length===0&&(
+          <div style={{textAlign:"center",padding:"30px 0",color:"#94a3b8"}}>
+            <div style={{fontSize:32,marginBottom:8}}>{activeTab==="pending"?"⏳":activeTab==="approved"?"✅":"❌"}</div>
+            <div style={{fontSize:13,fontWeight:600}}>No {activeTab} entries</div>
+          </div>
+        )}
+
+        <div style={{display:"grid",gap:10}}>
+          {shown.map(pc=>{
+            const ac=actionColors[pc.action]||{bg:"#f1f5f9",color:"#64748b",label:pc.action};
+            const data=pc.new_data||pc.old_data||{};
+            const isRejecting=rejectId===pc.id;
+            return(
+              <div key={pc.id} style={{background:"#f8fafc",borderRadius:12,overflow:"hidden",border:"1px solid #e2e8f0"}}>
+                <div style={{padding:"10px 14px",borderBottom:"1px solid #e2e8f0",display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+                  <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                    <span style={{background:ac.bg,color:ac.color,borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700}}>{ac.label}</span>
+                    <span style={{fontWeight:700,color:"#1e3a5f",fontSize:13}}>{data.invoice_no||"—"}</span>
+                    <span style={{fontSize:11,color:"#64748b"}}>{data.buyer_name} · {data.invoice_date}</span>
+                  </div>
+                  <div style={{fontSize:11,color:"#94a3b8",textAlign:"right"}}>
+                    <div>By: <b style={{color:"#374151"}}>{pc.submitted_by_name}</b></div>
+                    <div>{new Date(pc.submitted_at).toLocaleDateString("en-IN")} {new Date(pc.submitted_at).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</div>
+                  </div>
+                </div>
+                <div style={{padding:"10px 14px"}}>
+                  {pc.action==="delete"?(
+                    <div style={{fontSize:12,color:"#dc2626",fontWeight:600}}>⚠️ Request to delete shipment: {pc.old_data?.invoice_no} — {pc.old_data?.buyer_name}</div>
+                  ):(
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:6,fontSize:11}}>
+                      {[["Product",data.product],["Qty (MT)",data.qty],["Rate/MT",data.rate_per_mt],["Terms",data.delivery_terms],["Country",data.buyer_country],["Port Load",data.port_of_loading]].map(([l,v])=>v?<div key={l}><span style={{color:"#64748b"}}>{l}: </span><b style={{color:"#1e293b"}}>{v}</b></div>:null)}
+                    </div>
+                  )}
+                  {pc.action==="edit"&&pc.old_data&&(
+                    <div style={{marginTop:8,background:"#fffbeb",borderRadius:6,padding:"6px 10px",fontSize:11,color:"#92400e"}}>
+                      📝 Edit request — original: {pc.old_data.invoice_no} · {pc.old_data.buyer_name}
+                    </div>
+                  )}
+                  {pc.status==="rejected"&&pc.rejection_note&&(
+                    <div style={{marginTop:8,background:"#fee2e2",borderRadius:6,padding:"8px 10px",fontSize:12}}>
+                      <b style={{color:"#dc2626"}}>Rejection reason:</b> <span style={{color:"#7f1d1d"}}>{pc.rejection_note}</span>
+                      {pc.reviewed_by_name&&<span style={{color:"#94a3b8",fontSize:11}}> — by {pc.reviewed_by_name}</span>}
+                    </div>
+                  )}
+                  {pc.status==="approved"&&(
+                    <div style={{marginTop:8,background:"#dcfce7",borderRadius:6,padding:"6px 10px",fontSize:11,color:"#15803d",fontWeight:600}}>
+                      ✅ Approved by {pc.reviewed_by_name} on {pc.reviewed_at?new Date(pc.reviewed_at).toLocaleDateString("en-IN"):"—"}
+                    </div>
+                  )}
+                  {isRejecting&&(
+                    <div style={{marginTop:10}}>
+                      <label style={{fontSize:11.5,fontWeight:600,color:"#dc2626",display:"block",marginBottom:4}}>Rejection Reason *</label>
+                      <textarea value={rejectNote} onChange={e=>setRejectNote(e.target.value)} rows={2} placeholder="Enter reason so junior accountant knows what to fix..." style={{width:"100%",border:"1px solid #fca5a5",borderRadius:6,padding:"6px 8px",fontSize:12,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+                      <div style={{display:"flex",gap:8,marginTop:8}}>
+                        <button onClick={()=>reject(pc)} disabled={saving} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:6,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>{saving?"Saving...":"Confirm Reject"}</button>
+                        <button onClick={()=>{setRejectId(null);setRejectNote("");}} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                  {canReview&&pc.status==="pending"&&!isRejecting&&(
+                    <div style={{display:"flex",gap:8,marginTop:10}}>
+                      <button onClick={()=>approve(pc)} disabled={saving} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"7px 18px",cursor:"pointer",fontWeight:700,fontSize:12}}>✅ Approve</button>
+                      <button onClick={()=>setRejectId(pc.id)} style={{background:"#fee2e2",color:"#dc2626",border:"1px solid #fca5a5",borderRadius:7,padding:"7px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>❌ Reject</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App(){
   const [session,setSession]=useState(()=>{try{const s=localStorage.getItem("sb_session");return s?JSON.parse(s):null;}catch{return null;}});
   const [userInfo,setUserInfo]=useState(()=>{try{const u=localStorage.getItem("sb_user");return u?JSON.parse(u):null;}catch{return null;}});
@@ -881,6 +1023,8 @@ export default function App(){
   const [bcs,setBcs]=useState([]);
   const [profits,setProfits]=useState([]);
   const [users,setUsers]=useState([]);
+  const [pendings,setPendings]=useState([]);
+  const [showApprovals,setShowApprovals]=useState(false);
   const [loading,setLoading]=useState(false);
   const [showShipForm,setShowShipForm]=useState(false);
   const [editShipId,setEditShipId]=useState(null);
@@ -922,13 +1066,14 @@ export default function App(){
     if(!session)return;
     setLoading(true);
     try{
-      const[s,b,p,u]=await Promise.all([
+      const[s,b,p,u,pc]=await Promise.all([
         sb("shipments?select=*&order=invoice_date.desc"),
         sb("bill_collections?select=*,irm_entries(*),brc_entries(*)"),
         sb("profitability?select=*&order=created_at.desc"),
         sb("users?select=*&order=name.asc"),
+        sb("pending_changes?select=*&order=submitted_at.desc"),
       ]);
-      setShips(s||[]);setBcs(b||[]);setProfits(p||[]);setUsers(u||[]);
+      setShips(s||[]);setBcs(b||[]);setProfits(p||[]);setUsers(u||[]);setPendings(pc||[]);
     }catch(e){console.error(e);}
     setLoading(false);
   },[session]);
@@ -983,24 +1128,58 @@ export default function App(){
   const openEditShip=s=>{setShipForm({...s});setEditShipId(s.id);setShowShipForm(true);};
   const setSF=(k,v)=>setShipForm(f=>({...f,[k]:v}));
 
+  const prepShipPayload=(form)=>{
+    const payload={...form};
+    delete payload.id;delete payload.created_at;
+    ["qty","rate_per_mt","exchange_rate","igst","fob_value_usd","rodtep_amount"].forEach(f=>{if(payload[f]===""||payload[f]===undefined)payload[f]=null;else payload[f]=Number(payload[f])||null;});
+    ["invoice_date","shipping_bill_date","bl_date"].forEach(f=>{if(payload[f]===""||payload[f]===undefined)payload[f]=null;});
+    return payload;
+  };
+
   const saveShip=async()=>{
     if(!shipForm.invoice_no||!shipForm.buyer_name){alert("Invoice No and Buyer Name required.");return;}
     setSaving(true);
     try{
-      const payload={...shipForm};
-      delete payload.id;delete payload.created_at;
-      const numFields=["qty","rate_per_mt","exchange_rate","igst","fob_value_usd","rodtep_amount"];
-      numFields.forEach(f=>{if(payload[f]===""||payload[f]===undefined)payload[f]=null; else payload[f]=Number(payload[f])||null;});
-      const dateFields=["invoice_date","shipping_bill_date","bl_date"];
-      dateFields.forEach(f=>{if(payload[f]===""||payload[f]===undefined)payload[f]=null;});
-      if(editShipId){await sb(`shipments?id=eq.${editShipId}`,{method:"PATCH",body:JSON.stringify(payload)});}
-      else{await sb("shipments",{method:"POST",body:JSON.stringify(payload)});}
-      await loadAll();setShowShipForm(false);
+      const payload=prepShipPayload(shipForm);
+      if(isJuniorAccountant){
+        // Route through approval workflow
+        const action=editShipId?"edit":"add";
+        const oldData=editShipId?ships.find(s=>s.id===editShipId):null;
+        await sb("pending_changes",{method:"POST",body:JSON.stringify({
+          action, table_name:"shipments",
+          record_id:editShipId||null,
+          new_data:payload,
+          old_data:oldData||null,
+          submitted_by:userInfo.id,
+          submitted_by_name:userInfo.name,
+          status:"pending"
+        })});
+        await loadAll();setShowShipForm(false);
+        alert("✅ Submitted for approval. Your entry will appear once approved by senior accountant or admin.");
+      } else {
+        if(editShipId){await sb(`shipments?id=eq.${editShipId}`,{method:"PATCH",body:JSON.stringify(payload)});}
+        else{await sb("shipments",{method:"POST",body:JSON.stringify(payload)});}
+        await loadAll();setShowShipForm(false);
+      }
     }catch(e){alert("Error: "+e.message);}
     setSaving(false);
   };
 
-  const deleteShip=async id=>{setSaving(true);try{await sb(`shipments?id=eq.${id}`,{method:"DELETE"});await loadAll();setDeleteId(null);}catch(e){alert("Error: "+e.message);}setSaving(false);};
+  const deleteShip=async id=>{
+    setSaving(true);
+    try{
+      if(isJuniorAccountant){
+        const oldData=ships.find(s=>s.id===id);
+        await sb("pending_changes",{method:"POST",body:JSON.stringify({action:"delete",table_name:"shipments",record_id:id,new_data:null,old_data:oldData||null,submitted_by:userInfo.id,submitted_by_name:userInfo.name,status:"pending"})});
+        await loadAll();setDeleteId(null);
+        alert("Delete request submitted for approval by senior accountant or admin.");
+      } else {
+        await sb(`shipments?id=eq.${id}`,{method:"DELETE"});
+        await loadAll();setDeleteId(null);
+      }
+    }catch(e){alert("Error: "+e.message);}
+    setSaving(false);
+  };
 
   const openAddProfit=()=>{setProfitForm({...EMPTY_PROFIT});setEditProfitId(null);setShowProfit(true);};
   const openEditProfit=p=>{setProfitForm({...p});setEditProfitId(p.id);setShowProfit(true);};
@@ -1115,6 +1294,12 @@ export default function App(){
           {canEdit&&<button onClick={()=>setShowImport(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📥 Import</button>}
           <button onClick={shareAll} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📱 Share</button>
           {isAdmin&&<button onClick={()=>setShowUsers(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>👥 Users</button>}
+          {(isAdmin||isSeniorAccountant)&&(()=>{const cnt=pendings.filter(p=>p.status==="pending").length;return(<button onClick={()=>setShowApprovals(true)} style={{background:cnt>0?"rgba(239,68,68,0.8)":"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600,position:"relative"}}>
+            ✅ Approvals{cnt>0&&<span style={{background:"#fbbf24",color:"#1e3a5f",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,marginLeft:5}}>{cnt}</span>}
+          </button>);})()}
+          {isJuniorAccountant&&(()=>{const mine=pendings.filter(p=>p.submitted_by===userInfo?.id);const rej=mine.filter(p=>p.status==="rejected").length;const pend=mine.filter(p=>p.status==="pending").length;return(<button onClick={()=>setShowApprovals(true)} style={{background:rej>0?"rgba(239,68,68,0.8)":pend>0?"rgba(251,191,36,0.8)":"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+            📋 My Requests{(rej>0||pend>0)&&<span style={{background:"#fff",color:"#1e3a5f",borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:800,marginLeft:5}}>{rej>0?rej:pend}</span>}
+          </button>);})()}
           <button onClick={()=>setShowChangePwd(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>🔑 Password</button>
           <button onClick={loadAll} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>🔄 Refresh</button>
         </div>
@@ -1132,59 +1317,6 @@ export default function App(){
 
       <div style={{padding:"12px",maxWidth:1400,margin:"0 auto"}}>
 
-        {tab==="dashboard"&&(
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
-              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Dashboard</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>FY {fy} · Live cloud data</p></div>
-              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                <FYBar selected={fy} onChange={setFy} counts={fyCounts}/>
-                <button onClick={()=>setExportModal("dashboard")} style={{background:"#1e3a5f",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:11}}>📄 Export</button>
-              </div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:18}}>
-              {[{l:"Shipments",v:totals.count,i:"📦",c:"#1e3a5f",click:()=>{setTab("shipments");setDashFilter(null);}},
-                {l:"Invoice (USD)",v:fU(totals.invUSD),i:"🧾",c:"#0369a1",click:null},
-                {l:"Invoice (INR)",v:fR(totals.invINR),i:"₹",c:"#7c3aed",click:null},
-                {l:"FOB (USD)",v:fU(totals.fobUSD),i:"🚢",c:"#0891b2",click:null},
-                {l:"Pmt Rcvd (USD)",v:fU(totals.paidUSD),i:"✅",c:"#16a34a",click:null},
-                {l:"Pmt Rcvd (INR)",v:fR(totals.paidINR),i:"✅",c:"#15803d",click:null},
-                {l:"Balance (USD)",v:fU(totals.bal),i:"⏳",c:totals.bal>0?"#dc2626":"#16a34a",click:null},
-                {l:"BRC Pending",v:totals.brcPend,i:"🔴",c:"#d97706",click:()=>{setTab("shipments");setDashFilter("brc");}},
-                {l:"RODTEP Pending",v:totals.rodPend,i:"📋",c:"#d97706",click:()=>{setTab("shipments");setDashFilter("rodtep");}},
-                {l:"GST Pending",v:totals.gstPend,i:"📋",c:"#d97706",click:()=>{setTab("shipments");setDashFilter("gst");}}
-              ].map((x,i)=>(
-                <div key={i} onClick={x.click||undefined} style={{background:"#fff",borderRadius:10,padding:"12px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderLeft:`4px solid ${x.c}`,cursor:x.click?"pointer":"default",transition:"box-shadow 0.15s"}}>
-                  <div style={{fontSize:16}}>{x.i}</div><div style={{fontSize:13,fontWeight:700,color:x.c,margin:"3px 0 2px",wordBreak:"break-all"}}>{x.v}</div>
-                  <div style={{fontSize:10,color:"#64748b"}}>{x.l}{x.click&&<span style={{marginLeft:4,fontSize:9,color:"#0369a1"}}>↗ view</span>}</div>
-                </div>
-              ))}
-            </div>
-            <h3 style={{color:"#1e3a5f",marginBottom:8,fontSize:13}}>Year-wise Summary</h3>
-            <div style={{background:"#fff",borderRadius:12,overflow:"auto",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:18}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                <thead><tr style={{background:"#f8fafc"}}>{["FY","Ships","Invoice(USD)","Pmt(USD)","Balance(USD)"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:h==="FY"||h==="Ships"?"left":"right",color:"#64748b",fontWeight:600,fontSize:11,borderBottom:"1px solid #e2e8f0"}}>{h}</th>)}</tr></thead>
-                <tbody>{allYears.map(row=>(
-                  <tr key={row.fy} onClick={()=>setFy(row.fy)} style={{borderBottom:"1px solid #f1f5f9",cursor:"pointer",background:fy===row.fy?"#eff6ff":"transparent"}}>
-                    <td style={{padding:"8px 10px",fontWeight:700,color:fy===row.fy?"#1e3a5f":"#374151",fontSize:11}}>{fy===row.fy&&"▶ "}FY {row.fy}{row.fy===CURR_FY&&<span style={{marginLeft:4,fontSize:9,background:"#dcfce7",color:"#16a34a",borderRadius:10,padding:"1px 5px"}}>Current</span>}</td>
-                    <td style={{padding:"8px 10px",fontSize:11}}>{row.count||"—"}</td>
-                    <td style={{padding:"8px 10px",textAlign:"right",fontWeight:600,fontSize:11}}>{row.count>0?fU(row.inv):"—"}</td>
-                    <td style={{padding:"8px 10px",textAlign:"right",color:"#16a34a",fontSize:11}}>{row.count>0?fU(row.paid):"—"}</td>
-                    <td style={{padding:"8px 10px",textAlign:"right",color:row.bal>0?"#dc2626":"#16a34a",fontSize:11}}>{row.count>0?fU(row.bal):"—"}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-            <h3 style={{color:"#1e3a5f",marginBottom:8,fontSize:13}}>Recent Shipments — FY {fy}</h3>
-            {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:20,textAlign:"center",color:"#94a3b8",fontSize:13}}>No shipments for FY {fy}.</div>:
-            <div style={{background:"#fff",borderRadius:12,overflow:"auto",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:500}}>
-                <thead><tr style={{background:"#f8fafc"}}>{["Invoice No","Buyer","Inv.(USD)","Balance",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:11,borderBottom:"1px solid #e2e8f0"}}>{h}</th>)}</tr></thead>
-                <tbody>{fyShips.slice(0,8).map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);return(
-                  <tr key={s.id} style={{borderBottom:"1px solid #f1f5f9"}}>
-                    <td style={{padding:"8px 10px",fontWeight:600,color:"#1e3a5f",fontSize:11}}>{s.invoice_no}</td>
-                    <td style={{padding:"8px 10px",fontSize:11}}>{s.buyer_name}</td>
-                    <td style={{padding:"8px 10px",fontWeight:600,fontSize:11}}>{fU(c.invoiceAmtUSD)}</td>
-                    <td style={{padding:"8px 10px",fontWeight:600,color:bal>0?"#dc2626":"#16a34a",fontSize:11}}>{fU(bal)}</td>
                     <td style={{padding:"8px 10px"}}><button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>📱</button></td>
                   </tr>
                 );})}
@@ -1204,6 +1336,14 @@ export default function App(){
                 {canAddShipment&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add</button>}
               </div>
             </div>
+            {isJuniorAccountant&&(()=>{const myPend=pendings.filter(p=>p.submitted_by===userInfo?.id&&p.status==="pending");const myRej=pendings.filter(p=>p.submitted_by===userInfo?.id&&p.status==="rejected");return(<>
+              {myPend.length>0&&<div style={{background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"8px 14px",marginBottom:8,fontSize:12,color:"#92400e",fontWeight:600}}>
+                ⏳ {myPend.length} entry(s) waiting for approval
+              </div>}
+              {myRej.length>0&&<div style={{background:"#fee2e2",border:"1px solid #fca5a5",borderRadius:8,padding:"8px 14px",marginBottom:8,fontSize:12,color:"#dc2626",fontWeight:600,cursor:"pointer"}} onClick={()=>setShowApprovals(true)}>
+                ❌ {myRej.length} entry(s) rejected — tap to view reason
+              </div>}
+            </>)})()}
             {dashFilter&&<div style={{background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"8px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12}}>
               <span style={{fontWeight:600,color:"#92400e"}}>
                 {dashFilter==="brc"?"🔴 Showing: BRC Pending shipments":dashFilter==="rodtep"?"📋 Showing: RODTEP Pending shipments":"📋 Showing: GST Pending shipments"}
@@ -1375,6 +1515,8 @@ export default function App(){
           onClose={()=>setExportModal(null)}
         />
       )}
+
+      {showApprovals&&<ApprovalsModal pendings={pendings} userInfo={userInfo} onClose={()=>setShowApprovals(false)} onRefresh={loadAll} ships={ships}/>}
 
       {deleteId&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
