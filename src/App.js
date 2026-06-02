@@ -59,7 +59,7 @@ const calcProfit = p => {
 
 const iS = {width:"100%",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px",fontSize:13,outline:"none",boxSizing:"border-box",background:"#f8fafc"};
 const cS = {...iS,background:"#e0f2fe",color:"#0369a1",fontWeight:600,cursor:"not-allowed"};
-const bMap = {Received:{bg:"#dcfce7",color:"#16a34a"},Pending:{bg:"#fef3c7",color:"#d97706"},Error:{bg:"#fee2e2",color:"#dc2626"},NA:{bg:"#f1f5f9",color:"#64748b"},admin:{bg:"#dbeafe",color:"#1d4ed8"},accountant:{bg:"#f3e8ff",color:"#7c3aed"},viewer:{bg:"#f1f5f9",color:"#64748b"}};
+const bMap = {Received:{bg:"#dcfce7",color:"#16a34a"},Pending:{bg:"#fef3c7",color:"#d97706"},Error:{bg:"#fee2e2",color:"#dc2626"},NA:{bg:"#f1f5f9",color:"#64748b"},admin:{bg:"#dbeafe",color:"#1d4ed8"},accountant:{bg:"#f3e8ff",color:"#7c3aed"},senior_accountant:{bg:"#f3e8ff",color:"#7c3aed"},junior_accountant:{bg:"#fef9c3",color:"#854d0e"},viewer:{bg:"#f1f5f9",color:"#64748b"}};
 
 const escv = v => `"${String(v??'').replace(/"/g,'""')}"`;
 const toCSV = (h,r) => [h.map(escv).join(','),...r.map(x=>x.map(escv).join(','))].join('\n');
@@ -647,7 +647,7 @@ function UserModal({users,onClose,onRefresh}){
         <SH t={editId?"Edit User":"Add New User"}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
           {[["name","Full Name","text"],["email","Email","email"],["password","Password","password"]].map(([k,l,t])=><div key={k}><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label><input type={t} value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={iS} disabled={!!(editId&&k==="email")}/></div>)}
-          <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Role</label><select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={iS}><option value="admin">Admin</option><option value="accountant">Accountant</option><option value="viewer">Viewer</option></select></div>
+          <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Role</label><select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} style={iS}><option value="admin">Admin</option><option value="senior_accountant">Senior Accountant</option><option value="junior_accountant">Junior Accountant</option><option value="accountant">Accountant</option><option value="viewer">Viewer</option></select></div>
         </div>
         {msg&&<div style={{background:msg.includes("Error")?"#fee2e2":"#dcfce7",color:msg.includes("Error")?"#dc2626":"#16a34a",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:12}}>{msg}</div>}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -935,9 +935,17 @@ export default function App(){
 
   useEffect(()=>{loadAll();},[loadAll]);
 
-  const canEdit=userInfo&&(userInfo.role==="admin"||userInfo.role==="accountant");
-  const canDelete=userInfo&&userInfo.role==="admin";
   const isAdmin=userInfo&&userInfo.role==="admin";
+  const isSeniorAccountant=userInfo&&userInfo.role==="senior_accountant";
+  const isJuniorAccountant=userInfo&&userInfo.role==="junior_accountant";
+  // junior_accountant can only add shipments (not edit/delete/BC/P&L)
+  const canEdit=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant"||isJuniorAccountant);
+  const canDelete=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant");
+  const canEditBC=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant");
+  const canEditPL=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant");
+  // junior_accountant: can add shipment but NOT edit/delete existing ones
+  const canEditShipment=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant");
+  const canAddShipment=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant"||isJuniorAccountant);
   const getBC=s=>bcs.find(b=>b.id===s.bc_id)||null;
 
   const fyCounts=useMemo(()=>{const c={};ALL_FYS.forEach(f=>c[f]=0);ships.forEach(s=>{const f=getFY(s.invoice_date);if(c[f]!==undefined)c[f]++;});return c;},[ships]);
@@ -1113,7 +1121,9 @@ export default function App(){
       </div>
 
       <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-        {[["dashboard","📊 Dashboard"],["shipments","📦 Register"],["profitability","💰 P&L"],["bcmanager","🏦 Bill Coll."]].map(([k,l])=>(
+        {[["dashboard","📊 Dashboard"],["shipments","📦 Register"],
+          ...(!isJuniorAccountant?[["profitability","💰 P&L"],["bcmanager","🏦 Bill Coll."]]:[])
+        ].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)} style={{background:"none",border:"none",borderBottom:tab===k?"3px solid #1e3a5f":"3px solid transparent",color:tab===k?"#1e3a5f":"#64748b",padding:"11px 14px",cursor:"pointer",fontWeight:tab===k?700:500,fontSize:12,whiteSpace:"nowrap",flex:"1 0 auto"}}>{l}</button>
         ))}
       </div>
@@ -1191,7 +1201,7 @@ export default function App(){
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 <FYBar selected={fy} onChange={f=>{setFy(f);setSearch("");}} counts={fyCounts}/>
                 <button onClick={()=>setExportModal("shipments")} style={{background:"#0369a1",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:11}}>📤 Export</button>
-                {canEdit&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add</button>}
+                {canAddShipment&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add</button>}
               </div>
             </div>
             {dashFilter&&<div style={{background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"8px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12}}>
@@ -1202,12 +1212,12 @@ export default function App(){
               <button onClick={()=>setDashFilter(null)} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>✕ Clear Filter</button>
             </div>}
             <div style={{marginBottom:10}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{...iS,fontSize:13}}/></div>
-            {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:40,textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📭</div><div style={{fontSize:14,fontWeight:600}}>No shipments for FY {fy}</div>{canEdit&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600,marginTop:10,fontSize:13}}>+ Add First Shipment</button>}</div>:
+            {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:40,textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📭</div><div style={{fontSize:14,fontWeight:600}}>No shipments for FY {fy}</div>{canAddShipment&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600,marginTop:10,fontSize:13}}>+ Add First Shipment</button>}</div>:
             <>
               <div style={{background:"#fff",borderRadius:12,overflow:"auto",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:2000}}>
                   <thead><tr>
-                    <Th col="invoice_no" label="Invoice No"/><Th col="invoice_date" label="Date"/><Th col="buyer_name" label="Buyer"/><Th col="buyer_country" label="Country"/><Th col="product" label="Product"/><Th col="port_of_loading" label="Port Load"/><Th col="port_of_discharge" label="Port Disch"/><Th col="shipping_bill_no" label="SB No"/><Th col="shipping_bill_date" label="SB Date"/><Th col="port_code" label="Port Code"/><Th col="bl_no" label="BL No"/><Th col="bl_date" label="BL Date"/><Th col="qty" label="Qty(MT)" right/><Th col="rate_per_mt" label="Rate/MT" right/><Th col="delivery_terms" label="Terms"/><Th col="i1" label="Inv(USD)" right/><Th col="exchange_rate" label="ExRate" right/><Th col="i2" label="Inv(INR)" right/><Th col="igst" label="IGST" right/><Th col="i3" label="Gross(INR)" right/><Th col="fob_value_usd" label="FOB(USD)" right/><Th col="i4" label="FOB(INR)" right/><Th col="rodtep_amount" label="RODTEP(INR)" right/><Th col="rodtep_status" label="RODTEP"/><Th col="gst_status" label="GST"/><Th col="bc_no" label="BC No"/><Th col="bc_date" label="BC Date"/><Th col="brc_nos" label="BRC No(s)"/><Th col="brc_dates" label="BRC Dates"/><Th col="paid_usd" label="Pmt(USD)" right/><Th col="paid_inr" label="Pmt(INR)" right/><Th col="bal" label="Balance(USD)" right/>
+                    <Th col="invoice_no" label="Invoice No"/><Th col="invoice_date" label="Date"/><Th col="buyer_name" label="Buyer"/><Th col="buyer_country" label="Country"/><Th col="product" label="Product"/><Th col="port_of_loading" label="Port Load"/><Th col="port_of_discharge" label="Port Disch"/><Th col="shipping_bill_no" label="SB No"/><Th col="shipping_bill_date" label="SB Date"/><Th col="port_code" label="Port Code"/><Th col="bl_no" label="BL No"/><Th col="bl_date" label="BL Date"/><Th col="qty" label="Qty(MT)" right/><Th col="rate_per_mt" label="Rate/MT" right/><Th col="delivery_terms" label="Terms"/><Th col="i1" label="Inv(USD)" right/><Th col="exchange_rate" label="ExRate" right/><Th col="i2" label="Inv(INR)" right/><Th col="igst" label="IGST" right/><Th col="i3" label="Gross(INR)" right/><Th col="fob_value_usd" label="FOB(USD)" right/><Th col="i4" label="FOB(INR)" right/><Th col="rodtep_amount" label="RODTEP(INR)" right/><Th col="rodtep_status" label="RODTEP"/><Th col="gst_status" label="GST"/><Th col="bc_no" label="BC No"/><Th col="bc_bank" label="BC Bank"/><Th col="bc_date" label="BC Date"/><Th col="brc_nos" label="BRC No(s)"/><Th col="brc_dates" label="BRC Dates"/><Th col="paid_usd" label="Pmt(USD)" right/><Th col="paid_inr" label="Pmt(INR)" right/><Th col="bal" label="Balance(USD)" right/>
                     {canEdit&&<th style={{padding:"9px 10px",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",background:"#f8fafc",whiteSpace:"nowrap"}}>Actions</th>}
                   </tr></thead>
                   <tbody>
@@ -1239,14 +1249,15 @@ export default function App(){
                         <td style={{padding:"7px 10px"}}><Badge val={s.rodtep_status}/></td>
                         <td style={{padding:"7px 10px"}}><Badge val={s.gst_status}/></td>
                         <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>{bc?<span style={{fontWeight:600,color:"#1e3a5f"}}>{bc.bc_no}</span>:<span style={{color:"#94a3b8",fontSize:11}}>—</span>}</td>
+                        <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>{bc?<Badge val={bc.bank_name} map={{SBI:{bg:"#dcfce7",color:"#16a34a"},INDUSIND:{bg:"#dbeafe",color:"#1d4ed8"}}}/>:<span style={{color:"#94a3b8",fontSize:11}}>—</span>}</td>
                         <td style={{padding:"7px 10px",color:"#64748b",whiteSpace:"nowrap"}}>{bc?bc.bc_date:"—"}</td>
                         <td style={{padding:"7px 10px",color:"#16a34a",fontWeight:600,whiteSpace:"nowrap"}}>{brcNos}</td>
                         <td style={{padding:"7px 10px",color:"#64748b",whiteSpace:"nowrap"}}>{brcDts}</td>
                         <td style={{padding:"7px 10px",textAlign:"right",color:"#16a34a",fontWeight:600}}>{bc?fU(bc.total_amt_usd):"—"}</td>
                         <td style={{padding:"7px 10px",textAlign:"right",color:"#15803d",fontWeight:600}}>{bc?fR(bc.total_amt_inr):"—"}</td>
                         <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:bal>0?"#dc2626":"#16a34a"}}>{fU(bal)}</td>
-                        {canEdit&&<td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
-                          <button onClick={()=>openEditShip(s)} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>Edit</button>
+                        {(canAddShipment)&&<td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
+                          {canEditShipment&&<button onClick={()=>openEditShip(s)} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>Edit</button>}
                           <button onClick={()=>exportShipmentPDF(s,getBC(s))} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📄</button>
                           <button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📱</button>
                           {canDelete&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
@@ -1268,10 +1279,10 @@ export default function App(){
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 <FYBar selected={fy} onChange={setFy} counts={fyCounts}/>
                 <button onClick={()=>setExportModal("profitability")} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:11}}>📤 Export</button>
-                {canEdit&&<button onClick={openAddProfit} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add</button>}
+                {canEditPL&&<button onClick={openAddProfit} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add</button>}
               </div>
             </div>
-            <ProfitabilityContent fy={fy} fyProfits={fyProfits} canEdit={canEdit} canDelete={canDelete} openAddProfit={openAddProfit} openEditProfit={openEditProfit} onDelete={deleteProfit}/>
+            <ProfitabilityContent fy={fy} fyProfits={fyProfits} canEdit={canEditPL} canDelete={canDelete} openAddProfit={openAddProfit} openEditProfit={openEditProfit} onDelete={deleteProfit}/>
           </div>
         )}
 
@@ -1281,7 +1292,7 @@ export default function App(){
               <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Bill Collections</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>{bcs.length} total</p></div>
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 <button onClick={()=>setExportModal("bc")} style={{background:"#15803d",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:11}}>📤 Export</button>
-                {canEdit&&<button onClick={()=>{setEditBC(null);setShowBC(true);}} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New BC</button>}
+                {canEditBC&&<button onClick={()=>{setEditBC(null);setShowBC(true);}} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New BC</button>}
               </div>
             </div>
             {bcs.length===0&&<div style={{background:"#fff",borderRadius:12,padding:30,textAlign:"center",color:"#94a3b8",fontSize:13}}>No bill collections yet.</div>}
@@ -1330,7 +1341,7 @@ export default function App(){
             <SH t="Bill Collection"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,alignItems:"end",marginBottom:8}}>
               <div><label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:2}}>Bill Collection No</label><select value={shipForm.bc_id||""} onChange={e=>setSF("bc_id",e.target.value?Number(e.target.value):null)} style={iS}><option value="">Not linked</option>{bcs.map(b=><option key={b.id} value={b.id}>{b.bc_no} ({b.bank_name}) — {fU(b.total_amt_usd)}</option>)}</select></div>
-              <button onClick={()=>setShowBC(true)} style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>+ New</button>
+              {canEditBC&&<button onClick={()=>setShowBC(true)} style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>+ New</button>}
             </div>
             {selectedBC&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:7,padding:8,fontSize:11,marginBottom:10}}><b style={{color:"#15803d"}}>{selectedBC.bc_no}</b> · {fU(selectedBC.total_amt_usd)}</div>}
             {shipForm.invoice_date&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"6px 10px",marginBottom:10,fontSize:11,color:"#1d4ed8"}}>FY: {getFY(shipForm.invoice_date)}</div>}
