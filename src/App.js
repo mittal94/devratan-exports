@@ -32,8 +32,8 @@ const ALL_FYS = ["2020-21","2021-22","2022-23","2023-24","2024-25","2025-26","20
 const CURR_FY = "2026-27";
 const BANKS = ["SBI","INDUSIND"];
 const DEL_TERMS = ["CIF","FOB"];
-const RODTEP_ST = ["Pending","Received","Error"];
-const GST_ST = ["Pending","Received","Error"];
+const RODTEP_ST = ["Pending","Received","Error","NA"];
+const GST_ST = ["Pending","Received","Error","NA"];
 const COUNTRIES = ["Afghanistan","Albania","Algeria","Andorra","Angola","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Cambodia","Cameroon","Canada","Chad","Chile","China","Colombia","Congo (DRC)","Costa Rica","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominican Republic","Ecuador","Egypt","El Salvador","Estonia","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Guatemala","Guinea","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Ivory Coast","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kuwait","Laos","Latvia","Lebanon","Libya","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Mauritania","Mauritius","Mexico","Moldova","Mongolia","Morocco","Mozambique","Myanmar","Namibia","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","Norway","Oman","Pakistan","Palestine","Panama","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saudi Arabia","Senegal","Serbia","Sierra Leone","Singapore","Slovakia","Slovenia","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Togo","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Uganda","Ukraine","UAE","UK","USA","Uruguay","Uzbekistan","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
 
 const getFY = d => { if(!d)return CURR_FY; const dt=new Date(d),y=dt.getFullYear(),m=dt.getMonth()+1; return m>=4?`${y}-${String(y+1).slice(2)}`:`${y-1}-${String(y).slice(2)}`; };
@@ -41,6 +41,7 @@ const n = v => Number(v)||0;
 const fi = (v,d=2) => n(v).toLocaleString("en-IN",{minimumFractionDigits:d,maximumFractionDigits:d});
 const fU = v => "$"+fi(v);
 const fR = v => "₹"+fi(v);
+const pdfINR = v => "INR "+fi(v);
 
 const calcShip = s => {
   const inv = n(s.qty)*n(s.rate_per_mt);
@@ -49,14 +50,16 @@ const calcShip = s => {
 
 const calcProfit = p => {
   const rice=n(p.rice_purchase_val), interest=rice*0.01, bankCh=n(p.payment_received_inr)*0.0011;
-  const totalFOB=n(p.cha_clearing)+n(p.shipping_line_charges)+n(p.inspect_agency)+n(p.coc_ectn)+n(p.other_exp);
-  const totalCIF=rice+n(p.pp_bags_purchase_val)+n(p.local_transport)+interest+bankCh+n(p.ocean_freight)+totalFOB;
-  return { interest, bankCh, totalFOB, totalCIF, profit:n(p.payment_received_inr)-totalCIF };
+  const localBrokerage=n(p.qty_mt)*100;
+  const totalFOB=n(p.cha_clearing)+n(p.shipping_line_charges)+n(p.inspect_agency)+n(p.coc_ectn)+n(p.other_exp)+localBrokerage;
+  const totalDirect=rice+n(p.pp_bags_purchase_val)+n(p.local_transport)+interest+bankCh+n(p.ocean_freight);
+  const totalCIF=totalDirect+totalFOB;
+  return { interest, bankCh, localBrokerage, totalFOB, totalDirect, totalCIF, profit:n(p.payment_received_inr)-totalCIF };
 };
 
 const iS = {width:"100%",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px",fontSize:13,outline:"none",boxSizing:"border-box",background:"#f8fafc"};
 const cS = {...iS,background:"#e0f2fe",color:"#0369a1",fontWeight:600,cursor:"not-allowed"};
-const bMap = {Received:{bg:"#dcfce7",color:"#16a34a"},Pending:{bg:"#fef3c7",color:"#d97706"},Error:{bg:"#fee2e2",color:"#dc2626"},admin:{bg:"#dbeafe",color:"#1d4ed8"},accountant:{bg:"#f3e8ff",color:"#7c3aed"},viewer:{bg:"#f1f5f9",color:"#64748b"}};
+const bMap = {Received:{bg:"#dcfce7",color:"#16a34a"},Pending:{bg:"#fef3c7",color:"#d97706"},Error:{bg:"#fee2e2",color:"#dc2626"},NA:{bg:"#f1f5f9",color:"#64748b"},admin:{bg:"#dbeafe",color:"#1d4ed8"},accountant:{bg:"#f3e8ff",color:"#7c3aed"},viewer:{bg:"#f1f5f9",color:"#64748b"}};
 
 const escv = v => `"${String(v??'').replace(/"/g,'""')}"`;
 const toCSV = (h,r) => [h.map(escv).join(','),...r.map(x=>x.map(escv).join(','))].join('\n');
@@ -105,14 +108,14 @@ const exportShipmentPDF = (s, bc) => {
     ["Port Code", s.port_code||"—"], ["BL No", s.bl_no||"—"], ["BL Date", s.bl_date||"—"],
     ["Qty (MT)", fi(s.qty)], ["Rate/MT (USD)", fi(s.rate_per_mt)], ["Delivery Terms", s.delivery_terms||"—"],
     ["Invoice Amt (USD)", fU(c.invoiceAmtUSD)], ["Exchange Rate", fi(s.exchange_rate)],
-    ["Invoice Amt (INR)", fR(c.invoiceAmtINR)], ["IGST (INR)", fR(s.igst)],
-    ["Gross Total (INR)", fR(c.grossTotal)], ["FOB Value (USD)", fU(s.fob_value_usd)],
-    ["FOB Value (INR)", fR(c.fobValueINR)], ["RODTEP Amt (INR)", fR(s.rodtep_amount)],
+    ["Invoice Amt (INR)", pdfINR(c.invoiceAmtINR)], ["IGST (INR)", pdfINR(s.igst)],
+    ["Gross Total (INR)", pdfINR(c.grossTotal)], ["FOB Value (USD)", fU(s.fob_value_usd)],
+    ["FOB Value (INR)", pdfINR(c.fobValueINR)], ["RODTEP Amt (INR)", pdfINR(s.rodtep_amount)],
     ["RODTEP Status", s.rodtep_status||"—"], ["GST Status", s.gst_status||"—"],
     ["Bill Collection No", bc?bc.bc_no:"—"], ["BC Date", bc?bc.bc_date:"—"],
     ["BRC No(s)", bc?bc.brc_entries?.map(b=>b.brc_no).filter(Boolean).join(", ")||"—":"—"],
     ["Payment Rcvd (USD)", bc?fU(bc.total_amt_usd):"—"],
-    ["Payment Rcvd (INR)", bc?fR(bc.total_amt_inr):"—"],
+    ["Payment Rcvd (INR)", bc?pdfINR(bc.total_amt_inr):"—"],
     ["Balance (USD)", fU(bal)], ["Remarks", s.remarks||"—"]
   ];
   doc.autoTable({
@@ -136,14 +139,14 @@ const exportProfitPDF = (p) => {
   const rows = [
     ["Invoice No", p.invoice_no], ["Invoice Date", p.invoice_date||"—"],
     ["Buyer Name", p.buyer_name||"—"], ["Port of Discharge", p.port_of_discharge||"—"],
-    ["Invoice Amt (INR)", fR(p.invoice_amt_inr)], ["Payment Received (INR)", fR(p.payment_received_inr)],
-    ["Rice Purchase Value", fR(p.rice_purchase_val)], ["PP Bags Purchase", fR(p.pp_bags_purchase_val)],
-    ["Local Transport", fR(p.local_transport)], ["Interest Cost (1%)", fR(c.interest)],
-    ["Bank Charges (0.11%)", fR(c.bankCh)], ["Ocean Freight", fR(p.ocean_freight)],
-    ["CHA & Clearing", fR(p.cha_clearing)], ["Shipping Line Charges", fR(p.shipping_line_charges)],
-    ["Inspection Agency", fR(p.inspect_agency)], ["COC / ECTN", fR(p.coc_ectn)],
-    ["Other Expenses", fR(p.other_exp)], ["Total FOB Cost", fR(c.totalFOB)],
-    ["Total CIF Cost", fR(c.totalCIF)], ["Net Profit", fR(c.profit)]
+    ["Invoice Amt (INR)", pdfINR(p.invoice_amt_inr)], ["Payment Received (INR)", pdfINR(p.payment_received_inr)],
+    ["Rice Purchase Value", pdfINR(p.rice_purchase_val)], ["PP Bags Purchase", pdfINR(p.pp_bags_purchase_val)],
+    ["Local Transport", pdfINR(p.local_transport)], ["Interest Cost (1%)", pdfINR(c.interest)],
+    ["Bank Charges (0.11%)", pdfINR(c.bankCh)], ["Ocean Freight", pdfINR(p.ocean_freight)],
+    ["CHA & Clearing", pdfINR(p.cha_clearing)], ["Shipping Line Charges", pdfINR(p.shipping_line_charges)],
+    ["Inspection Agency", pdfINR(p.inspect_agency)], ["COC / ECTN", pdfINR(p.coc_ectn)],
+    ["Other Expenses", pdfINR(p.other_exp)], ["Local Brokerage (INR 100/MT)", pdfINR(c.localBrokerage)], ["Total FOB Cost", pdfINR(c.totalFOB)], ["Total Direct Cost", pdfINR(c.totalDirect)],
+    ["Total CIF Cost", pdfINR(c.totalCIF)], ["Net Profit", pdfINR(c.profit)]
   ];
   doc.autoTable({
     startY: y, head: [["Description","Amount"]], body: rows,
@@ -167,7 +170,7 @@ const exportBCPDF = (bc) => {
     body: [
       ["BC No", bc.bc_no], ["Bank", bc.bank_name], ["BC Date", bc.bc_date||"—"],
       ["Linked Invoices", bc.linked_invoices?.join(", ")||"—"],
-      ["Total Received (USD)", fU(bc.total_amt_usd)], ["Total Received (INR)", fR(bc.total_amt_inr)]
+      ["Total Received (USD)", fU(bc.total_amt_usd)], ["Total Received (INR)", pdfINR(bc.total_amt_inr)]
     ],
     styles:{fontSize:9,cellPadding:3},
     headStyles:{fillColor:[30,58,95],textColor:255,fontStyle:'bold'},
@@ -182,7 +185,7 @@ const exportBCPDF = (bc) => {
     doc.autoTable({
       startY: y2,
       head: [["IRM No","Date","Amt (USD)","Exch Rate","Intermediary (USD)","Amt (INR)"]],
-      body: bc.irm_entries.map(i=>[i.irm_no||"—",i.irm_date||"—",fU(i.irm_amt_usd),fi(i.exchange_rate),fU(i.intermediary_charges_usd||0),fR(i.irm_amt_inr)]),
+      body: bc.irm_entries.map(i=>[i.irm_no||"—",i.irm_date||"—",fU(i.irm_amt_usd),fi(i.exchange_rate),fU(i.intermediary_charges_usd||0),pdfINR(i.irm_amt_inr)]),
       styles:{fontSize:8,cellPadding:3},
       headStyles:{fillColor:[3,105,161],textColor:255,fontStyle:'bold'},
       alternateRowStyles:{fillColor:[240,249,255]},
@@ -229,10 +232,10 @@ function ExportModal({ type, data, onClose, getBC }) {
       if (fmt === "pdf") {
         exportShipmentsPDF(filtered, getBC);
       } else {
-        const hdrs = ["Invoice No","Date","Buyer","Country","Product","Port Load","Port Disch","SB No","SB Date","BL No","BL Date","Qty(MT)","Rate/MT(USD)","Terms","Inv(USD)","ExRate","Inv(INR)","IGST","Gross(INR)","FOB(USD)","FOB(INR)","RODTEP(INR)","RODTEP St","GST St","BC No","BRC No(s)","Pmt(USD)","Pmt(INR)","Balance(USD)"];
+        const hdrs = ["Invoice No","Date","Buyer","Country","Product","Port Load","Port Disch","SB No","SB Date","Port Code","BL No","BL Date","Qty(MT)","Rate/MT(USD)","Terms","Inv(USD)","ExRate","Inv(INR)","IGST","Gross(INR)","FOB(USD)","FOB(INR)","RODTEP(INR)","RODTEP St","GST St","BC No","BC Bank","BRC No(s)","Pmt(USD)","Pmt(INR)","Balance(USD)"];
         const rows = filtered.map(s => {
           const c = calcShip(s), bc = getBC(s), bal = c.invoiceAmtUSD - (bc ? bc.total_amt_usd : 0);
-          return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.brc_entries?.map(b=>b.brc_no).join("; "):"",bc?fi(bc.total_amt_usd):"",bc?fi(bc.total_amt_inr):"",fi(bal)];
+          return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.port_code||"",s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.bank_name:"",bc?bc.brc_entries?.map(b=>b.brc_no).join("; "):"",bc?fi(bc.total_amt_usd):"",bc?fi(bc.total_amt_inr):"",fi(bal)];
         });
         dlCSV(`Devratan_Shipments_${fromDate||"all"}_to_${toDate||"all"}.csv`, toCSV(hdrs, rows));
       }
@@ -294,7 +297,7 @@ function ExportModal({ type, data, onClose, getBC }) {
       head: [["Invoice No","Date","Buyer","Invoice(INR)","Pmt(INR)","Total CIF","Net Profit"]],
       body: profits.map(p => {
         const c = calcProfit(p);
-        return [p.invoice_no,p.invoice_date,p.buyer_name,fR(p.invoice_amt_inr),fR(p.payment_received_inr),fR(c.totalCIF),fR(c.profit)];
+        return [p.invoice_no,p.invoice_date,p.buyer_name,pdfINR(p.invoice_amt_inr),pdfINR(p.payment_received_inr),pdfINR(c.totalCIF),pdfINR(c.profit)];
       }),
       styles:{fontSize:8,cellPadding:3},
       headStyles:{fillColor:[30,58,95],textColor:255,fontStyle:'bold'},
@@ -313,7 +316,7 @@ function ExportModal({ type, data, onClose, getBC }) {
     doc.autoTable({
       startY: y,
       head: [["BC No","Bank","Date","Linked Invoices","Total (USD)","Total (INR)"]],
-      body: bcs.map(bc => [bc.bc_no,bc.bank_name,bc.bc_date||"—",bc.linked_invoices?.join(", ")||"—",fU(bc.total_amt_usd),fR(bc.total_amt_inr)]),
+      body: bcs.map(bc => [bc.bc_no,bc.bank_name,bc.bc_date||"—",bc.linked_invoices?.join(", ")||"—",fU(bc.total_amt_usd),pdfINR(bc.total_amt_inr)]),
       styles:{fontSize:9,cellPadding:3},
       headStyles:{fillColor:[30,58,95],textColor:255,fontStyle:'bold'},
       alternateRowStyles:{fillColor:[241,245,249]},
@@ -342,10 +345,10 @@ function ExportModal({ type, data, onClose, getBC }) {
       body: [
         ["Total Shipments", String(totals.count)],
         ["Invoice Amount (USD)", fU(totals.invUSD)],
-        ["Invoice Amount (INR)", fR(totals.invINR)],
+        ["Invoice Amount (INR)", pdfINR(totals.invINR)],
         ["FOB Value (USD)", fU(totals.fobUSD)],
         ["Payment Received (USD)", fU(totals.paidUSD)],
-        ["Payment Received (INR)", fR(totals.paidINR)],
+        ["Payment Received (INR)", pdfINR(totals.paidINR)],
         ["Outstanding Balance (USD)", fU(totals.bal)],
         ["RODTEP Pending", String(totals.rodPend)],
         ["GST Pending", String(totals.gstPend)]
@@ -795,8 +798,8 @@ function ProfitabilityContent({fy,fyProfits,canEdit,canDelete,openAddProfit,open
                 <div style={{padding:"12px 16px"}}>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(185px,1fr))",gap:12}}>
                     <div style={{borderRight:"1px solid #f1f5f9",paddingRight:12}}><div style={{fontSize:11,fontWeight:700,color:"#0369a1",marginBottom:6}}>REVENUE</div><Row l="Invoice (INR)" v={fR(p.invoice_amt_inr)}/><Row l="Payment (INR)" v={fR(p.payment_received_inr)}/></div>
-                    <div style={{borderRight:"1px solid #f1f5f9",paddingRight:12}}><div style={{fontSize:11,fontWeight:700,color:"#d97706",marginBottom:6}}>DIRECT COSTS</div><Row l="Rice Purchase" v={fR(p.rice_purchase_val)}/><Row l="PP Bags" v={fR(p.pp_bags_purchase_val)}/><Row l="Local Transport" v={fR(p.local_transport)}/><Row l="Interest (1%)" v={fR(c.interest)}/><Row l="Bank Charges" v={fR(c.bankCh)}/><Row l="Ocean Freight" v={fR(p.ocean_freight)}/></div>
-                    <div style={{borderRight:"1px solid #f1f5f9",paddingRight:12}}><div style={{fontSize:11,fontWeight:700,color:"#7c3aed",marginBottom:6}}>FOB COSTS</div><Row l="CHA & Clearing" v={fR(p.cha_clearing)}/><Row l="Shipping Line" v={fR(p.shipping_line_charges)}/><Row l="Inspection" v={fR(p.inspect_agency)}/><Row l="COC/ECTN" v={fR(p.coc_ectn)}/><Row l="Other Exp" v={fR(p.other_exp)}/><Row l="Total FOB" v={fR(c.totalFOB)} bold col="#7c3aed"/></div>
+                    <div style={{borderRight:"1px solid #f1f5f9",paddingRight:12}}><div style={{fontSize:11,fontWeight:700,color:"#d97706",marginBottom:6}}>DIRECT COSTS</div><Row l="Rice Purchase" v={fR(p.rice_purchase_val)}/><Row l="PP Bags" v={fR(p.pp_bags_purchase_val)}/><Row l="Local Transport" v={fR(p.local_transport)}/><Row l="Interest (1%)" v={fR(c.interest)}/><Row l="Bank Charges" v={fR(c.bankCh)}/><Row l="Ocean Freight" v={fR(p.ocean_freight)}/><Row l="Total Direct" v={fR(c.totalDirect)} bold col="#d97706"/></div>
+                    <div style={{borderRight:"1px solid #f1f5f9",paddingRight:12}}><div style={{fontSize:11,fontWeight:700,color:"#7c3aed",marginBottom:6}}>FOB COSTS</div><Row l="CHA & Clearing" v={fR(p.cha_clearing)}/><Row l="Shipping Line" v={fR(p.shipping_line_charges)}/><Row l="Inspection" v={fR(p.inspect_agency)}/><Row l="COC/ECTN" v={fR(p.coc_ectn)}/><Row l="Other Exp" v={fR(p.other_exp)}/><Row l="Local Brokerage (100/MT)" v={fR(c.localBrokerage)}/><Row l="Total FOB" v={fR(c.totalFOB)} bold col="#7c3aed"/></div>
                     <div><div style={{fontSize:11,fontWeight:700,color:"#1e3a5f",marginBottom:6}}>SUMMARY</div><Row l="Total CIF Cost" v={fR(c.totalCIF)} bold col="#d97706"/><Row l="Payment (INR)" v={fR(p.payment_received_inr)} col="#15803d"/><Row l="Net Profit" v={fR(c.profit)} bold col={c.profit>=0?"#16a34a":"#dc2626"}/></div>
                   </div>
                 </div>
@@ -842,6 +845,7 @@ function ProfitFormModal({fy,editId,form,calc,fyShips,setF,onSelectInvoice,onSav
           {ro("Interest Cost (1% of Rice Purchase)",fR(calc.interest||0))}
           {ro("Bank Charges (0.11% of Pmt Rcvd)",fR(calc.bankCh||0))}
           {fld("ocean_freight","Ocean Freight Exp")}
+          {ro("Total Direct Cost",fR(calc.totalDirect||0))}
         </div>
         <SH t="FOB Cost Head (INR)" color="#7c3aed" bg="#f3e8ff"/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
@@ -850,6 +854,7 @@ function ProfitFormModal({fy,editId,form,calc,fyShips,setF,onSelectInvoice,onSav
           {fld("inspect_agency","Inspection Agency Exp")}
           {fld("coc_ectn","COC / ECTN Exp")}
           {fld("other_exp","Other Exp")}
+          {ro("Local Brokerage (Auto @ INR 100/MT)",fR(calc.localBrokerage||0))}
           {ro("Total FOB Cost",fR(calc.totalFOB||0))}
         </div>
         <div style={{background:"#1e3a5f",borderRadius:10,padding:14,marginBottom:14,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
@@ -896,6 +901,7 @@ export default function App(){
   const [sortDir,setSortDir]=useState("desc");
   const [saving,setSaving]=useState(false);
   const [exportModal,setExportModal]=useState(null); // "shipments"|"profitability"|"bc"|"dashboard"
+  const [dashFilter,setDashFilter]=useState(null); // null|"brc"|"rodtep"|"gst"
 
   const doLogin=async()=>{
     if(!loginForm.email||!loginForm.password){setLoginForm(f=>({...f,error:"Email and password required."}));return;}
@@ -951,7 +957,16 @@ export default function App(){
 
   const allYears=useMemo(()=>ALL_FYS.map(f=>{const ss=ships.filter(s=>getFY(s.invoice_date)===f);return ss.reduce((a,s)=>{const c=calcShip(s),bc=getBC(s);a.count++;a.inv+=c.invoiceAmtUSD;a.fob+=n(s.fob_value_usd);a.paid+=bc?bc.total_amt_usd:0;a.bal+=bc?c.invoiceAmtUSD-bc.total_amt_usd:c.invoiceAmtUSD;return a;},{fy:f,count:0,inv:0,fob:0,paid:0,bal:0});}), [ships,bcs]);
 
-  const filtered=useMemo(()=>{let s=[...fyShips];if(search)s=s.filter(x=>Object.values(x).join(" ").toLowerCase().includes(search.toLowerCase()));s.sort((a,b)=>{let av=a[sortCol],bv=b[sortCol];if(!isNaN(Number(av))){av=Number(av);bv=Number(bv);}return av<bv?(sortDir==="asc"?-1:1):av>bv?(sortDir==="asc"?1:-1):0;});return s;},[fyShips,search,sortCol,sortDir]);
+  const filtered=useMemo(()=>{
+    let s=[...fyShips];
+    // Dashboard quick filters
+    if(dashFilter==="brc") s=s.filter(x=>{const bc=getBC(x);return !bc||bc.brc_entries?.every(b=>!b.brc_no);});
+    if(dashFilter==="rodtep") s=s.filter(x=>x.rodtep_status==="Pending");
+    if(dashFilter==="gst") s=s.filter(x=>x.gst_status==="Pending");
+    if(search) s=s.filter(x=>Object.values(x).join(" ").toLowerCase().includes(search.toLowerCase()));
+    s.sort((a,b)=>{let av=a[sortCol],bv=b[sortCol];if(!isNaN(Number(av))){av=Number(av);bv=Number(bv);}return av<bv?(sortDir==="asc"?-1:1):av>bv?(sortDir==="asc"?1:-1):0;});
+    return s;
+  },[fyShips,search,sortCol,sortDir,dashFilter,bcs]);
 
   const EMPTY_SHIP={invoice_no:"",invoice_date:"",buyer_name:"",buyer_country:"",product:"",port_of_loading:"",port_of_discharge:"",shipping_bill_no:"",shipping_bill_date:"",port_code:"",bl_no:"",bl_date:"",qty:"",rate_per_mt:"",delivery_terms:"CIF",exchange_rate:"",igst:0,fob_value_usd:"",rodtep_amount:"",rodtep_status:"Pending",gst_status:"Pending",bc_id:null,remarks:""};
   const EMPTY_PROFIT={invoice_no:"",invoice_date:"",buyer_name:"",port_of_discharge:"",invoice_amt_inr:0,payment_received_inr:0,rice_purchase_val:"",pp_bags_purchase_val:"",local_transport:"",ocean_freight:"",cha_clearing:"",shipping_line_charges:"",inspect_agency:"",coc_ectn:"",other_exp:""};
@@ -987,7 +1002,7 @@ export default function App(){
     const s=ships.find(x=>x.invoice_no===inv);
     if(!s){setPF("invoice_no",inv);return;}
     const bc=getBC(s),c=calcShip(s);
-    setProfitForm(f=>({...f,invoice_no:inv,invoice_date:s.invoice_date,buyer_name:s.buyer_name,port_of_discharge:s.port_of_discharge,invoice_amt_inr:c.invoiceAmtINR,payment_received_inr:bc?bc.total_amt_inr:0}));
+    setProfitForm(f=>({...f,invoice_no:inv,invoice_date:s.invoice_date,buyer_name:s.buyer_name,port_of_discharge:s.port_of_discharge,invoice_amt_inr:c.invoiceAmtINR,payment_received_inr:bc?bc.total_amt_inr:0,qty_mt:s.qty}));
   };
 
   const saveProfit=async()=>{
@@ -1027,7 +1042,7 @@ export default function App(){
     setSaving(false);
   };
 
-  const profitCalc=useMemo(()=>{try{return calcProfit(profitForm);}catch{return{interest:0,bankCh:0,totalFOB:0,totalCIF:0,profit:0};}},[profitForm]);
+  const profitCalc=useMemo(()=>{try{return calcProfit(profitForm);}catch{return{interest:0,bankCh:0,localBrokerage:0,totalFOB:0,totalDirect:0,totalCIF:0,profit:0};}},[profitForm]);
   const shipCalc=useMemo(()=>calcShip(shipForm),[shipForm]);
   const selectedBC=bcs.find(b=>b.id===shipForm.bc_id)||null;
   const viewShip=ships.find(s=>s.id===viewShipId)||null;
@@ -1117,9 +1132,20 @@ export default function App(){
               </div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:18}}>
-              {[{l:"Shipments",v:totals.count,i:"📦",c:"#1e3a5f"},{l:"Invoice (USD)",v:fU(totals.invUSD),i:"🧾",c:"#0369a1"},{l:"Invoice (INR)",v:fR(totals.invINR),i:"₹",c:"#7c3aed"},{l:"FOB (USD)",v:fU(totals.fobUSD),i:"🚢",c:"#0891b2"},{l:"Pmt Rcvd (USD)",v:fU(totals.paidUSD),i:"✅",c:"#16a34a"},{l:"Pmt Rcvd (INR)",v:fR(totals.paidINR),i:"✅",c:"#15803d"},{l:"Balance (USD)",v:fU(totals.bal),i:"⏳",c:totals.bal>0?"#dc2626":"#16a34a"},{l:"BRC Pending",v:totals.brcPend,i:"🔴",c:"#d97706"},{l:"RODTEP Pending",v:totals.rodPend,i:"📋",c:"#d97706"},{l:"GST Pending",v:totals.gstPend,i:"📋",c:"#d97706"}].map((x,i)=>(
-                <div key={i} style={{background:"#fff",borderRadius:10,padding:"12px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderLeft:`4px solid ${x.c}`}}>
-                  <div style={{fontSize:16}}>{x.i}</div><div style={{fontSize:13,fontWeight:700,color:x.c,margin:"3px 0 2px",wordBreak:"break-all"}}>{x.v}</div><div style={{fontSize:10,color:"#64748b"}}>{x.l}</div>
+              {[{l:"Shipments",v:totals.count,i:"📦",c:"#1e3a5f",click:()=>{setTab("shipments");setDashFilter(null);}},
+                {l:"Invoice (USD)",v:fU(totals.invUSD),i:"🧾",c:"#0369a1",click:null},
+                {l:"Invoice (INR)",v:fR(totals.invINR),i:"₹",c:"#7c3aed",click:null},
+                {l:"FOB (USD)",v:fU(totals.fobUSD),i:"🚢",c:"#0891b2",click:null},
+                {l:"Pmt Rcvd (USD)",v:fU(totals.paidUSD),i:"✅",c:"#16a34a",click:null},
+                {l:"Pmt Rcvd (INR)",v:fR(totals.paidINR),i:"✅",c:"#15803d",click:null},
+                {l:"Balance (USD)",v:fU(totals.bal),i:"⏳",c:totals.bal>0?"#dc2626":"#16a34a",click:null},
+                {l:"BRC Pending",v:totals.brcPend,i:"🔴",c:"#d97706",click:()=>{setTab("shipments");setDashFilter("brc");}},
+                {l:"RODTEP Pending",v:totals.rodPend,i:"📋",c:"#d97706",click:()=>{setTab("shipments");setDashFilter("rodtep");}},
+                {l:"GST Pending",v:totals.gstPend,i:"📋",c:"#d97706",click:()=>{setTab("shipments");setDashFilter("gst");}}
+              ].map((x,i)=>(
+                <div key={i} onClick={x.click||undefined} style={{background:"#fff",borderRadius:10,padding:"12px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",borderLeft:`4px solid ${x.c}`,cursor:x.click?"pointer":"default",transition:"box-shadow 0.15s"}}>
+                  <div style={{fontSize:16}}>{x.i}</div><div style={{fontSize:13,fontWeight:700,color:x.c,margin:"3px 0 2px",wordBreak:"break-all"}}>{x.v}</div>
+                  <div style={{fontSize:10,color:"#64748b"}}>{x.l}{x.click&&<span style={{marginLeft:4,fontSize:9,color:"#0369a1"}}>↗ view</span>}</div>
                 </div>
               ))}
             </div>
@@ -1168,6 +1194,13 @@ export default function App(){
                 {canEdit&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add</button>}
               </div>
             </div>
+            {dashFilter&&<div style={{background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"8px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12}}>
+              <span style={{fontWeight:600,color:"#92400e"}}>
+                {dashFilter==="brc"?"🔴 Showing: BRC Pending shipments":dashFilter==="rodtep"?"📋 Showing: RODTEP Pending shipments":"📋 Showing: GST Pending shipments"}
+                <span style={{marginLeft:6,fontWeight:400}}>({filtered.length} records)</span>
+              </span>
+              <button onClick={()=>setDashFilter(null)} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>✕ Clear Filter</button>
+            </div>}
             <div style={{marginBottom:10}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{...iS,fontSize:13}}/></div>
             {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:40,textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📭</div><div style={{fontSize:14,fontWeight:600}}>No shipments for FY {fy}</div>{canEdit&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600,marginTop:10,fontSize:13}}>+ Add First Shipment</button>}</div>:
             <>
