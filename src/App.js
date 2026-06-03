@@ -1415,7 +1415,7 @@ export default function App(){
   const canEditBC=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant");
   const canEditPL=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant");
   // junior_accountant: can add shipment but NOT edit/delete existing ones
-  const canEditShipment=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant");
+  const canEditShipment=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant"||isJuniorAccountant);
   const canAddShipment=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant"||isJuniorAccountant);
   const getBC=s=>bcs.find(b=>b.id===s.bc_id)||null;
 
