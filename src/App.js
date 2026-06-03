@@ -1647,228 +1647,332 @@ function exportContractPDF(contract, buyer, consignee) {
   const JPDF = getPDF();
   if (!JPDF) { alert("PDF library not loaded."); return; }
   const doc = new JPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const margin = 18;
-  const pw = 210 - margin * 2;
-  const navy = [30, 58, 95];
-  const gold = [180, 140, 60];
-  const lightGray = [245, 247, 250];
-  const borderGray = [210, 214, 220];
+  const M = 16; // margin
+  const pw = 210 - M * 2; // page width
+  const navy  = [30, 58, 95];
+  const gold  = [162, 120, 50];
+  const cream = [253, 251, 246];
+  const lgray = [244, 246, 249];
+  const dgray = [200, 205, 212];
+  const white = [255, 255, 255];
 
-  // ── Page 1 Header ──
-  // Top navy bar
+  // ── Helper: write mixed bold/normal text ──────────────────────────────────
+  const writeMixed = (parts, x, y, opts = {}) => {
+    // parts = [{text, bold}]
+    let cx = x;
+    parts.forEach(p => {
+      doc.setFont(undefined, p.bold ? "bold" : "normal");
+      doc.text(p.text, cx, y, opts);
+      cx += doc.getTextWidth(p.text);
+    });
+    return cx;
+  };
+
+  // ── Helper: add section heading ───────────────────────────────────────────
+  const sectionHead = (title, yPos) => {
+    if (yPos > 252) { doc.addPage(); addPageDecor(); yPos = 24; }
+    // Left accent bar
+    doc.setFillColor(...gold);
+    doc.rect(M, yPos - 3.5, 3, 8, "F");
+    doc.setFontSize(9.5); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
+    doc.text(title, M + 6, yPos + 1.5);
+    doc.setDrawColor(...gold); doc.setLineWidth(0.5);
+    doc.line(M + 6 + doc.getTextWidth(title) + 3, yPos + 0.5, M + pw, yPos + 0.5);
+    doc.setTextColor(0, 0, 0);
+    return yPos + 7;
+  };
+
+  // ── Helper: add clause item ───────────────────────────────────────────────
+  const addClause = (text, yPos, indent = 5) => {
+    if (yPos > 274) { doc.addPage(); addPageDecor(); yPos = 24; }
+    doc.setFont(undefined, "normal"); doc.setFontSize(8.3); doc.setTextColor(30, 30, 30);
+    // Gold bullet dot
+    doc.setFillColor(...gold);
+    doc.circle(M + indent - 2, yPos - 0.5, 0.9, "F");
+    const lines = doc.splitTextToSize(text, pw - indent - 2);
+    lines.forEach((line, i) => {
+      if (yPos > 274) { doc.addPage(); addPageDecor(); yPos = 24; }
+      doc.text(line, M + indent, yPos);
+      yPos += 4.6;
+    });
+    return yPos + 0.8; // small gap between clauses
+  };
+
+  // ── Watermark on a page ───────────────────────────────────────────────────
+  const addWatermark = () => {
+    doc.saveGraphicsState();
+    doc.setGState(new doc.GState({ opacity: 0.05 }));
+    doc.setFontSize(55); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
+    doc.text("DEVRATAN", 105, 160, { align: "center", angle: 45 });
+    doc.restoreGraphicsState();
+  };
+
+  // ── Page decorations (header stripe + watermark) ──────────────────────────
+  const addPageDecor = () => {
+    // Thin gold top stripe
+    doc.setFillColor(...gold);
+    doc.rect(0, 0, 210, 3, "F");
+    // Thin navy bottom stripe
+    doc.setFillColor(...navy);
+    doc.rect(0, 291, 210, 6, "F");
+    // Footer text
+    doc.setFontSize(7); doc.setTextColor(...white); doc.setFont(undefined, "normal");
+    doc.text(COMPANY.name + "  |  akshay@devratan.com  |  www.devratan.com  |  GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D", 105, 294.5, { align: "center" });
+    // Watermark
+    addWatermark();
+  };
+
+  // ═══════════════════════════════════════════════════════
+  // PAGE 1
+  // ═══════════════════════════════════════════════════════
+  // Gold top stripe
+  doc.setFillColor(...gold);
+  doc.rect(0, 0, 210, 3, "F");
+
+  // Navy header bar
   doc.setFillColor(...navy);
-  doc.rect(0, 0, 210, 36, "F");
+  doc.rect(0, 3, 210, 42, "F");
 
-  // Company name left
+  // Watermark behind header
+  addWatermark();
+
+  // Logo placeholder box (left side)
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...gold); doc.setLineWidth(0.5);
+  doc.roundedRect(M, 7, 28, 28, 2, 2, "FD");
+  doc.setFontSize(6); doc.setTextColor(180, 140, 60); doc.setFont(undefined, "bold");
+  doc.text("DEVRATAN", M + 14, 17, { align: "center" });
+  doc.text("ENTERPRISES", M + 14, 21, { align: "center" });
+  doc.text("LLP", M + 14, 25, { align: "center" });
+  doc.setFontSize(5); doc.setFont(undefined, "normal");
+  doc.text("We Create Not Produce", M + 14, 30, { align: "center" });
+
+  // Company name & details (right of logo)
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11); doc.setFont(undefined, "bold");
-  doc.text(COMPANY.name, margin, 11);
-  doc.setFontSize(7.5); doc.setFont(undefined, "normal");
-  doc.text(COMPANY.tagline, margin, 16.5);
-  doc.text(COMPANY.address, margin, 21);
-  doc.text("+91-9111282828  |  akshay@devratan.com  |  www.devratan.com", margin, 25.5);
-  doc.text("GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D  |  LLP IN: AAV-1622", margin, 30);
+  doc.setFontSize(12); doc.setFont(undefined, "bold");
+  doc.text(COMPANY.name, M + 33, 14);
+  doc.setFontSize(7); doc.setFont(undefined, "italic");
+  doc.text(COMPANY.tagline, M + 33, 18.5);
+  doc.setFont(undefined, "normal"); doc.setFontSize(7);
+  doc.text(COMPANY.address, M + 33, 23);
+  doc.text("+91-9111282828  |  akshay@devratan.com  |  www.devratan.com", M + 33, 27);
+  doc.text("GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D  |  LLP IN: AAV-1622", M + 33, 31);
 
-  // SALE CONTRACT right
-  doc.setFontSize(18); doc.setFont(undefined, "bold");
-  doc.text("SALE CONTRACT", 210 - margin, 17, { align: "right" });
-  doc.setFontSize(8); doc.setFont(undefined, "normal");
-  doc.text(`Contract No: ${contract.contract_no || ""}`, 210 - margin, 23, { align: "right" });
-  doc.text(`Date: ${contract.contract_date || ""}`, 210 - margin, 28, { align: "right" });
+  // SALE CONTRACT title block (right side)
+  doc.setFontSize(20); doc.setFont(undefined, "bold"); doc.setTextColor(255, 255, 255);
+  doc.text("SALE CONTRACT", 210 - M, 16, { align: "right" });
+  // Gold underline
+  const titleWidth = doc.getTextWidth("SALE CONTRACT");
+  doc.setDrawColor(...gold); doc.setLineWidth(0.8);
+  doc.line(210 - M - titleWidth, 18, 210 - M, 18);
+
+  doc.setFontSize(8); doc.setFont(undefined, "normal"); doc.setTextColor(200, 215, 235);
+  doc.text("Contract No:  " + (contract.contract_no || ""), 210 - M, 24, { align: "right" });
+  doc.text("Date:  " + (contract.contract_date || ""), 210 - M, 29, { align: "right" });
+  if (contract.status === "final") {
+    doc.setFillColor(22, 163, 74); doc.setDrawColor(...gold); doc.setLineWidth(0.4);
+    doc.roundedRect(210 - M - 22, 32, 22, 7, 1.5, 1.5, "FD");
+    doc.setFontSize(7); doc.setFont(undefined, "bold"); doc.setTextColor(255, 255, 255);
+    doc.text("FINAL", 210 - M - 11, 36.5, { align: "center" });
+  }
+
   doc.setTextColor(0, 0, 0);
+  let y = 52;
 
-  let y = 42;
-
-  // ── Seller / Buyer / Consignee block ──
+  // ── Cream background for party block ──────────────────────────────────────
   const buyerAddr = contract.buyer_address || buyer?.address || "";
   const hasConsignee = contract.consignee_id && contract.consignee_name;
   const consigneeAddr = contract.consignee_address || consignee?.address || "";
 
-  const partyRows = [
+  // Party table with styled cells
+  const partyData = [
     [
-      { content: "Seller:", styles: { fontStyle: "bold", fillColor: lightGray, cellWidth: 26, textColor: navy } },
-      { content: `${COMPANY.name}
-${COMPANY.address}
-(Hereinafter referred to as "the Seller")`, styles: { fontSize: 8.5 } }
+      { content: "SELLER", styles: { fontStyle: "bold", halign: "center", fillColor: navy, textColor: white, cellWidth: 22, fontSize: 8 } },
+      { content: COMPANY.name, styles: { fontStyle: "bold", fontSize: 9, textColor: navy, fillColor: cream } },
+      { content: COMPANY.address + "\n(Hereinafter referred to as \"the Seller\")", styles: { fontSize: 8, fillColor: cream } },
     ],
     [
-      { content: "Buyer:", styles: { fontStyle: "bold", fillColor: lightGray, cellWidth: 26, textColor: navy } },
-      { content: `${contract.buyer_name || ""}
-${buyerAddr}
-(Hereinafter referred to as "the Buyer")`, styles: { fontSize: 8.5 } }
+      { content: "BUYER", styles: { fontStyle: "bold", halign: "center", fillColor: navy, textColor: white, cellWidth: 22, fontSize: 8 } },
+      { content: contract.buyer_name || "", styles: { fontStyle: "bold", fontSize: 9, textColor: navy, fillColor: cream } },
+      { content: buyerAddr + "\n(Hereinafter referred to as \"the Buyer\")", styles: { fontSize: 8, fillColor: cream } },
     ],
   ];
   if (hasConsignee) {
-    partyRows.push([
-      { content: "Consignee:", styles: { fontStyle: "bold", fillColor: lightGray, cellWidth: 26, textColor: navy } },
-      { content: `${contract.consignee_name}
-${consigneeAddr}`, styles: { fontSize: 8.5 } }
+    partyData.push([
+      { content: "CONSIGNEE", styles: { fontStyle: "bold", halign: "center", fillColor: navy, textColor: white, cellWidth: 22, fontSize: 8 } },
+      { content: contract.consignee_name || "", styles: { fontStyle: "bold", fontSize: 9, textColor: navy, fillColor: cream } },
+      { content: consigneeAddr + "\n(Hereinafter referred to as \"the Consignee\")", styles: { fontSize: 8, fillColor: cream } },
     ]);
   }
 
   doc.autoTable({
-    startY: y, body: partyRows,
-    styles: { fontSize: 8.5, cellPadding: 4, valign: "top", lineColor: borderGray, lineWidth: 0.3 },
-    tableLineColor: borderGray, tableLineWidth: 0.3,
-    margin: { left: margin, right: margin }, tableWidth: pw,
+    startY: y, body: partyData,
+    styles: { cellPadding: { top: 4, bottom: 4, left: 4, right: 4 }, valign: "top", lineColor: dgray, lineWidth: 0.25 },
+    columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 48 }, 2: { cellWidth: pw - 70 } },
+    tableLineColor: gold, tableLineWidth: 0.5,
+    margin: { left: M, right: M }, tableWidth: pw,
   });
   y = doc.lastAutoTable.finalY + 5;
 
-  // ── Gold divider line ──
-  doc.setDrawColor(...gold); doc.setLineWidth(0.6);
-  doc.line(margin, y, 210 - margin, y); y += 5;
+  // ── Gold divider ──────────────────────────────────────────────────────────
+  doc.setDrawColor(...gold); doc.setLineWidth(0.8);
+  doc.line(M, y, M + pw, y);
+  doc.setDrawColor(...dgray); doc.setLineWidth(0.25);
+  doc.line(M, y + 1, M + pw, y + 1);
+  y += 6;
 
-  // ── Main Terms Table ──
-  const qtyDisplay = (contract.quantity_mt || "") + " MTS " + (contract.quantity_tolerance || "+/- 5% at seller's option") + (contract.container_qty && contract.container_type ? "\n" + contract.container_qty + " x " + contract.container_type : "");
+  // ── Contract Terms Table ──────────────────────────────────────────────────
+  const qtyDisplay = (contract.quantity_mt || "") + " MTS " +
+    (contract.quantity_tolerance || "+/- 5% at seller's option") +
+    (contract.container_qty && contract.container_type
+      ? "\n" + contract.container_qty + " x " + contract.container_type : "");
+
   const baseTerms = (contract.delivery_terms || "CIF").split(" ")[0];
-  const priceDisplay = "USD " + (contract.price_usd || "") + " Per " + (contract.price_per || "MTs") + " " + (contract.delivery_terms || "CIF") + (contract.freight_usd ? "\n(Freight is considered at USD " + contract.freight_usd + " Per MT. Any increase or decrease in freight will be passed to the Buyer.)" : "");
+  const priceDisplay = "USD " + (contract.price_usd || "") + " Per " +
+    (contract.price_per || "MTs") + " " + (contract.delivery_terms || "CIF") +
+    (contract.freight_usd
+      ? "\nNote: Freight is considered at USD " + contract.freight_usd +
+        " PER MT. Any increase or decrease in freight will be passed to the Buyer." : "");
 
-  // Docs list from selected
-  const selectedDocs = contract.selected_docs || [];
+  const selectedDocs = Array.isArray(contract.selected_docs) ? contract.selected_docs : [];
   const docsText = ALL_DOCS.filter(d => selectedDocs.includes(d.key)).map(d => d.label).join("\n");
 
-  const mainRows = [
-    ["Commodity", contract.commodity || ""],
-    ["Quantity", qtyDisplay],
-    ["Loading", contract.loading_port || ""],
-    ["Destination", contract.destination || ""],
-    ["Specification", contract.specification || ""],
-    ["Shipment", contract.shipment_period || ""],
-    ["Packing", contract.packing || ""],
-    ["Price", priceDisplay],
-    ["Payment Condition", contract.payment_condition || ""],
-    ["Documents Required", docsText],
+  const termRows = [
+    [{ content: "Commodity", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.commodity || "" }],
+    [{ content: "Quantity", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: qtyDisplay }],
+    [{ content: "Loading Port", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.loading_port || "" }],
+    [{ content: "Destination", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.destination || "" }],
+    [{ content: "Specification", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.specification || "" }],
+    [{ content: "Shipment", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.shipment_period || "" }],
+    [{ content: "Packing", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.packing || "" }],
+    [{ content: "Price", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: priceDisplay, styles: { fontStyle: "bold", textColor: [22, 100, 50] } }],
+    [{ content: "Payment Terms", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.payment_condition || "", styles: { fontStyle: "bold" } }],
+    [{ content: "Documents\nRequired", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: docsText }],
   ];
 
   doc.autoTable({
-    startY: y, body: mainRows,
-    styles: { fontSize: 8.5, cellPadding: 4, valign: "top", lineColor: borderGray, lineWidth: 0.3 },
-    columnStyles: {
-      0: { fillColor: lightGray, fontStyle: "bold", cellWidth: 32, textColor: navy }
-    },
-    tableLineColor: borderGray, tableLineWidth: 0.3,
-    alternateRowStyles: { fillColor: [255, 255, 255] },
-    margin: { left: margin, right: margin }, tableWidth: pw,
+    startY: y, body: termRows,
+    styles: { fontSize: 8.5, cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 5 }, valign: "top", lineColor: dgray, lineWidth: 0.25 },
+    columnStyles: { 0: { cellWidth: 34 } },
+    tableLineColor: gold, tableLineWidth: 0.4,
+    alternateRowStyles: { fillColor: [250, 252, 255] },
+    margin: { left: M, right: M }, tableWidth: pw,
   });
   y = doc.lastAutoTable.finalY + 6;
 
-  // ── Special Conditions ──
-  if (contract.special_conditions) {
-    doc.setFillColor(...lightGray);
-    doc.setDrawColor(...borderGray); doc.setLineWidth(0.3);
-    doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
-    doc.text("Special Conditions:", margin, y); y += 5;
-    doc.setFont(undefined, "normal"); doc.setTextColor(0, 0, 0); doc.setFontSize(8.5);
-    const scLines = doc.splitTextToSize(contract.special_conditions, pw);
-    doc.text(scLines, margin, y); y += scLines.length * 4.5 + 4;
+  // ── Special Conditions ────────────────────────────────────────────────────
+  if (contract.special_conditions && contract.special_conditions.trim()) {
+    if (y > 255) { doc.addPage(); addPageDecor(); y = 24; }
+    doc.setFillColor(...lgray);
+    doc.setDrawColor(...gold); doc.setLineWidth(0.5);
+    doc.roundedRect(M, y - 1, pw, 7 + doc.splitTextToSize(contract.special_conditions, pw - 10).length * 4.8, 2, 2, "FD");
+    doc.setFontSize(8.5); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
+    doc.text("Special Conditions:", M + 4, y + 4);
+    y += 8;
+    doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40);
+    const scLines = doc.splitTextToSize(contract.special_conditions, pw - 8);
+    scLines.forEach(line => { doc.text(line, M + 4, y); y += 4.8; });
+    y += 4;
   }
 
-  // ── Section helper ──
-  const addSection = (title, items) => {
-    if (y > 248) { doc.addPage(); y = 20; }
-    doc.setDrawColor(...gold); doc.setLineWidth(0.5);
-    doc.line(margin, y, margin + 4, y); 
-    doc.setFontSize(9.5); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
-    doc.text(title, margin, y + 4); 
-    doc.setDrawColor(...borderGray); doc.setLineWidth(0.3);
-    doc.line(margin, y + 6, 210 - margin, y + 6);
-    y += 10;
-    doc.setFont(undefined, "normal"); doc.setTextColor(0, 0, 0); doc.setFontSize(8.2);
-    items.forEach(item => {
-      if (y > 272) { doc.addPage(); y = 20; }
-      doc.setFillColor(...gold);
-      doc.circle(margin + 1.5, y - 0.8, 0.8, "F");
-      const lines = doc.splitTextToSize(item, pw - 6);
-      doc.text(lines, margin + 5, y);
-      y += lines.length * 4.3 + 1.5;
-    });
-    y += 4;
-  };
+  // ── T E R M S   &   C O N D I T I O N S ──────────────────────────────────
+  y = sectionHead("Terms & Conditions:", y);
 
-  // ── Terms & Conditions ──
-  const baseTermsClauses = [
+  const tc = [
     "All customs duties and formalities are for Seller's account at loading port.",
     "The Documents will be delivered through Sellers Bank to the Buyers Bank or telex release depends on buyer choice.",
-    "Bank charges at Seller's bank paid at the Seller's expense, at Buyer's bank and correspondent bank – at the Buyer's expense.",
-    `The Seller shall deliver Goods in FCL lot on basis of ${baseTerms}, according to INCOTERMS 2020.`,
+    "Bank charges at Seller's bank paid at the Seller's expense, at Buyer's bank and correspondent bank - at the Buyer's expense.",
+    "The Seller shall deliver Goods in FCL lot on basis of " + baseTerms + ", according to INCOTERMS 2020.",
     "None of the Parties is entitled to transfer its rights and obligations under the present Contract to a third party without the other Party's previous written consent.",
     "All amendments and additions to the present Contract are valid only if they are made out in writing and signed by both Parties. All amendments to the present Contract are integral part of it.",
     "The present Contract is signed in two originals in English, one for each Party.",
     "The Contract will come in force at the moment of its signing by the Parties and continues until the Parties fully perform their obligations under the present Contract.",
     "The duration of the contract is 3 months after duly signing of the contract by both parties.",
     "Weight & Quality will be finalized at loading port only by any third-party surveyor & accepted as final report.",
-    "If buyer fails to make payment of the documents as per the contract, the seller reserves the right to protect his interest and accordingly this contract acts as implied no objection certificate/confirmation from buyer to seller to transfer/resell to alternate buyer. This clause therefore serves as valid no objection certificate to customs or any statutory authorities to clear the cargo. Under these circumstances seller can unconditionally choose to cancel the contract and withdraw or re-route the documents and sell the cargo as per seller choice.",
+    "If buyer fails to make payment of the documents as per the contract, the seller reserves the right to protect his interest and accordingly this contract acts as implied no objection certificate/confirmation from buyer to seller to transfer/resell to alternate buyer. This clause therefore serves as valid no objection certificate to customs or any statutory authorities to clear the cargo. Under these circumstances seller can unconditionally choose to cancel the contract and withdraw or re-route the documents and sell the cargo as per seller choice. The seller does not have to procure an additional no objection certificate from the buyer, the presence of this clause in the contract is deemed sufficient for all purposes.",
     "This facsimile/email/whatsapp transmission of the signed contract shall be treated as valid and legal.",
-    `Payment: ${contract.payment_condition || ""}`,
+    "Payment: " + (contract.payment_condition || ""),
   ];
 
   if (contract.war_risk_clause !== false) {
-    baseTermsClauses.splice(11, 0,
-      "WAR RISK & EXTRAORDINARY CHARGES (IMPORTANT): Notwithstanding the agreed Incoterms, any increase or additional charges arising after the date of contract due to war, hostilities, geopolitical tensions, sanctions, route deviations, or similar circumstances—including but not limited to War Risk Surcharge (WRS), Emergency Risk Surcharge (ERS), additional insurance premium, port congestion surcharge, or any unforeseen charges imposed by shipping lines, carriers, port authorities, or insurers—shall be borne by the Buyer. These charges shall be payable by the Buyer immediately upon demand and shall be over and above the agreed contract price."
-    );
+    tc.splice(11, 0, "WAR RISK & EXTRAORDINARY CHARGES (IMPORTANT): Notwithstanding the agreed Incoterms (including " + baseTerms + "), any increase or additional charges arising after the date of contract due to war, hostilities, geopolitical tensions, sanctions, route deviations, or similar circumstances - including but not limited to War Risk Surcharge (WRS), Emergency Risk Surcharge (ERS), additional insurance premium, port congestion surcharge, or any unforeseen charges imposed by shipping lines, carriers, port authorities, or insurers - shall be borne by the Buyer. These charges shall be payable by the Buyer immediately upon demand and shall be over and above the agreed contract price.");
   }
 
-  addSection("Terms & Conditions:", baseTermsClauses);
+  tc.forEach(clause => { y = addClause(clause, y); });
 
-  addSection("Force Majeure:", [
+  // ── F O R C E   M A J E U R E ─────────────────────────────────────────────
+  y = sectionHead("Force Majeure:", y);
+  [
     "The parties have agreed, that in case of force majeure circumstances (actions of a force majeure, which do not depend on will of the Parties), namely: wars, military actions, blockade, embargo, other international sanctions, currency restrictions, other actions of the states, that make impossible performance by the Parties of their obligations, fires, floods, other act of nature or seasonal natural phenomena, in particular such as freezing of the sea, straits, ports etc., closing of ways, straits, channels, crossings, the Parties are released from performance of their obligations during the time when the specified circumstances are in action.",
     "In case if action of the specified circumstances lasts more than 30 days, each of the Parties has the right to cancel the present Contract and does not bear the responsibility for such cancellation provided that it will notify on it other Party not later than 15 days before cancellation.",
     "The sufficient proof of action of force majeure circumstances is the document given by Commercial and industrial chamber or other representative on distribution of such documents by a state body.",
-  ]);
+  ].forEach(clause => { y = addClause(clause, y); });
 
-  addSection("Arbitration:", [
+  // ── A R B I T R A T I O N ─────────────────────────────────────────────────
+  y = sectionHead("Arbitration:", y);
+  [
     "All disputes or differences that may arise out of this Contract or in connection with it shall be settled by amicable talks.",
     "In the case that it is impossible to settle disputes by negotiations then disputes shall be settled in the competent Court at the domicile of the defendant.",
     "The awards of this Arbitration Court shall be final and binding upon both Parties concerned.",
-  ]);
+  ].forEach(clause => { y = addClause(clause, y); });
 
-  // ── Signature Block ──
-  if (y > 238) { doc.addPage(); y = 20; }
+  // ── S I G N A T U R E   B L O C K ────────────────────────────────────────
+  if (y > 236) { doc.addPage(); addPageDecor(); y = 24; }
   y += 4;
-  doc.setDrawColor(...gold); doc.setLineWidth(0.6);
-  doc.line(margin, y, 210 - margin, y); y += 5;
+  doc.setDrawColor(...gold); doc.setLineWidth(0.8);
+  doc.line(M, y, M + pw, y);
+  doc.setDrawColor(...dgray); doc.setLineWidth(0.25);
+  doc.line(M, y + 1, M + pw, y + 1);
+  y += 5;
 
-  doc.autoTable({
-    startY: y,
-    body: [[
-      { content: `SELLER
+  const sigY = y;
+  const sigW = pw / 2 - 3;
 
+  // Seller box
+  doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
+  doc.roundedRect(M, sigY, sigW, 44, 2, 2, "FD");
+  doc.setFontSize(8); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
+  doc.text("SELLER", M + sigW / 2, sigY + 6, { align: "center" });
+  doc.setFont(undefined, "bold"); doc.setFontSize(8.5);
+  doc.text(COMPANY.name, M + sigW / 2, sigY + 13, { align: "center" });
+  doc.setDrawColor(...dgray); doc.setLineWidth(0.3);
+  doc.line(M + 8, sigY + 35, M + sigW - 8, sigY + 35);
+  doc.setFont(undefined, "normal"); doc.setFontSize(7.5); doc.setTextColor(80, 80, 80);
+  doc.text("Authorized Signature & Stamp", M + sigW / 2, sigY + 40, { align: "center" });
 
-${COMPANY.name}
+  // Buyer box
+  const bx = M + sigW + 6;
+  doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
+  doc.roundedRect(bx, sigY, sigW, 44, 2, 2, "FD");
+  doc.setFontSize(8); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
+  doc.text("BUYER", bx + sigW / 2, sigY + 6, { align: "center" });
+  doc.setFont(undefined, "bold"); doc.setFontSize(8.5);
+  doc.text(contract.buyer_name || "", bx + sigW / 2, sigY + 13, { align: "center" });
+  doc.setDrawColor(...dgray); doc.setLineWidth(0.3);
+  doc.line(bx + 8, sigY + 35, bx + sigW - 8, sigY + 35);
+  doc.setFont(undefined, "normal"); doc.setFontSize(7.5); doc.setTextColor(80, 80, 80);
+  doc.text("Authorized Signature & Stamp", bx + sigW / 2, sigY + 40, { align: "center" });
 
-_______________________________
-Authorized Signature & Stamp`, styles: { halign: "center", fontSize: 8.5, fontStyle: "normal" } },
-      { content: `BUYER
-
-
-${contract.buyer_name || ""}
-
-_______________________________
-Authorized Signature & Stamp`, styles: { halign: "center", fontSize: 8.5, fontStyle: "normal" } },
-    ]],
-    styles: { cellPadding: 6, minCellHeight: 40, valign: "top", lineColor: borderGray, lineWidth: 0.3, fontSize: 8.5 },
-    headStyles: { fillColor: navy, textColor: 255, fontStyle: "bold" },
-    columnStyles: { 0: { cellWidth: pw / 2 }, 1: { cellWidth: pw / 2 } },
-    tableLineColor: borderGray, tableLineWidth: 0.3,
-    margin: { left: margin, right: margin }, tableWidth: pw,
-  });
-
-  // ── Footer on every page ──
+  // ── Footer on every page ──────────────────────────────────────────────────
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setFillColor(...navy);
-    doc.rect(0, 285, 210, 12, "F");
-    doc.setFontSize(7); doc.setTextColor(255, 255, 255); doc.setFont(undefined, "normal");
-    doc.text(`${COMPANY.name}  |  +91-9111282828  |  akshay@devratan.com  |  www.devratan.com  |  GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D`, 105, 290, { align: "center" });
-    doc.text(`Page ${i} of ${totalPages}`, 210 - margin, 293, { align: "right" });
-    if (i < totalPages) {
-      doc.setDrawColor(...gold); doc.setLineWidth(0.4);
-      doc.line(margin, 283, 210 - margin, 283);
+    // Gold top stripe (already drawn on page 1, add for others)
+    if (i > 1) {
+      doc.setFillColor(...gold); doc.rect(0, 0, 210, 3, "F");
     }
+    // Navy footer bar
+    doc.setFillColor(...navy); doc.rect(0, 291, 210, 6, "F");
+    doc.setFontSize(6.5); doc.setTextColor(...white); doc.setFont(undefined, "normal");
+    doc.text(COMPANY.name + "  |  +91-9111282828  |  akshay@devratan.com  |  www.devratan.com  |  GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D", 105, 294.5, { align: "center" });
+    // Page number (gold box)
+    doc.setFillColor(...gold);
+    doc.roundedRect(M + pw - 14, 285, 14, 6, 1, 1, "F");
+    doc.setFontSize(7); doc.setFont(undefined, "bold"); doc.setTextColor(...white);
+    doc.text(i + " / " + totalPages, M + pw - 7, 289, { align: "center" });
   }
 
-  doc.save(`Contract_${contract.contract_no}.pdf`);
+  doc.save("Contract_" + (contract.contract_no || "draft") + ".pdf");
 }
 
 export default function App(){
