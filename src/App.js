@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 const SUPABASE_URL = "https://jqbagmezerzgewxaqtpt.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxYmFnbWV6ZXJ6Z2V3eGFxdHB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjMxMjIsImV4cCI6MjA5NTc5OTEyMn0.HAG23sw41cMXiyrnTC2-9dTZn5bO0oXMc69XKwB3IkU";
 const R2_WORKER = "https://devratan-r2-worker.mittal94.workers.dev";
+const APP_VERSION = "1.0.3"; // ← Increment this on every deployment to force logout all users
 
 // ─── Document config ───────────────────────────────────────────────────────
 const SHIP_DOCS = [
@@ -1426,6 +1427,39 @@ export default function App(){
       events.forEach(e => window.removeEventListener(e, reset));
     };
   },[session]);
+
+  // ── Force logout on new app version deployment ───────────────────────────
+  useEffect(()=>{
+    if(!session) return;
+    const storedVersion = localStorage.getItem("app_version");
+    if(storedVersion && storedVersion !== APP_VERSION){
+      doLogout();
+      alert("App has been updated. Please log in again.");
+      return;
+    }
+    localStorage.setItem("app_version", APP_VERSION);
+  },[session]);
+
+  // ── Force logout if user role has been changed by admin ──────────────────
+  useEffect(()=>{
+    if(!session || !userInfo) return;
+    const checkRole = async () => {
+      try {
+        const fresh = await sb(`users?id=eq.${userInfo.id}&select=role,name`);
+        if(!fresh || !fresh[0]) return;
+        const freshRole = fresh[0].role;
+        if(freshRole !== userInfo.role){
+          // Role changed — force logout
+          doLogout();
+          alert(`Your account role has been updated to "${freshRole}". Please log in again with your new access level.`);
+        }
+      } catch(e){ /* silent */ }
+    };
+    // Check on load and every 2 minutes
+    checkRole();
+    const interval = setInterval(checkRole, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  },[session, userInfo]);
 
   const isAdmin=userInfo&&userInfo.role==="admin";
   const isSeniorAccountant=userInfo&&userInfo.role==="senior_accountant";
