@@ -1648,7 +1648,7 @@ const LOGO_B64 = "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGlu
 
 function exportContractPDF(contract, buyer, consignee) {
   const JPDF = getPDF();
-  if (!JPDF) { alert("PDF library not loaded."); return; }
+  if (!JPDF) { alert("PDF library not loaded. Please refresh and try again."); return; }
   const doc = new JPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const M = 15;
   const pw = 210 - M * 2;
@@ -1663,17 +1663,13 @@ function exportContractPDF(contract, buyer, consignee) {
 
   // ── Watermark (logo faded) ────────────────────────────────────────────────
   const addWatermark = () => {
-    // Faded logo watermark centered on page
-    doc.saveGraphicsState();
-    doc.setGState(new doc.GState({ opacity: 0.06 }));
-    doc.addImage(LOGO_B64, "SVG", 55, 100, 100, 100);
-    doc.restoreGraphicsState();
-    // Subtle text watermark
-    doc.saveGraphicsState();
-    doc.setGState(new doc.GState({ opacity: 0.04 }));
-    doc.setFontSize(18); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
-    doc.text("DEVRATAN ENTERPRISES LLP", 105, 80, { align: "center", angle: 35 });
-    doc.restoreGraphicsState();
+    // Watermark: very light grey text diagonal
+    doc.setFontSize(32); doc.setFont(undefined, "bold");
+    doc.setTextColor(225, 228, 235);
+    doc.text("DEVRATAN ENTERPRISES", 105, 165, { align: "center", angle: 38 });
+    doc.setFontSize(13); doc.setFont(undefined, "normal");
+    doc.text("We Create Not Produce", 105, 178, { align: "center", angle: 38 });
+    doc.setTextColor(0, 0, 0);
   };
 
   // ── Page decorations ──────────────────────────────────────────────────────
@@ -1748,8 +1744,18 @@ function exportContractPDF(contract, buyer, consignee) {
   // Logo area (left) — white rounded box, will hold SVG once available
   doc.setFillColor(...white); doc.setDrawColor(...gold); doc.setLineWidth(0.6);
   doc.roundedRect(M, 6, 30, 30, 2, 2, "FD");
-  // Add actual SVG logo
-  doc.addImage(LOGO_B64, "SVG", M + 1, 6, 28, 30);
+  // Logo: try adding image, fallback to styled text
+  try {
+    if (LOGO_B64) doc.addImage(LOGO_B64, "SVG", M + 1, 6, 28, 30);
+  } catch(e) {
+    // Fallback: styled logo text
+    doc.setFontSize(8); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
+    doc.text("DEVRATAN", M + 15, 16, { align: "center" });
+    doc.setFontSize(6); doc.setFont(undefined, "normal"); doc.setTextColor(...gold);
+    doc.text("ENTERPRISES LLP", M + 15, 21, { align: "center" });
+    doc.setFontSize(5); doc.setTextColor(120, 100, 60);
+    doc.text("We Create Not Produce", M + 15, 26, { align: "center" });
+  }
 
   // Company info right of logo
   doc.setTextColor(255, 255, 255);
