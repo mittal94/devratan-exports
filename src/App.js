@@ -1949,6 +1949,13 @@ export default function App(){
       const payload={...form,created_by:userInfo?.name,created_by_role:userInfo?.role,
         approval_status:isJA?"pending":"approved"};
       delete payload.id;delete payload.created_at;
+      // Convert empty strings to null for numeric fields
+      ["price_usd","freight_usd"].forEach(k=>{
+        if(payload[k]===""||payload[k]===undefined) payload[k]=null;
+        else payload[k]=Number(payload[k])||null;
+      });
+      // Convert empty date to null
+      if(!payload.contract_date) payload.contract_date=null;
       if(editContract){
         if(isJA){
           await sb("pending_changes",{method:"POST",body:JSON.stringify({
