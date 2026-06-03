@@ -1339,8 +1339,30 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships}){
 }
 
 export default function App(){
-  const [session,setSession]=useState(()=>{try{const s=localStorage.getItem("sb_session");return s?JSON.parse(s):null;}catch{return null;}});
-  const [userInfo,setUserInfo]=useState(()=>{try{const u=localStorage.getItem("sb_user");return u?JSON.parse(u):null;}catch{return null;}});
+  const [session,setSession]=useState(()=>{
+    try{
+      // Version check — runs before any state is loaded
+      const storedVer=localStorage.getItem("app_version");
+      if(storedVer && storedVer!==APP_VERSION){
+        // New version deployed — wipe session so user must re-login
+        localStorage.removeItem("sb_session");
+        localStorage.removeItem("sb_user");
+        localStorage.setItem("app_version",APP_VERSION);
+        return null;
+      }
+      localStorage.setItem("app_version",APP_VERSION);
+      const s=localStorage.getItem("sb_session");
+      return s?JSON.parse(s):null;
+    }catch{return null;}
+  });
+  const [userInfo,setUserInfo]=useState(()=>{
+    try{
+      // If session was wiped above, wipe userInfo too
+      if(!localStorage.getItem("sb_session")) return null;
+      const u=localStorage.getItem("sb_user");
+      return u?JSON.parse(u):null;
+    }catch{return null;}
+  });
   const [loginForm,setLoginForm]=useState({email:"",password:"",error:"",loading:false});
   const [tab,setTab]=useState("dashboard");
   const [fy,setFy]=useState(CURR_FY);
@@ -1429,48 +1451,41 @@ export default function App(){
   },[session]);
 
   // ── Force logout on new app version deployment ───────────────────────────
+  // Handled in useState initializer above — session is null if version changed
   useEffect(()=>{
-    // Always runs — check stored version against current
-    const storedVersion = localStorage.getItem("app_version");
-    if(!storedVersion){
-      // First time — just store it
-      localStorage.setItem("app_version", APP_VERSION);
-    } else if(storedVersion !== APP_VERSION){
-      // Version changed — clear everything and force re-login
-      localStorage.removeItem("sb_session");
-      localStorage.removeItem("sb_user");
-      localStorage.setItem("app_version", APP_VERSION);
-      setSession(null);
-      setUserInfo(null);
-      setShips([]);setBcs([]);setProfits([]);
-      alert("App has been updated to a new version. Please log in again.");
+    const storedVer=localStorage.getItem("app_version");
+    if(storedVer && storedVer!==APP_VERSION){
+      // Fallback: if somehow still logged in, show message
+      alert("App has been updated. Please log in again.");
     }
-  },[]); // runs once on mount — no dependency needed
+  },[]);
 
   // ── Force logout if user role has been changed by admin ──────────────────
   useEffect(()=>{
-    if(!session || !userInfo) return;
+    if(!session || !userInfo || !userInfo.id) return;
+    const savedRole = userInfo.role;
     const checkRole = async () => {
       try {
-        const fresh = await sb(`users?id=eq.${userInfo.id}&select=role,name`);
-        if(!fresh || !fresh[0]) return;
-        const freshRole = fresh[0].role;
-        if(freshRole !== userInfo.role){
-          // Role changed — clear storage and force re-login
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${userInfo.id}&select=role`,{
+          headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`}
+        });
+        const data = await res.json();
+        if(!data||!data[0]) return;
+        const freshRole = data[0].role;
+        if(freshRole && freshRole !== savedRole){
           localStorage.removeItem("sb_session");
           localStorage.removeItem("sb_user");
           setSession(null);
           setUserInfo(null);
           setShips([]);setBcs([]);setProfits([]);
-          alert(`Your role has been changed to "${freshRole}". Please log in again.`);
+          alert(`Your role has been updated to "${freshRole}". Please log in again.`);
         }
       } catch(e){ /* silent */ }
     };
-    // Check immediately on load and then every 60 seconds
     checkRole();
-    const interval = setInterval(checkRole, 60 * 1000);
+    const interval = setInterval(checkRole, 60000);
     return () => clearInterval(interval);
-  },[session?.access_token]); // only re-run when session token changes, not userInfo
+  },[userInfo?.id]);
 
   const isAdmin=userInfo&&userInfo.role==="admin";
   const isSeniorAccountant=userInfo&&userInfo.role==="senior_accountant";
