@@ -1736,10 +1736,8 @@ ${consigneeAddr}`, styles: { fontSize: 8.5 } }
     ["Shipment", contract.shipment_period || ""],
     ["Packing", contract.packing || ""],
     ["Price", priceDisplay],
-    ["Payment
-Condition", contract.payment_condition || ""],
-    ["Documents
-Required", docsText],
+    ["Payment Condition", contract.payment_condition || ""],
+    ["Documents Required", docsText],
   ];
 
   doc.autoTable({
