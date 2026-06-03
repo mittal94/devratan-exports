@@ -1591,7 +1591,7 @@ export default function App(){
   };
 
   const doSort=col=>{if(sortCol===col)setSortDir(d=>d==="asc"?"desc":"asc");else{setSortCol(col);setSortDir("asc");}};
-  function Th({col,label,right}){return<th onClick={()=>doSort(col)} style={{padding:"9px 10px",textAlign:right?"right":"left",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",cursor:"pointer",whiteSpace:"nowrap",userSelect:"none",background:"#f8fafc"}}>{label}{sortCol===col?(sortDir==="asc"?" ↑":" ↓"):""}</th>;}
+  function Th({col,label,right}){return<th onClick={()=>doSort(col)} style={{padding:"9px 10px",textAlign:right?"right":"left",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"2px solid #e2e8f0",cursor:"pointer",whiteSpace:"nowrap",userSelect:"none",background:"#f8fafc",overflow:"hidden",textOverflow:"ellipsis"}}>{label}{sortCol===col?(sortDir==="asc"?" ↑":" ↓"):""}</th>;}
 
   const SHIP_SECTIONS=[
     {title:"Invoice & Buyer",fields:[["invoice_no","Invoice No *","text"],["invoice_date","Invoice Date","date"],["buyer_name","Buyer Name *","text"],["buyer_country","Buyer Country","select",COUNTRIES]]},
@@ -1743,8 +1743,44 @@ export default function App(){
             <div style={{marginBottom:10}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{...iS,fontSize:13}}/></div>
             {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:40,textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📭</div><div style={{fontSize:14,fontWeight:600}}>No shipments for FY {fy}</div>{canAddShipment&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600,marginTop:10,fontSize:13}}>+ Add First Shipment</button>}</div>:
             <>
-              <div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",overflow:"auto",maxHeight:"calc(100vh - 220px)",WebkitOverflowScrolling:"touch"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:2000,tableLayout:"fixed"}}>
+              <div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",overflow:"auto",maxHeight:"calc(100vh - 240px)",WebkitOverflowScrolling:"touch",position:"relative"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:2200}}>
+                  <colgroup>
+                    <col style={{width:140}}/>{/* Invoice No - frozen */}
+                    <col style={{width:95}}/>{/* Date */}
+                    <col style={{width:160}}/>{/* Buyer */}
+                    <col style={{width:100}}/>{/* Country */}
+                    <col style={{width:140}}/>{/* Product */}
+                    <col style={{width:110}}/>{/* Port Load */}
+                    <col style={{width:110}}/>{/* Port Disch */}
+                    <col style={{width:95}}/>{/* SB No */}
+                    <col style={{width:95}}/>{/* SB Date */}
+                    <col style={{width:85}}/>{/* Port Code */}
+                    <col style={{width:110}}/>{/* BL No */}
+                    <col style={{width:95}}/>{/* BL Date */}
+                    <col style={{width:75}}/>{/* Qty */}
+                    <col style={{width:75}}/>{/* Rate/MT */}
+                    <col style={{width:65}}/>{/* Terms */}
+                    <col style={{width:105}}/>{/* Inv USD */}
+                    <col style={{width:68}}/>{/* ExRate */}
+                    <col style={{width:115}}/>{/* Inv INR */}
+                    <col style={{width:90}}/>{/* IGST */}
+                    <col style={{width:115}}/>{/* Gross INR */}
+                    <col style={{width:100}}/>{/* FOB USD */}
+                    <col style={{width:110}}/>{/* FOB INR */}
+                    <col style={{width:100}}/>{/* RODTEP INR */}
+                    <col style={{width:85}}/>{/* RODTEP St */}
+                    <col style={{width:75}}/>{/* GST St */}
+                    <col style={{width:110}}/>{/* BC No */}
+                    <col style={{width:80}}/>{/* BC Bank */}
+                    <col style={{width:90}}/>{/* BC Date */}
+                    <col style={{width:120}}/>{/* BRC Nos */}
+                    <col style={{width:100}}/>{/* BRC Dates */}
+                    <col style={{width:100}}/>{/* Pmt USD */}
+                    <col style={{width:110}}/>{/* Pmt INR */}
+                    <col style={{width:110}}/>{/* Balance */}
+                    <col style={{width:130}}/>{/* Actions */}
+                  </colgroup>
                   <thead style={{position:"sticky",top:0,zIndex:10}}><tr>
                     <th onClick={()=>doSort("invoice_no")} style={{padding:"9px 10px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",cursor:"pointer",whiteSpace:"nowrap",userSelect:"none",background:"#f0f4ff",position:"sticky",left:0,zIndex:11,minWidth:130,boxShadow:"2px 0 4px rgba(0,0,0,0.08)"}}>Invoice No{sortCol==="invoice_no"?(sortDir==="asc"?" ↑":" ↓"):""}</th><Th col="invoice_date" label="Date"/><Th col="buyer_name" label="Buyer"/><Th col="buyer_country" label="Country"/><Th col="product" label="Product"/><Th col="port_of_loading" label="Port Load"/><Th col="port_of_discharge" label="Port Disch"/><Th col="shipping_bill_no" label="SB No"/><Th col="shipping_bill_date" label="SB Date"/><Th col="port_code" label="Port Code"/><Th col="bl_no" label="BL No"/><Th col="bl_date" label="BL Date"/><Th col="qty" label="Qty(MT)" right/><Th col="rate_per_mt" label="Rate/MT" right/><Th col="delivery_terms" label="Terms"/><Th col="i1" label="Inv(USD)" right/><Th col="exchange_rate" label="ExRate" right/><Th col="i2" label="Inv(INR)" right/><Th col="igst" label="IGST" right/><Th col="i3" label="Gross(INR)" right/><Th col="fob_value_usd" label="FOB(USD)" right/><Th col="i4" label="FOB(INR)" right/><Th col="rodtep_amount" label="RODTEP(INR)" right/><Th col="rodtep_status" label="RODTEP"/><Th col="gst_status" label="GST"/><Th col="bc_no" label="BC No"/><Th col="bc_bank" label="BC Bank"/><Th col="bc_date" label="BC Date"/><Th col="brc_nos" label="BRC No(s)"/><Th col="brc_dates" label="BRC Dates"/><Th col="paid_usd" label="Pmt(USD)" right/><Th col="paid_inr" label="Pmt(INR)" right/><Th col="bal" label="Balance(USD)" right/>
                     {canEdit&&<th style={{padding:"9px 10px",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",background:"#f8fafc",whiteSpace:"nowrap"}}>Actions</th>}
@@ -1754,9 +1790,9 @@ export default function App(){
                       <tr key={s.id} style={{borderBottom:"1px solid #f1f5f9"}} onDoubleClick={()=>setViewShipId(s.id)}>
                         <td style={{padding:"7px 10px",fontWeight:600,color:"#1e3a5f",whiteSpace:"nowrap",position:"sticky",left:0,background:"#f8fafc",zIndex:5,boxShadow:"2px 0 4px rgba(0,0,0,0.06)",minWidth:130}}>{s.invoice_no}</td>
                         <td style={{padding:"7px 10px",color:"#64748b",whiteSpace:"nowrap"}}>{s.invoice_date}</td>
-                        <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>{s.buyer_name}</td>
+                        <td style={{padding:"7px 10px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:160}}>{s.buyer_name}</td>
                         <td style={{padding:"7px 10px",color:"#64748b"}}>{s.buyer_country}</td>
-                        <td style={{padding:"7px 10px",whiteSpace:"nowrap",color:"#64748b"}}>{s.product}</td>
+                        <td style={{padding:"7px 10px",whiteSpace:"nowrap",color:"#64748b",overflow:"hidden",textOverflow:"ellipsis",maxWidth:140}}>{s.product}</td>
                         <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>{s.port_of_loading}</td>
                         <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>{s.port_of_discharge}</td>
                         <td style={{padding:"7px 10px"}}>{s.shipping_bill_no}</td>
