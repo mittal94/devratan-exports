@@ -1385,6 +1385,314 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships}){
   );
 }
 
+// ─── Buyer Master Modal ───────────────────────────────────────────────────────
+function BuyerFormModal({buyer,onSave,onClose,saving}){
+  const EMPTY={buyer_name:"",company_name:"",address:"",country:"",contact_person:"",email:"",phone:"",payment_terms:"",bank_name:"",bank_address:"",bank_account:"",swift_code:"",iban:"",notes:""};
+  const [form,setForm]=useState(buyer?{...buyer}:{...EMPTY});
+  const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const fld=(k,l,t="text",opts=null)=>(
+    <div key={k}>
+      <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label>
+      {opts?<select value={form[k]||""} onChange={e=>sf(k,e.target.value)} style={iS}><option value="">Select...</option>{opts.map(o=><option key={o}>{o}</option>)}</select>
+      :t==="textarea"?<textarea value={form[k]||""} onChange={e=>sf(k,e.target.value)} rows={2} style={{...iS,resize:"vertical"}}/>
+      :<input type={t} value={form[k]||""} onChange={e=>sf(k,e.target.value)} style={iS}/>}
+    </div>
+  );
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:12}}>
+      <div style={{background:"#fff",borderRadius:14,padding:20,width:"100%",maxWidth:680,maxHeight:"95vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <h3 style={{margin:0,color:"#1e3a5f",fontSize:15}}>{buyer?"Edit":"Add"} Buyer</h3>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
+        </div>
+        <SH t="Company Details"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          {fld("buyer_name","Buyer / Trade Name *")}
+          {fld("company_name","Full Company Name")}
+          {fld("country","Country","select",COUNTRIES)}
+          {fld("contact_person","Contact Person")}
+          {fld("email","Email","email")}
+          {fld("phone","Phone")}
+        </div>
+        <div style={{marginBottom:12}}>{fld("address","Full Address","textarea")}</div>
+        <SH t="Payment & Banking"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          {fld("payment_terms","Default Payment Terms")}
+          {fld("bank_name","Bank Name")}
+          {fld("bank_account","Bank Account No")}
+          {fld("swift_code","SWIFT Code")}
+          {fld("iban","IBAN")}
+          {fld("bank_address","Bank Address")}
+        </div>
+        <div style={{marginBottom:14}}>{fld("notes","Notes","textarea")}</div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
+          <button onClick={()=>onSave(form)} disabled={saving} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 24px",cursor:"pointer",fontWeight:700}}>{saving?"Saving...":"Save Buyer"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Contract Form Modal ──────────────────────────────────────────────────────
+function ContractFormModal({contract,buyers,userInfo,onSave,onClose,saving}){
+  const today=new Date().toISOString().split("T")[0];
+  const EMPTY_CONTRACT={
+    contract_no:"",contract_date:today,buyer_id:"",buyer_name:"",buyer_address:"",
+    commodity:"INDIAN PARBOILED RICE – 5% BROKEN",quantity:"",loading_port:"Any Indian Port",
+    destination:"",specification:"Moisture 14% Max, Broken 5% Max, DD 2% Max, Length 5.9 mm Min",
+    shipment_period:"",packing:"In 20 Kg PP Bags",price_usd:"",price_per:"MTs",
+    delivery_terms:"CIF",freight_usd:"",payment_condition:"",documents_required:
+`Commercial Invoice – 3 Original
+Packing List – 3 Original
+Master Bill of Lading – 3 Original
+Certificate of Origin – 1 Original
+Certificate of Fumigation – 1 Original
+Phytosanitary Certificate – 1 Original
+Insurance Policy – 1 Original
+Weight & quality certificate – 1 Original
+Pesticide Free Test Report – 1 Original`,
+    special_conditions:"",status:"draft"
+  };
+  const [form,setForm]=useState(contract?{...contract}:{...EMPTY_CONTRACT});
+  const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const selectBuyer=(id)=>{
+    const b=buyers.find(x=>x.id===id);
+    if(!b){sf("buyer_id",id);return;}
+    setForm(f=>({...f,buyer_id:id,buyer_name:b.buyer_name,buyer_address:b.address||"",payment_condition:b.payment_terms||f.payment_condition}));
+  };
+
+  const fld=(k,l,t="text",opts=null,full=false)=>(
+    <div key={k} style={full?{gridColumn:"1/-1"}:{}}>
+      <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label>
+      {opts?<select value={form[k]||""} onChange={e=>sf(k,e.target.value)} style={iS}><option value="">Select...</option>{opts.map(o=><option key={o}>{o}</option>)}</select>
+      :t==="textarea"?<textarea value={form[k]||""} onChange={e=>sf(k,e.target.value)} rows={3} style={{...iS,resize:"vertical"}}/>
+      :<input type={t} value={form[k]||""} onChange={e=>sf(k,e.target.value)} style={iS} step={t==="number"?"any":undefined}/>}
+    </div>
+  );
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:12}}>
+      <div style={{background:"#fff",borderRadius:14,padding:20,width:"100%",maxWidth:820,maxHeight:"95vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <h3 style={{margin:0,color:"#1e3a5f",fontSize:15}}>{contract?"Edit":"Create"} Sales Contract</h3>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
+        </div>
+
+        <SH t="Contract Details"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          {fld("contract_no","Contract No *")}
+          {fld("contract_date","Contract Date","date")}
+          <div style={{gridColumn:"1/-1"}}>
+            <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Buyer *</label>
+            <select value={form.buyer_id||""} onChange={e=>selectBuyer(e.target.value)} style={{...iS,borderColor:form.buyer_id?"#e2e8f0":"#dc2626"}}>
+              <option value="">Select Buyer from Master...</option>
+              {buyers.map(b=><option key={b.id} value={b.id}>{b.buyer_name} — {b.country}</option>)}
+            </select>
+          </div>
+          {form.buyer_id&&<div style={{gridColumn:"1/-1",background:"#f0fdf4",borderRadius:8,padding:"8px 12px",fontSize:12}}>
+            <b style={{color:"#15803d"}}>Selected: </b>{form.buyer_name} · {buyers.find(b=>b.id===form.buyer_id)?.country} · {buyers.find(b=>b.id===form.buyer_id)?.email||""}
+          </div>}
+        </div>
+
+        <SH t="Commodity & Quantity"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          {fld("commodity","Commodity",undefined,null,true)}
+          {fld("quantity","Quantity (e.g. 27 MTS +/- 5%)")}
+          {fld("specification","Specification")}
+          {fld("packing","Packing")}
+          {fld("shipment_period","Shipment Period (e.g. JUN-JUL 2026)")}
+          {fld("loading_port","Port of Loading")}
+          {fld("destination","Destination Port")}
+          {fld("delivery_terms","Delivery Terms","select",DEL_TERMS)}
+        </div>
+
+        <SH t="Pricing"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
+          {fld("price_usd","Price (USD)","number")}
+          {fld("price_per","Per","select",["MTs","MT","Container","Lot"])}
+          {fld("freight_usd","Freight (USD per MT)","number")}
+          <div style={{gridColumn:"1/-1"}}>{fld("payment_condition","Payment Condition (e.g. 10% ADVANCE & BALANCE CAD)")}</div>
+        </div>
+
+        <SH t="Documents Required"/>
+        <div style={{marginBottom:12}}>
+          <textarea value={form.documents_required||""} onChange={e=>sf("documents_required",e.target.value)} rows={6} style={{...iS,resize:"vertical",fontFamily:"inherit"}}/>
+        </div>
+
+        <SH t="Special Conditions (Optional)"/>
+        <div style={{marginBottom:12}}>
+          <textarea value={form.special_conditions||""} onChange={e=>sf("special_conditions",e.target.value)} rows={3} style={{...iS,resize:"vertical"}} placeholder="Any additional conditions specific to this contract..."/>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"center",marginBottom:14}}>
+          <div>
+            <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Status</label>
+            <select value={form.status||"draft"} onChange={e=>sf("status",e.target.value)} style={iS}>
+              <option value="draft">Draft</option>
+              <option value="final">Final</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          {(userInfo?.role==="junior_accountant")&&(
+            <div style={{background:"#fef3c7",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#92400e",fontWeight:600}}>
+              ⚠️ Will need approval
+            </div>
+          )}
+        </div>
+
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
+          <button onClick={()=>onSave(form)} disabled={saving} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 24px",cursor:"pointer",fontWeight:700}}>{saving?"Saving...":"Save Contract"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Contract PDF Export ──────────────────────────────────────────────────────
+function exportContractPDF(contract,buyer){
+  const JPDF=getPDF();
+  if(!JPDF){alert("PDF library not loaded.");return;}
+  const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const margin=14;
+  const pw=210-margin*2;
+
+  // Header
+  doc.setFillColor(30,58,95);
+  doc.rect(0,0,210,32,"F");
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(16);doc.setFont(undefined,"bold");
+  doc.text("SALE CONTRACT",105,12,{align:"center"});
+  doc.setFontSize(9);doc.setFont(undefined,"normal");
+  doc.text(COMPANY.name,105,19,{align:"center"});
+  doc.text(COMPANY.address,105,24,{align:"center"});
+  doc.setTextColor(0,0,0);
+
+  let y=38;
+
+  // Contract No & Date
+  doc.setFontSize(10);doc.setFont(undefined,"bold");
+  doc.text(`Contract No: ${contract.contract_no}`,margin,y);
+  doc.text(`Date: ${contract.contract_date||""}`,210-margin,y,{align:"right"});
+  y+=8;
+
+  // Seller / Buyer table
+  doc.autoTable({
+    startY:y,
+    body:[
+      [{content:"Seller:",styles:{fontStyle:"bold",cellWidth:22}},{content:`${COMPANY.name}\n${COMPANY.address}\n(Hereinafter referred to as "the Seller")`}],
+      [{content:"Buyer:",styles:{fontStyle:"bold",cellWidth:22}},{content:`${contract.buyer_name||""}\n${contract.buyer_address||buyer?.address||""}\n(Hereinafter referred to as "the Buyer")`}],
+    ],
+    styles:{fontSize:9,cellPadding:4,valign:"top"},
+    columnStyles:{0:{fillColor:[241,245,249],fontStyle:"bold",cellWidth:22}},
+    margin:{left:margin,right:margin},
+    tableWidth:pw,
+  });
+  y=doc.lastAutoTable.finalY+4;
+
+  // Main contract terms table
+  const deliveryFull=`USD ${pdfINR(contract.price_usd)} Per ${contract.price_per||"MTs"} ${contract.delivery_terms||""}${contract.freight_usd?`\nFreight is considered at USD ${contract.freight_usd} PER MT. Any increase or decrease in freight will be passed to the Buyer.`:""}`;
+  doc.autoTable({
+    startY:y,
+    body:[
+      ["Commodity",contract.commodity||""],
+      ["Quantity",contract.quantity||""],
+      ["Loading",contract.loading_port||""],
+      ["Destination",contract.destination||""],
+      ["Specification",contract.specification||""],
+      ["Shipment",contract.shipment_period||""],
+      ["Packing",contract.packing||""],
+      ["Price",deliveryFull],
+      ["Payment Condition",contract.payment_condition||""],
+      ["Documents Required",contract.documents_required||""],
+    ],
+    styles:{fontSize:9,cellPadding:4,valign:"top"},
+    columnStyles:{0:{fillColor:[241,245,249],fontStyle:"bold",cellWidth:38}},
+    margin:{left:margin,right:margin},
+    tableWidth:pw,
+  });
+  y=doc.lastAutoTable.finalY+6;
+
+  // Special conditions
+  if(contract.special_conditions){
+    doc.setFontSize(9);doc.setFont(undefined,"bold");doc.setTextColor(30,58,95);
+    doc.text("Special Conditions:",margin,y);y+=5;
+    doc.setFont(undefined,"normal");doc.setTextColor(0,0,0);
+    const lines=doc.splitTextToSize(contract.special_conditions,pw);
+    doc.text(lines,margin,y);y+=lines.length*5+4;
+  }
+
+  // Standard Terms
+  const addSection=(title,items)=>{
+    if(y>250){doc.addPage();y=20;}
+    doc.setFontSize(10);doc.setFont(undefined,"bold");doc.setTextColor(30,58,95);
+    doc.text(title,margin,y);y+=5;
+    doc.setFont(undefined,"normal");doc.setTextColor(0,0,0);doc.setFontSize(8.5);
+    items.forEach(item=>{
+      if(y>270){doc.addPage();y=20;}
+      const lines=doc.splitTextToSize(`- ${item}`,pw-4);
+      doc.text(lines,margin+2,y);y+=lines.length*4.5+1;
+    });
+    y+=3;
+  };
+
+  addSection("Terms & Conditions:",[
+    "All customs duties and formalities are for Seller's account at loading port.",
+    "The Documents will be delivered through Sellers Bank to the Buyers Bank or telex release depends on buyer choice.",
+    "Bank charges at Seller's bank paid at the Seller's expense, at Buyer's bank and correspondent bank – at the Buyer's expense.",
+    `The Seller shall deliver Goods in FCL lot on basis of ${contract.delivery_terms||"CIF"}, according to INCOTERMS 2020`,
+    "None of the Parties is entitled to transfer its rights and obligations under the present Contract to a third party without the other Party's previous written consent.",
+    "All amendments and additions to the present Contract are valid only if they are made out in writing and signed by both Parties.",
+    "The present Contract is signed in two originals in English, one for each Party.",
+    "The Contract will come in force at the moment of its signing by the Parties and continues until the Parties fully perform their obligations under the present Contract.",
+    "The duration of the contract is 3 months after duly signing of the contract by both parties.",
+    "Weight & Quality will be finalized at loading port only by any third-party surveyor & accepted as final report.",
+    "If buyer fails to make payment of the documents as per the contract, the seller reserves the right to protect his interest and accordingly this contract acts as implied no objection certificate/confirmation from buyer to seller to transfer/resell to alternate buyer.",
+    "WAR RISK & EXTRAORDINARY CHARGES: Any increase or additional charges arising after the date of contract due to war, hostilities, geopolitical tensions, sanctions, route deviations—including War Risk Surcharge, Emergency Risk Surcharge, additional insurance premium—shall be borne by the Buyer.",
+    "This facsimile/email/whatsapp transmission of the signed contract shall be treated as valid and legal.",
+  ]);
+
+  addSection("Force Majeure:",[
+    "The parties have agreed, that in case of force majeure circumstances (wars, military actions, blockade, embargo, other international sanctions, currency restrictions, fires, floods, other act of nature), the Parties are released from performance of their obligations during the time when the specified circumstances are in action.",
+    "In case if action of the specified circumstances lasts more than 30 days, each of the Parties has the right to cancel the present Contract provided that it will notify the other Party not later than 15 days before cancellation.",
+    "The sufficient proof of action of force majeure circumstances is the document given by Commercial and industrial chamber or other representative body.",
+  ]);
+
+  addSection("Arbitration:",[
+    "All disputes or differences that may arise out of this Contract or in connection with it shall be settled by amicable talks.",
+    "In the case that it is impossible to settle disputes by negotiations then disputes shall be settled in the competent Court at the domicile of the defendant.",
+    "The awards of this Arbitration Court shall be final and binding upon both Parties concerned.",
+  ]);
+
+  // Signature block
+  if(y>240){doc.addPage();y=20;}
+  y+=4;
+  doc.autoTable({
+    startY:y,
+    body:[[
+      {content:`Seller\n\n${COMPANY.name}\n\n\nAuthorized Signature & Stamp`,styles:{halign:"center",fontSize:9}},
+      {content:`Buyer\n\n${contract.buyer_name||""}\n\n\nAuthorized Signature & Stamp`,styles:{halign:"center",fontSize:9}},
+    ]],
+    styles:{cellPadding:8,minCellHeight:35,valign:"top"},
+    columnStyles:{0:{cellWidth:pw/2},1:{cellWidth:pw/2}},
+    margin:{left:margin,right:margin},
+    tableWidth:pw,
+  });
+
+  // Footer
+  const totalPages=doc.getNumberOfPages();
+  for(let i=1;i<=totalPages;i++){
+    doc.setPage(i);
+    doc.setFontSize(7.5);doc.setTextColor(150,150,150);
+    doc.text(`${COMPANY.name} | +91-9111282828 | akshay@devratan.com | www.devratan.com | GSTIN: 23AARFD8883D1Z3 | IEC: AARFD8883D`,105,292,{align:"center"});
+    doc.text(`Page ${i} of ${totalPages}`,200,292,{align:"right"});
+  }
+
+  doc.save(`Contract_${contract.contract_no}.pdf`);
+}
+
 export default function App(){
   const [session,setSession]=useState(()=>{
     try{
@@ -1417,8 +1725,16 @@ export default function App(){
   const [bcs,setBcs]=useState([]);
   const [profits,setProfits]=useState([]);
   const [users,setUsers]=useState([]);
+  const [buyers,setBuyers]=useState([]);
+  const [contracts,setContracts]=useState([]);
   const [pendings,setPendings]=useState([]);
   const [showApprovals,setShowApprovals]=useState(false);
+  const [showBuyerForm,setShowBuyerForm]=useState(false);
+  const [editBuyer,setEditBuyer]=useState(null);
+  const [showContractForm,setShowContractForm]=useState(false);
+  const [editContract,setEditContract]=useState(null);
+  const [buyerSearch,setBuyerSearch]=useState("");
+  const [contractSearch,setContractSearch]=useState("");
   const [shipDocsId,setShipDocsId]=useState(null);
   const [bcDocsId,setBCDocsId]=useState(null);
   const [loading,setLoading]=useState(false);
@@ -1463,14 +1779,16 @@ export default function App(){
     if(!session)return;
     setLoading(true);
     try{
-      const[s,b,p,u,pc]=await Promise.all([
+      const[s,b,p,u,pc,by,ct]=await Promise.all([
         sb("shipments?select=*&order=invoice_date.desc"),
         sb("bill_collections?select=*,irm_entries(*),brc_entries(*)"),
         sb("profitability?select=*&order=created_at.desc"),
         sb("users?select=*&order=name.asc"),
         sb("pending_changes?select=*&order=submitted_at.desc"),
+        sb("buyers?select=*&order=buyer_name.asc"),
+        sb("contracts?select=*&order=created_at.desc"),
       ]);
-      setShips(s||[]);setBcs(b||[]);setProfits(p||[]);setUsers(u||[]);setPendings(pc||[]);
+      setShips(s||[]);setBcs(b||[]);setProfits(p||[]);setUsers(u||[]);setPendings(pc||[]);setBuyers(by||[]);setContracts(ct||[]);
     }catch(e){console.error(e);}
     setLoading(false);
   },[session]);
@@ -1600,6 +1918,75 @@ export default function App(){
   const openAddShip=()=>{setShipForm({...EMPTY_SHIP});setEditShipId(null);setShowShipForm(true);};
   const openEditShip=s=>{setShipForm({...s});setEditShipId(s.id);setShowShipForm(true);};
   const setSF=(k,v)=>setShipForm(f=>({...f,[k]:v}));
+
+  // ── Buyer CRUD ─────────────────────────────────────────────────────────────
+  const saveBuyer=async(form)=>{
+    if(!form.buyer_name){alert("Buyer name required.");return;}
+    setSaving(true);
+    try{
+      const payload={...form};delete payload.id;delete payload.created_at;
+      if(editBuyer){await sb(`buyers?id=eq.${editBuyer.id}`,{method:"PATCH",body:JSON.stringify(payload)});}
+      else{await sb("buyers",{method:"POST",body:JSON.stringify(payload)});}
+      await loadAll();setShowBuyerForm(false);setEditBuyer(null);
+    }catch(e){alert("Error: "+e.message);}
+    setSaving(false);
+  };
+
+  const deleteBuyer=async(id)=>{
+    if(!window.confirm("Delete this buyer?"))return;
+    setSaving(true);
+    try{await sb(`buyers?id=eq.${id}`,{method:"DELETE"});await loadAll();}
+    catch(e){alert("Error: "+e.message);}
+    setSaving(false);
+  };
+
+  // ── Contract CRUD ───────────────────────────────────────────────────────────
+  const saveContract=async(form)=>{
+    if(!form.contract_no||!form.buyer_id){alert("Contract No and Buyer are required.");return;}
+    setSaving(true);
+    try{
+      const isJA=isJuniorAccountant;
+      const payload={...form,created_by:userInfo?.name,created_by_role:userInfo?.role,
+        approval_status:isJA?"pending":"approved"};
+      delete payload.id;delete payload.created_at;
+      if(editContract){
+        if(isJA){
+          await sb("pending_changes",{method:"POST",body:JSON.stringify({
+            action:"edit",table_name:"contracts",record_id:editContract.id,
+            new_data:payload,old_data:editContract,
+            submitted_by:userInfo.id,submitted_by_name:userInfo.name,status:"pending"
+          })});
+          alert("Contract edit submitted for approval.");
+        } else {
+          await sb(`contracts?id=eq.${editContract.id}`,{method:"PATCH",body:JSON.stringify(payload)});
+        }
+      } else {
+        if(isJA){
+          await sb("pending_changes",{method:"POST",body:JSON.stringify({
+            action:"add",table_name:"contracts",record_id:null,
+            new_data:payload,old_data:null,
+            submitted_by:userInfo.id,submitted_by_name:userInfo.name,status:"pending"
+          })});
+          alert("Contract submitted for approval.");
+        } else {
+          await sb("contracts",{method:"POST",body:JSON.stringify(payload)});
+        }
+      }
+      await loadAll();setShowContractForm(false);setEditContract(null);
+    }catch(e){alert("Error: "+e.message);}
+    setSaving(false);
+  };
+
+  const deleteContract=async(id)=>{
+    if(!window.confirm("Delete this contract?"))return;
+    setSaving(true);
+    try{await sb(`contracts?id=eq.${id}`,{method:"DELETE"});await loadAll();}
+    catch(e){alert("Error: "+e.message);}
+    setSaving(false);
+  };
+
+  const canManageContracts=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant"||isJuniorAccountant);
+  const canDeleteContracts=userInfo&&(isAdmin||isSeniorAccountant);
 
   const prepShipPayload=(form)=>{
     const payload={...form};
@@ -1795,7 +2182,9 @@ export default function App(){
       )}
       <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
         {[["dashboard","📊 Dashboard"],["shipments","📦 Register"],
-          ...(!isJuniorAccountant?[["profitability","💰 P&L"],["bcmanager","🏦 Bill Coll."]]:[])
+          ...(!isJuniorAccountant?[["profitability","💰 P&L"],["bcmanager","🏦 Bill Coll."]]:[]),
+          ["buyers","👥 Buyers"],
+          ...(!isJuniorAccountant||true?[["contracts","📋 Contracts"]]:[]),
         ].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)} style={{background:"none",border:"none",borderBottom:tab===k?"3px solid #1e3a5f":"3px solid transparent",color:tab===k?"#1e3a5f":"#64748b",padding:"11px 14px",cursor:"pointer",fontWeight:tab===k?700:500,fontSize:12,whiteSpace:"nowrap",flex:"1 0 auto"}}>{l}</button>
         ))}
@@ -1997,6 +2386,44 @@ export default function App(){
           </div>
         )}
 
+        {tab==="buyers"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
+              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Buyer Master</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>{buyers.length} buyers</p></div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {canManageContracts&&<button onClick={()=>{setEditBuyer(null);setShowBuyerForm(true);}} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add Buyer</button>}
+              </div>
+            </div>
+            <div style={{marginBottom:10}}><input value={buyerSearch} onChange={e=>setBuyerSearch(e.target.value)} placeholder="Search buyers..." style={{...iS,fontSize:13}}/></div>
+            {buyers.length===0
+              ?<div style={{background:"#fff",borderRadius:12,padding:40,textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>👥</div><div style={{fontSize:14,fontWeight:600}}>No buyers yet</div>{canManageContracts&&<button onClick={()=>{setEditBuyer(null);setShowBuyerForm(true);}} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600,marginTop:10}}>+ Add First Buyer</button>}</div>
+              :<div style={{display:"grid",gap:10}}>
+                {buyers.filter(b=>!buyerSearch||JSON.stringify(b).toLowerCase().includes(buyerSearch.toLowerCase())).map(b=>(
+                  <div key={b.id} style={{background:"#fff",borderRadius:12,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:8}}>
+                      <div>
+                        <div style={{fontWeight:700,color:"#1e3a5f",fontSize:14}}>{b.buyer_name}</div>
+                        {b.company_name&&<div style={{fontSize:12,color:"#64748b"}}>{b.company_name}</div>}
+                        <div style={{fontSize:11,color:"#94a3b8"}}>{b.country}{b.contact_person?" · "+b.contact_person:""}{b.email?" · "+b.email:""}</div>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        {canManageContracts&&<button onClick={()=>{setEditBuyer(b);setShowBuyerForm(true);}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
+                        {canDeleteContracts&&<button onClick={()=>deleteBuyer(b.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
+                      </div>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:6,fontSize:11}}>
+                      {b.address&&<div><span style={{color:"#94a3b8"}}>Address: </span>{b.address}</div>}
+                      {b.payment_terms&&<div><span style={{color:"#94a3b8"}}>Payment: </span><b>{b.payment_terms}</b></div>}
+                      {b.bank_name&&<div><span style={{color:"#94a3b8"}}>Bank: </span>{b.bank_name}</div>}
+                      {b.swift_code&&<div><span style={{color:"#94a3b8"}}>SWIFT: </span>{b.swift_code}</div>}
+                      {b.notes&&<div style={{gridColumn:"1/-1"}}><span style={{color:"#94a3b8"}}>Notes: </span>{b.notes}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>}
+          </div>
+        )}
+
         {tab==="bcmanager"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:14}}>
@@ -2030,6 +2457,54 @@ export default function App(){
           </div>
         )}
       </div>
+
+      {tab==="contracts"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
+              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Sales Contracts</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>{contracts.length} contracts</p></div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {canManageContracts&&<button onClick={()=>{setEditContract(null);setShowContractForm(true);}} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New Contract</button>}
+              </div>
+            </div>
+            <div style={{marginBottom:10}}><input value={contractSearch} onChange={e=>setContractSearch(e.target.value)} placeholder="Search contracts..." style={{...iS,fontSize:13}}/></div>
+            {contracts.length===0
+              ?<div style={{background:"#fff",borderRadius:12,padding:40,textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📋</div><div style={{fontSize:14,fontWeight:600}}>No contracts yet</div>{canManageContracts&&<button onClick={()=>{setEditContract(null);setShowContractForm(true);}} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600,marginTop:10}}>+ Create First Contract</button>}</div>
+              :<div style={{display:"grid",gap:12}}>
+                {contracts.filter(c=>!contractSearch||JSON.stringify(c).toLowerCase().includes(contractSearch.toLowerCase())).map(c=>{
+                  const buyer=buyers.find(b=>b.id===c.buyer_id);
+                  const statusColors={draft:{bg:"#fef3c7",color:"#d97706"},final:{bg:"#dcfce7",color:"#16a34a"},cancelled:{bg:"#fee2e2",color:"#dc2626"}};
+                  const sc=statusColors[c.status]||statusColors.draft;
+                  return(
+                    <div key={c.id} style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+                      <div style={{background:"linear-gradient(135deg,#1e3a5f,#1e5799)",padding:"11px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                        <div>
+                          <span style={{fontWeight:700,color:"#fff",fontSize:14}}>{c.contract_no}</span>
+                          <span style={{marginLeft:10,fontSize:12,color:"#93c5fd"}}>{c.contract_date} · {c.buyer_name}</span>
+                        </div>
+                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                          <span style={{background:sc.bg,color:sc.color,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,textTransform:"capitalize"}}>{c.status}</span>
+                          {c.approval_status==="pending"&&<span style={{background:"#fef3c7",color:"#d97706",borderRadius:20,padding:"3px 10px",fontSize:10,fontWeight:700}}>⏳ Pending Approval</span>}
+                          <button onClick={()=>exportContractPDF(c,buyer)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📄 PDF</button>
+                          {canManageContracts&&<button onClick={()=>{setEditContract(c);setShowContractForm(true);}} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
+                          {canDeleteContracts&&<button onClick={()=>deleteContract(c.id)} style={{background:"rgba(220,38,38,0.3)",color:"#fca5a5",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
+                        </div>
+                      </div>
+                      <div style={{padding:"12px 16px"}}>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:8,fontSize:12}}>
+                          <div><span style={{color:"#94a3b8",fontSize:11}}>Commodity</span><div style={{fontWeight:600,color:"#1e293b"}}>{c.commodity}</div></div>
+                          <div><span style={{color:"#94a3b8",fontSize:11}}>Quantity</span><div style={{fontWeight:600,color:"#1e293b"}}>{c.quantity}</div></div>
+                          <div><span style={{color:"#94a3b8",fontSize:11}}>Price</span><div style={{fontWeight:700,color:"#1e3a5f"}}>USD {c.price_usd} / {c.price_per} {c.delivery_terms}</div></div>
+                          <div><span style={{color:"#94a3b8",fontSize:11}}>Shipment Period</span><div style={{fontWeight:600,color:"#1e293b"}}>{c.shipment_period}</div></div>
+                          <div><span style={{color:"#94a3b8",fontSize:11}}>Destination</span><div style={{fontWeight:600,color:"#1e293b"}}>{c.destination}</div></div>
+                          <div><span style={{color:"#94a3b8",fontSize:11}}>Payment</span><div style={{fontWeight:600,color:"#16a34a"}}>{c.payment_condition}</div></div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>}
+          </div>
+        )}
 
       {/* ── Modals ── */}
       {showShipForm&&(
@@ -2091,6 +2566,9 @@ export default function App(){
       {shipDocsId&&ships.find(x=>x.id===shipDocsId)&&<ShipDocsModal shipment={ships.find(x=>x.id===shipDocsId)} canUpload={canEdit} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setShipDocsId(null)}/>}
       {bcDocsId&&bcs.find(x=>x.id===bcDocsId)&&<BCDocsModal bc={bcs.find(x=>x.id===bcDocsId)} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBCDocsId(null)}/>}
       {showApprovals&&<ApprovalsModal pendings={pendings} userInfo={userInfo} onClose={()=>setShowApprovals(false)} onRefresh={loadAll} ships={ships}/>}
+
+      {showBuyerForm&&<BuyerFormModal buyer={editBuyer} onSave={saveBuyer} onClose={()=>{setShowBuyerForm(false);setEditBuyer(null);}} saving={saving}/>}
+      {showContractForm&&<ContractFormModal contract={editContract} buyers={buyers} userInfo={userInfo} onSave={saveContract} onClose={()=>{setShowContractForm(false);setEditContract(null);}} saving={saving}/>}
 
       {deleteId&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
