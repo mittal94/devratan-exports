@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 const SUPABASE_URL = "https://jqbagmezerzgewxaqtpt.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxYmFnbWV6ZXJ6Z2V3eGFxdHB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjMxMjIsImV4cCI6MjA5NTc5OTEyMn0.HAG23sw41cMXiyrnTC2-9dTZn5bO0oXMc69XKwB3IkU";
 const R2_WORKER = "https://devratan-r2-worker.mittal94.workers.dev";
-const APP_VERSION = "1.0.4"; // ← Increment this on every deployment to force logout all users
+const APP_VERSION = "1.0.3"; // ← Increment this on every deployment to force logout all users
 
 // ─── Document config ───────────────────────────────────────────────────────
 const SHIP_DOCS = [
@@ -1160,6 +1160,26 @@ function ProfitFormModal({fy,editId,form,calc,fyShips,setF,onSelectInvoice,onSav
 
 
 
+
+function EditChanges({newData,oldData}){
+  const changed=Object.keys(newData).filter(k=>newData[k]!==oldData[k]&&newData[k]!==null&&newData[k]!==undefined&&newData[k]!=="");
+  if(!changed.length) return null;
+  return(
+    <div style={{background:"#fffbeb",borderRadius:8,padding:"8px 12px",border:"1px solid #fde68a",marginTop:8}}>
+      <div style={{fontSize:11,fontWeight:700,color:"#92400e",marginBottom:6}}>📝 Changed fields:</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
+        {changed.map(k=>(
+          <div key={k} style={{fontSize:11,background:"#fff",borderRadius:4,padding:"4px 8px"}}>
+            <div style={{color:"#94a3b8",fontSize:10}}>{k.replace(/_/g," ")}</div>
+            <div style={{color:"#dc2626",textDecoration:"line-through",fontSize:11}}>{String(oldData[k]||"—")}</div>
+            <div style={{color:"#16a34a",fontWeight:600,fontSize:11}}>{String(newData[k])}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Small helper components for approval UI ─────────────────────────────────
 function ApprovalBtn({pendings,onClick}){
   const cnt=pendings.filter(p=>p.status==="pending").length;
@@ -1290,10 +1310,37 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships}){
                 </div>
                 <div style={{padding:"10px 14px"}}>
                   {pc.action==="delete"?(
-                    <div style={{fontSize:12,color:"#dc2626",fontWeight:600}}>⚠️ Request to delete shipment: {pc.old_data?.invoice_no} — {pc.old_data?.buyer_name}</div>
+                    <div style={{background:"#fee2e2",borderRadius:8,padding:"10px 14px"}}>
+                      <div style={{fontSize:12,color:"#dc2626",fontWeight:700,marginBottom:6}}>⚠️ Request to DELETE this shipment permanently:</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,fontSize:11}}>
+                        {[["Invoice No",pc.old_data?.invoice_no],["Date",pc.old_data?.invoice_date],["Buyer",pc.old_data?.buyer_name],["Country",pc.old_data?.buyer_country],["Product",pc.old_data?.product],["Qty (MT)",pc.old_data?.qty],["Rate/MT (USD)",pc.old_data?.rate_per_mt],["Terms",pc.old_data?.delivery_terms],["Port Load",pc.old_data?.port_of_loading],["Port Disch",pc.old_data?.port_of_discharge],["SB No",pc.old_data?.shipping_bill_no],["BL No",pc.old_data?.bl_no],["FOB (USD)",pc.old_data?.fob_value_usd],["Exchange Rate",pc.old_data?.exchange_rate]].map(([l,v])=>v?<div key={l} style={{background:"#fff",borderRadius:4,padding:"3px 8px"}}><span style={{color:"#94a3b8",fontSize:10}}>{l}</span><div style={{fontWeight:600,color:"#1e293b",fontSize:11}}>{v}</div></div>:null)}
+                      </div>
+                    </div>
                   ):(
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:6,fontSize:11}}>
-                      {[["Product",data.product],["Qty (MT)",data.qty],["Rate/MT",data.rate_per_mt],["Terms",data.delivery_terms],["Country",data.buyer_country],["Port Load",data.port_of_loading]].map(([l,v])=>v?<div key={l}><span style={{color:"#64748b"}}>{l}: </span><b style={{color:"#1e293b"}}>{v}</b></div>:null)}
+                    <div>
+                      {/* Full detail grid */}
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:11,marginBottom:8}}>
+                        {[
+                          ["Invoice No",data.invoice_no],["Invoice Date",data.invoice_date],
+                          ["Buyer Name",data.buyer_name],["Country",data.buyer_country],
+                          ["Product",data.product],["Delivery Terms",data.delivery_terms],
+                          ["Qty (MT)",data.qty],["Rate/MT (USD)",data.rate_per_mt],
+                          ["Exchange Rate",data.exchange_rate],["FOB Value (USD)",data.fob_value_usd],
+                          ["Port of Loading",data.port_of_loading],["Port of Discharge",data.port_of_discharge],
+                          ["Shipping Bill No",data.shipping_bill_no],["SB Date",data.shipping_bill_date],
+                          ["Port Code",data.port_code],["BL No",data.bl_no],
+                          ["BL Date",data.bl_date],["IGST (INR)",data.igst],
+                          ["RODTEP Amt",data.rodtep_amount],["RODTEP Status",data.rodtep_status],
+                          ["GST Status",data.gst_status],["Remarks",data.remarks],
+                        ].map(([l,v])=>v!==undefined&&v!==null&&v!==""?
+                          <div key={l} style={{background:"#f8fafc",borderRadius:6,padding:"5px 10px",border:"1px solid #e2e8f0"}}>
+                            <div style={{color:"#94a3b8",fontSize:10,marginBottom:1}}>{l}</div>
+                            <div style={{fontWeight:600,color:"#1e293b",fontSize:12}}>{v}</div>
+                          </div>:null
+                        )}
+                      </div>
+                      {/* If edit — show what changed */}
+                      {pc.action==="edit"&&pc.old_data&&<EditChanges newData={data} oldData={pc.old_data}/>}
                     </div>
                   )}
                   {pc.action==="edit"&&pc.old_data&&(
@@ -1393,7 +1440,8 @@ export default function App(){
   const [sortCol,setSortCol]=useState("invoice_date");
   const [sortDir,setSortDir]=useState("desc");
   const [saving,setSaving]=useState(false);
-  const [exportModal,setExportModal]=useState(null); // "shipments"|"profitability"|"bc"|"dashboard"
+  const [exportModal,setExportModal]=useState(null);
+  const [showUpdateBanner,setShowUpdateBanner]=useState(false); // "shipments"|"profitability"|"bc"|"dashboard"
   const [dashFilter,setDashFilter]=useState(null); // null|"brc"|"rodtep"|"gst"
 
   const doLogin=async()=>{
@@ -1450,15 +1498,33 @@ export default function App(){
     };
   },[session]);
 
-  // ── Force logout on new app version deployment ───────────────────────────
-  // Handled in useState initializer above — session is null if version changed
+  // ── Show update banner when new version is deployed ─────────────────────
   useEffect(()=>{
-    const storedVer=localStorage.getItem("app_version");
-    if(storedVer && storedVer!==APP_VERSION){
-      // Fallback: if somehow still logged in, show message
-      alert("App has been updated. Please log in again.");
-    }
-  },[]);
+    if(!session) return;
+    // Poll index.html every 5 minutes to detect new deployment
+    const checkForUpdate = async () => {
+      try {
+        // Fetch index.html with cache-busting to get fresh copy
+        const res = await fetch("/", {headers:{"Cache-Control":"no-cache, no-store"},cache:"no-store"});
+        const html = await res.text();
+        // Extract APP_VERSION value from the fetched JS bundle reference
+        // New deployment = different bundle hash in script src
+        const matches = html.match(/static\/js\/main\.[a-z0-9]+\.js/g);
+        if(matches && matches[0]){
+          const deployedHash = matches[0];
+          const storedHash = sessionStorage.getItem("bundle_hash");
+          if(storedHash && storedHash !== deployedHash){
+            setShowUpdateBanner(true);
+          } else if(!storedHash){
+            sessionStorage.setItem("bundle_hash", deployedHash);
+          }
+        }
+      } catch(e){ /* silent — offline or blocked */ }
+    };
+    checkForUpdate();
+    const interval = setInterval(checkForUpdate, 5 * 60 * 1000); // every 5 min
+    return () => clearInterval(interval);
+  },[session]);
 
   // ── Force logout if user role has been changed by admin ──────────────────
   useEffect(()=>{
@@ -1708,6 +1774,25 @@ export default function App(){
         </div>
       </div>
 
+      {showUpdateBanner&&(
+        <div style={{background:"linear-gradient(135deg,#1e3a5f,#0369a1)",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:18}}>🚀</span>
+            <div>
+              <div style={{color:"#fff",fontWeight:700,fontSize:13}}>New version available</div>
+              <div style={{color:"#93c5fd",fontSize:11}}>The app has been updated. Reload to get the latest version and log in again.</div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{localStorage.removeItem("sb_session");localStorage.removeItem("sb_user");sessionStorage.clear();window.location.reload();}} style={{background:"#fff",color:"#1e3a5f",border:"none",borderRadius:7,padding:"7px 16px",cursor:"pointer",fontWeight:700,fontSize:12}}>
+              🔄 Reload & Login
+            </button>
+            <button onClick={()=>setShowUpdateBanner(false)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:7,padding:"7px 12px",cursor:"pointer",fontSize:12}}>
+              Later
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
         {[["dashboard","📊 Dashboard"],["shipments","📦 Register"],
           ...(!isJuniorAccountant?[["profitability","💰 P&L"],["bcmanager","🏦 Bill Coll."]]:[])
