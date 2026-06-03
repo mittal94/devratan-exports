@@ -1430,15 +1430,22 @@ export default function App(){
 
   // ── Force logout on new app version deployment ───────────────────────────
   useEffect(()=>{
-    if(!session) return;
+    // Always runs — check stored version against current
     const storedVersion = localStorage.getItem("app_version");
-    if(storedVersion && storedVersion !== APP_VERSION){
-      doLogout();
-      alert("App has been updated. Please log in again.");
-      return;
+    if(!storedVersion){
+      // First time — just store it
+      localStorage.setItem("app_version", APP_VERSION);
+    } else if(storedVersion !== APP_VERSION){
+      // Version changed — clear everything and force re-login
+      localStorage.removeItem("sb_session");
+      localStorage.removeItem("sb_user");
+      localStorage.setItem("app_version", APP_VERSION);
+      setSession(null);
+      setUserInfo(null);
+      setShips([]);setBcs([]);setProfits([]);
+      alert("App has been updated to a new version. Please log in again.");
     }
-    localStorage.setItem("app_version", APP_VERSION);
-  },[session]);
+  },[]); // runs once on mount — no dependency needed
 
   // ── Force logout if user role has been changed by admin ──────────────────
   useEffect(()=>{
@@ -1449,17 +1456,21 @@ export default function App(){
         if(!fresh || !fresh[0]) return;
         const freshRole = fresh[0].role;
         if(freshRole !== userInfo.role){
-          // Role changed — force logout
-          doLogout();
-          alert(`Your account role has been updated to "${freshRole}". Please log in again with your new access level.`);
+          // Role changed — clear storage and force re-login
+          localStorage.removeItem("sb_session");
+          localStorage.removeItem("sb_user");
+          setSession(null);
+          setUserInfo(null);
+          setShips([]);setBcs([]);setProfits([]);
+          alert(`Your role has been changed to "${freshRole}". Please log in again.`);
         }
       } catch(e){ /* silent */ }
     };
-    // Check on load and every 2 minutes
+    // Check immediately on load and then every 60 seconds
     checkRole();
-    const interval = setInterval(checkRole, 2 * 60 * 1000);
+    const interval = setInterval(checkRole, 60 * 1000);
     return () => clearInterval(interval);
-  },[session, userInfo]);
+  },[session?.access_token]); // only re-run when session token changes, not userInfo
 
   const isAdmin=userInfo&&userInfo.role==="admin";
   const isSeniorAccountant=userInfo&&userInfo.role==="senior_accountant";
