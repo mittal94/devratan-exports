@@ -1749,30 +1749,34 @@ function exportContractPDF(contract, buyer, consignee) {
   // Gold top stripe
   doc.setFillColor(...gold); doc.rect(0, 0, 210, 2.5, "F");
 
-  // Navy header bar
+  // Navy header bar (full width)
   doc.setFillColor(...navy); doc.rect(0, 2.5, 210, 44, "F");
 
-  // Logo — directly on navy header, no white box (eagle logo on dark bg)
+  // White logo panel on left — so eagle logo is clearly visible
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...gold); doc.setLineWidth(0.5);
+  doc.roundedRect(M - 1, 4, 40, 40, 2, 2, "FD");
+
+  // Logo image inside white panel
   try {
-    if (LOGO_B64) doc.addImage(LOGO_B64, "PNG", M - 2, 3, 40, 42);
+    if (LOGO_B64) doc.addImage(LOGO_B64, "PNG", M, 5, 38, 38);
   } catch(e) {
-    // Fallback text
-    doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(...gold);
-    doc.text("DEVRATAN", M + 16, 18, { align: "center" });
-    doc.setFontSize(6); doc.setFont(undefined, "normal"); doc.setTextColor(...white);
-    doc.text("ENTERPRISES LLP", M + 16, 24, { align: "center" });
+    doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
+    doc.text("DEVRATAN", M + 19, 18, { align: "center" });
+    doc.setFontSize(5.5); doc.setFont(undefined, "normal"); doc.setTextColor(...gold);
+    doc.text("ENTERPRISES LLP", M + 19, 23, { align: "center" });
+    doc.text("We Create Not Produce", M + 19, 28, { align: "center" });
   }
 
-  // Company info right of logo
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11.5); doc.setFont(undefined, "bold");
-  doc.text(COMPANY.name, M + 44, 13);
+  // Company info right of logo panel
+  doc.setFontSize(11.5); doc.setFont(undefined, "bold"); doc.setTextColor(255, 255, 255);
+  doc.text(COMPANY.name, M + 47, 13);
   doc.setFontSize(7); doc.setFont(undefined, "italic"); doc.setTextColor(200, 215, 240);
-  doc.text(COMPANY.tagline, M + 44, 17.5);
+  doc.text(COMPANY.tagline, M + 47, 17.5);
   doc.setFont(undefined, "normal"); doc.setTextColor(210, 220, 235); doc.setFontSize(7);
-  doc.text(COMPANY.address, M + 44, 22);
-  doc.text("+91-9111282828  |  akshay@devratan.com  |  www.devratan.com", M + 44, 26.5);
-  doc.text("GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D  |  LLP IN: AAV-1622", M + 44, 31);
+  doc.text(COMPANY.address, M + 47, 22);
+  doc.text("+91-9111282828  |  akshay@devratan.com  |  www.devratan.com", M + 47, 26.5);
+  doc.text("GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D  |  LLP IN: AAV-1622", M + 47, 31);
 
   // SALE CONTRACT — right block
   doc.setFontSize(19); doc.setFont(undefined, "bold"); doc.setTextColor(255, 255, 255);
