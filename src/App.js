@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 const SUPABASE_URL = "https://jqbagmezerzgewxaqtpt.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxYmFnbWV6ZXJ6Z2V3eGFxdHB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjMxMjIsImV4cCI6MjA5NTc5OTEyMn0.HAG23sw41cMXiyrnTC2-9dTZn5bO0oXMc69XKwB3IkU";
 const R2_WORKER = "https://devratan-r2-worker.mittal94.workers.dev";
-const APP_VERSION = "1.0.3"; // ← Increment this on every deployment to force logout all users
+const APP_VERSION = "1.0.4"; // ← Increment this on every deployment to force logout all users
 
 // ─── Document config ───────────────────────────────────────────────────────
 const SHIP_DOCS = [
@@ -1498,6 +1498,7 @@ function ContractFormModal({contract,buyers,userInfo,onSave,onClose,saving}){
         ...EMPTY,...contract,
         selected_docs:contract.selected_docs||DEFAULT_DOCS,
         war_risk_clause:contract.war_risk_clause!==undefined?contract.war_risk_clause:true,
+        seller_company:contract.seller_company||"devratan",
       };
     }
     return{...EMPTY};
@@ -1711,8 +1712,8 @@ function exportContractPDF(contract, buyer, consignee) {
   const green = [22, 100, 50];
 
   // ── Watermark (logo faded) ────────────────────────────────────────────────
-  // Resolve seller company
-  const seller = COMPANIES[contract.seller_company] || COMPANIES.devratan;
+  // Resolve seller company (safe fallback)
+  const seller = COMPANIES[(contract.seller_company||"devratan")] || COMPANIES.devratan;
 
   const addWatermark = () => {
     // Use actual watermark PNG centered on page
