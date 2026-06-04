@@ -79,7 +79,29 @@ const authFetch = async (path, opts = {}) => {
   return data;
 };
 
-const COMPANY = { name: "DEVRATAN ENTERPRISES LLP", tagline: "We Create Not Produce", address: "Off No 206, II Floor, Indore Trade Center, Madhumilan Square, Indore MP 452001" };
+const COMPANIES = {
+  devratan: {
+    id: "devratan",
+    name: "DEVRATAN ENTERPRISES LLP",
+    tagline: "We Create Not Produce",
+    address: "Off No 206, II Floor, Indore Trade Center, Madhumilan Square, Indore MP 452001",
+    phone: "+91-9111282828",
+    email: "akshay@devratan.com",
+    web: "www.devratan.com",
+    gstin: "GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D  |  LLP IN: AAV-1622",
+  },
+  vjra: {
+    id: "vjra",
+    name: "VJRA GLOBAL TRADE FZE LLC",
+    tagline: "We Create Not Produce",
+    address: "Business Centre, Sharjah Publishing City Free Zone, Sharjah, UAE",
+    phone: "+971-566552850",
+    email: "vjraglobal@gmail.com",
+    web: "",
+    gstin: "",
+  },
+};
+const COMPANY = COMPANIES.devratan; // default (used outside contracts)
 const ALL_FYS = ["2020-21","2021-22","2022-23","2023-24","2024-25","2025-26","2026-27"];
 const CURR_FY = "2026-27";
 const BANKS = ["SBI","INDUSIND"];
@@ -1454,7 +1476,7 @@ function ContractFormModal({contract,buyers,userInfo,onSave,onClose,saving}){
   const today=new Date().toISOString().split("T")[0];
   const DEFAULT_DOCS=["commercial_invoice","packing_list","bill_of_lading","cert_of_origin","fumigation_cert","phyto_certificate","insurance","weight_quality","pesticide_report"];
   const EMPTY={
-    contract_no:"",contract_date:today,
+    contract_no:"",contract_date:today,seller_company:"devratan",
     buyer_id:"",buyer_name:"",buyer_address:"",
     consignee_id:"",consignee_name:"",consignee_address:"",
     commodity:"INDIAN PARBOILED RICE – 5% BROKEN",
@@ -1512,6 +1534,23 @@ function ContractFormModal({contract,buyers,userInfo,onSave,onClose,saving}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
           <h3 style={{margin:0,color:"#1e3a5f",fontSize:15}}>{contract?"Edit":"Create"} Sales Contract</h3>
           <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
+        </div>
+
+        <SH t="Seller Company"/>
+        <div style={{marginBottom:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            {Object.values(COMPANIES).map(co=>(
+              <div key={co.id} onClick={()=>sf("seller_company",co.id)}
+                style={{border:"2px solid "+(form.seller_company===co.id?"#1e3a5f":"#e2e8f0"),
+                  borderRadius:8,padding:"10px 14px",cursor:"pointer",background:form.seller_company===co.id?"#eff6ff":"#fff",
+                  transition:"all 0.15s"}}>
+                <div style={{fontWeight:700,fontSize:12,color:"#1e3a5f"}}>{co.name}</div>
+                <div style={{fontSize:10,color:"#64748b",marginTop:2}}>{co.address}</div>
+                <div style={{fontSize:10,color:"#64748b"}}>{co.phone} · {co.email}</div>
+                {form.seller_company===co.id&&<div style={{fontSize:10,color:"#1d4ed8",fontWeight:600,marginTop:4}}>✓ Selected</div>}
+              </div>
+            ))}
+          </div>
         </div>
 
         <SH t="Contract Details"/>
@@ -1672,6 +1711,9 @@ function exportContractPDF(contract, buyer, consignee) {
   const green = [22, 100, 50];
 
   // ── Watermark (logo faded) ────────────────────────────────────────────────
+  // Resolve seller company
+  const seller = COMPANIES[contract.seller_company] || COMPANIES.devratan;
+
   const addWatermark = () => {
     // Use actual watermark PNG centered on page
     try {
@@ -1689,7 +1731,7 @@ function exportContractPDF(contract, buyer, consignee) {
   const addPageDecor = () => {
     doc.setFillColor(...navy); doc.rect(0, 288, 210, 9, "F");
     doc.setFontSize(6.5); doc.setTextColor(...white); doc.setFont(undefined, "normal");
-    doc.text(COMPANY.name + "  |  +91-9111282828  |  akshay@devratan.com  |  www.devratan.com  |  GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D", 105, 294, { align: "center" });
+    doc.text(seller.name + (seller.phone?" |  "+seller.phone:"") + (seller.email?"  |  "+seller.email:"") + (seller.web?"  |  "+seller.web:"") + (seller.gstin?"  |  "+seller.gstin:""), 105, 294, { align: "center" });
     addWatermark();
   };
 
@@ -1768,17 +1810,17 @@ function exportContractPDF(contract, buyer, consignee) {
 
   // Company name & info — navy text on light blue
   doc.setFontSize(12); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
-  doc.text(COMPANY.name, 57, 13);
+  doc.text(seller.name, 57, 13);
   // Gold underline under company name
-  const cnW = doc.getTextWidth(COMPANY.name); doc.setFontSize(12);
+  const cnW = doc.getTextWidth(seller.name); doc.setFontSize(12);
   doc.setDrawColor(...gold); doc.setLineWidth(0.6);
   doc.line(57, 14.5, 57 + cnW, 14.5);
   doc.setFontSize(7); doc.setFont(undefined, "italic"); doc.setTextColor(...steel);
-  doc.text(COMPANY.tagline, 57, 18.5);
+  doc.text(seller.tagline, 57, 18.5);
   doc.setFont(undefined, "normal"); doc.setTextColor(...navy); doc.setFontSize(6.5);
-  doc.text(COMPANY.address, 57, 23);
-  doc.text("+91-9111282828  |  akshay@devratan.com  |  www.devratan.com", 57, 27.5);
-  doc.text("GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D  |  LLP IN: AAV-1622", 57, 32);
+  doc.text(seller.address, 57, 23);
+  doc.text(seller.phone + (seller.email?"  |  "+seller.email:"") + (seller.web?"  |  "+seller.web:""), 57, 27.5);
+  if(seller.gstin) doc.text(seller.gstin, 57, 32);
 
   // SALE CONTRACT — right block (navy text on light blue)
   doc.setFontSize(17); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
@@ -1821,8 +1863,8 @@ function exportContractPDF(contract, buyer, consignee) {
   const partyRows = [
     [
       { content: "SELLER", styles: { fontStyle: "bold", halign: "center", valign: "middle", fillColor: navy, textColor: white, fontSize: 8 } },
-      { content: COMPANY.name, styles: { fontStyle: "bold", textColor: navy, fillColor: cream, fontSize: 8.5 } },
-      { content: COMPANY.address + "\n(Hereinafter referred to as \"the Seller\")", styles: { fontSize: 7.8, fillColor: cream, textColor: [50, 50, 50] } },
+      { content: seller.name, styles: { fontStyle: "bold", textColor: navy, fillColor: cream, fontSize: 8.5 } },
+      { content: seller.address + "\n(Hereinafter referred to as \"the Seller\")", styles: { fontSize: 7.8, fillColor: cream, textColor: [50, 50, 50] } },
     ],
     [
       { content: "BUYER", styles: { fontStyle: "bold", halign: "center", valign: "middle", fillColor: navy, textColor: white, fontSize: 8 } },
@@ -1992,7 +2034,7 @@ function exportContractPDF(contract, buyer, consignee) {
     doc.text("Authorized Signature & Stamp", x + sigW / 2, y + 46, { align: "center" });
   };
 
-  drawSigBox(M, "SELLER", COMPANY.name);
+  drawSigBox(M, "SELLER", seller.name);
   drawSigBox(M + sigW + 8, "BUYER", contract.buyer_name || "");
 
   // ── FOOTER on every page ──────────────────────────────────────────────────
@@ -2001,7 +2043,7 @@ function exportContractPDF(contract, buyer, consignee) {
     doc.setPage(i);
     doc.setFillColor(...navy); doc.rect(0, 290, 210, 7, "F");
     doc.setFontSize(6.5); doc.setTextColor(...white); doc.setFont(undefined, "normal");
-    doc.text(COMPANY.name + "  |  +91-9111282828  |  akshay@devratan.com  |  www.devratan.com  |  GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D", 105, 293.5, { align: "center" });
+    doc.text(seller.name + (seller.phone?" |  "+seller.phone:"") + (seller.email?"  |  "+seller.email:"") + (seller.web?"  |  "+seller.web:"") + (seller.gstin?"  |  "+seller.gstin:""), 105, 293.5, { align: "center" });
     // Gold page number pill
     doc.setFillColor(...gold); doc.roundedRect(M + pw - 16, 283.5, 16, 6, 1.5, 1.5, "F");
     doc.setFontSize(7); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
@@ -2419,8 +2461,8 @@ export default function App(){
   const selectedBC=bcs.find(b=>b.id===shipForm.bc_id)||null;
   const viewShip=ships.find(s=>s.id===viewShipId)||null;
 
-  const shareShip=s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);setShareText(`${COMPANY.name}\nShipment: ${s.invoice_no}\nDate: ${s.invoice_date}\nBuyer: ${s.buyer_name} (${s.buyer_country})\nProduct: ${s.product}\nQty: ${s.qty} MT @ $${s.rate_per_mt}/MT | ${s.delivery_terms}\nInvoice: ${fU(c.invoiceAmtUSD)}\nPayment: ${bc?fU(bc.total_amt_usd):"Pending"}\nBalance: ${fU(bal)}\nRODTEP: ${s.rodtep_status} | GST: ${s.gst_status}\n${COMPANY.address}`);};
-  const shareAll=()=>setShareText(`${COMPANY.name}\nFY ${fy} Summary\nShipments: ${totals.count}\nInvoice: ${fU(totals.invUSD)}\nPayment: ${fU(totals.paidUSD)}\nBalance: ${fU(totals.bal)}\nBRC Pending: ${totals.brcPend}\n${COMPANY.address}`);
+  const shareShip=s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);setShareText(`${seller.name}\nShipment: ${s.invoice_no}\nDate: ${s.invoice_date}\nBuyer: ${s.buyer_name} (${s.buyer_country})\nProduct: ${s.product}\nQty: ${s.qty} MT @ $${s.rate_per_mt}/MT | ${s.delivery_terms}\nInvoice: ${fU(c.invoiceAmtUSD)}\nPayment: ${bc?fU(bc.total_amt_usd):"Pending"}\nBalance: ${fU(bal)}\nRODTEP: ${s.rodtep_status} | GST: ${s.gst_status}\n${seller.address}`);};
+  const shareAll=()=>setShareText(`${seller.name}\nFY ${fy} Summary\nShipments: ${totals.count}\nInvoice: ${fU(totals.invUSD)}\nPayment: ${fU(totals.paidUSD)}\nBalance: ${fU(totals.bal)}\nBRC Pending: ${totals.brcPend}\n${seller.address}`);
 
   const doImport=rows=>{
     const ex=new Set(ships.map(s=>s.invoice_no));
@@ -2451,9 +2493,9 @@ export default function App(){
       <div style={{background:"#fff",borderRadius:16,padding:32,width:"100%",maxWidth:380,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:24}}>
           <Logo size={64}/>
-          <h2 style={{margin:"10px 0 2px",color:"#1e3a5f",fontSize:18,fontWeight:800}}>{COMPANY.name}</h2>
-          <p style={{color:"#64748b",fontSize:11,margin:"0 0 4px",fontStyle:"italic"}}>{COMPANY.tagline}</p>
-          <p style={{color:"#94a3b8",fontSize:10,margin:"0 0 16px"}}>{COMPANY.address}</p>
+          <h2 style={{margin:"10px 0 2px",color:"#1e3a5f",fontSize:18,fontWeight:800}}>{seller.name}</h2>
+          <p style={{color:"#64748b",fontSize:11,margin:"0 0 4px",fontStyle:"italic"}}>{seller.tagline}</p>
+          <p style={{color:"#94a3b8",fontSize:10,margin:"0 0 16px"}}>{seller.address}</p>
         </div>
         <div style={{marginBottom:14}}><label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Email</label><input type="email" value={loginForm.email} onChange={e=>setLoginForm(f=>({...f,email:e.target.value}))} style={iS} placeholder="your@email.com" onKeyDown={e=>e.key==="Enter"&&doLogin()}/></div>
         <div style={{marginBottom:16}}><label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Password</label><input type="password" value={loginForm.password} onChange={e=>setLoginForm(f=>({...f,password:e.target.value}))} style={iS} onKeyDown={e=>e.key==="Enter"&&doLogin()}/></div>
@@ -2468,7 +2510,7 @@ export default function App(){
     <div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"system-ui,sans-serif"}}>
       <div style={{background:"linear-gradient(135deg,#1e3a5f 0%,#1e5799 100%)",color:"#fff",boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
         <div style={{padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}><Logo size={30}/><div><div style={{fontWeight:800,fontSize:11,lineHeight:1.2}}>{COMPANY.name}</div><div style={{fontSize:9,opacity:0.7}}>{COMPANY.tagline}</div></div></div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}><Logo size={30}/><div><div style={{fontWeight:800,fontSize:11,lineHeight:1.2}}>{seller.name}</div><div style={{fontSize:9,opacity:0.7}}>{seller.tagline}</div></div></div>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             <span style={{fontSize:10,opacity:0.9}}>{userInfo?.name?.split(" ")[0]}</span>
             <span style={{background:"rgba(255,255,255,0.2)",borderRadius:4,padding:"1px 6px",fontSize:9}}>{userInfo?.role}</span>
