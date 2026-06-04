@@ -2136,21 +2136,21 @@ export default function App(){
 
   const doLogout=()=>{localStorage.removeItem("sb_session");localStorage.removeItem("sb_user");setSession(null);setUserInfo(null);setShips([]);setBcs([]);setProfits([]);};
 
-  const loadAll=useCallback(async()=>{
+    const loadAll=useCallback(async()=>{
     if(!session)return;
     setLoading(true);
-    try{
-      const[s,b,p,u,pc,by,ct]=await Promise.all([
-        sb("shipments?select=*&order=invoice_date.desc"),
-        sb("bill_collections?select=*,irm_entries(*),brc_entries(*)"),
-        sb("profitability?select=*&order=created_at.desc"),
-        sb("users?select=*&order=name.asc"),
-        sb("pending_changes?select=*&order=submitted_at.desc"),
-        sb("buyers?select=*&order=buyer_name.asc"),
-        sb("contracts?select=*&order=created_at.desc"),
-      ]);
-      setShips(s||[]);setBcs(b||[]);setProfits(p||[]);setUsers(u||[]);setPendings(pc||[]);setBuyers(by||[]);setContracts(ct||[]);
-    }catch(e){console.error(e);}
+    // Fetch each table independently so one failure doesn't blank the whole app
+    const safe=q=>sb(q).catch(e=>{console.warn("Fetch error:",q,e);return[];});
+    const[s,b,p,u,pc,by,ct]=await Promise.all([
+      safe("shipments?select=*&order=invoice_date.desc"),
+      safe("bill_collections?select=*,irm_entries(*),brc_entries(*)"),
+      safe("profitability?select=*&order=created_at.desc"),
+      safe("users?select=*&order=name.asc"),
+      safe("pending_changes?select=*&order=submitted_at.desc"),
+      safe("buyers?select=*&order=buyer_name.asc"),
+      safe("contracts?select=*&order=created_at.desc"),
+    ]);
+    setShips(s||[]);setBcs(b||[]);setProfits(p||[]);setUsers(u||[]);setPendings(pc||[]);setBuyers(by||[]);setContracts(ct||[]);
     setLoading(false);
   },[session]);
 
@@ -2462,8 +2462,8 @@ export default function App(){
   const selectedBC=bcs.find(b=>b.id===shipForm.bc_id)||null;
   const viewShip=ships.find(s=>s.id===viewShipId)||null;
 
-  const shareShip=s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);setShareText(`${seller.name}\nShipment: ${s.invoice_no}\nDate: ${s.invoice_date}\nBuyer: ${s.buyer_name} (${s.buyer_country})\nProduct: ${s.product}\nQty: ${s.qty} MT @ $${s.rate_per_mt}/MT | ${s.delivery_terms}\nInvoice: ${fU(c.invoiceAmtUSD)}\nPayment: ${bc?fU(bc.total_amt_usd):"Pending"}\nBalance: ${fU(bal)}\nRODTEP: ${s.rodtep_status} | GST: ${s.gst_status}\n${seller.address}`);};
-  const shareAll=()=>setShareText(`${seller.name}\nFY ${fy} Summary\nShipments: ${totals.count}\nInvoice: ${fU(totals.invUSD)}\nPayment: ${fU(totals.paidUSD)}\nBalance: ${fU(totals.bal)}\nBRC Pending: ${totals.brcPend}\n${seller.address}`);
+  const shareShip=s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);setShareText(`${COMPANY.name}\nShipment: ${s.invoice_no}\nDate: ${s.invoice_date}\nBuyer: ${s.buyer_name} (${s.buyer_country})\nProduct: ${s.product}\nQty: ${s.qty} MT @ $${s.rate_per_mt}/MT | ${s.delivery_terms}\nInvoice: ${fU(c.invoiceAmtUSD)}\nPayment: ${bc?fU(bc.total_amt_usd):"Pending"}\nBalance: ${fU(bal)}\nRODTEP: ${s.rodtep_status} | GST: ${s.gst_status}\n${COMPANY.address}`);};
+  const shareAll=()=>setShareText(`${COMPANY.name}\nFY ${fy} Summary\nShipments: ${totals.count}\nInvoice: ${fU(totals.invUSD)}\nPayment: ${fU(totals.paidUSD)}\nBalance: ${fU(totals.bal)}\nBRC Pending: ${totals.brcPend}\n${COMPANY.address}`);
 
   const doImport=rows=>{
     const ex=new Set(ships.map(s=>s.invoice_no));
@@ -2494,9 +2494,9 @@ export default function App(){
       <div style={{background:"#fff",borderRadius:16,padding:32,width:"100%",maxWidth:380,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:24}}>
           <Logo size={64}/>
-          <h2 style={{margin:"10px 0 2px",color:"#1e3a5f",fontSize:18,fontWeight:800}}>{seller.name}</h2>
-          <p style={{color:"#64748b",fontSize:11,margin:"0 0 4px",fontStyle:"italic"}}>{seller.tagline}</p>
-          <p style={{color:"#94a3b8",fontSize:10,margin:"0 0 16px"}}>{seller.address}</p>
+          <h2 style={{margin:"10px 0 2px",color:"#1e3a5f",fontSize:18,fontWeight:800}}>{COMPANY.name}</h2>
+          <p style={{color:"#64748b",fontSize:11,margin:"0 0 4px",fontStyle:"italic"}}>{COMPANY.tagline}</p>
+          <p style={{color:"#94a3b8",fontSize:10,margin:"0 0 16px"}}>{COMPANY.address}</p>
         </div>
         <div style={{marginBottom:14}}><label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Email</label><input type="email" value={loginForm.email} onChange={e=>setLoginForm(f=>({...f,email:e.target.value}))} style={iS} placeholder="your@email.com" onKeyDown={e=>e.key==="Enter"&&doLogin()}/></div>
         <div style={{marginBottom:16}}><label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Password</label><input type="password" value={loginForm.password} onChange={e=>setLoginForm(f=>({...f,password:e.target.value}))} style={iS} onKeyDown={e=>e.key==="Enter"&&doLogin()}/></div>
@@ -2511,7 +2511,7 @@ export default function App(){
     <div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"system-ui,sans-serif"}}>
       <div style={{background:"linear-gradient(135deg,#1e3a5f 0%,#1e5799 100%)",color:"#fff",boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
         <div style={{padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}><Logo size={30}/><div><div style={{fontWeight:800,fontSize:11,lineHeight:1.2}}>{seller.name}</div><div style={{fontSize:9,opacity:0.7}}>{seller.tagline}</div></div></div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}><Logo size={30}/><div><div style={{fontWeight:800,fontSize:11,lineHeight:1.2}}>{COMPANY.name}</div><div style={{fontSize:9,opacity:0.7}}>{COMPANY.tagline}</div></div></div>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             <span style={{fontSize:10,opacity:0.9}}>{userInfo?.name?.split(" ")[0]}</span>
             <span style={{background:"rgba(255,255,255,0.2)",borderRadius:4,padding:"1px 6px",fontSize:9}}>{userInfo?.role}</span>
