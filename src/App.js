@@ -97,6 +97,7 @@ const ALL_DOCS = [
   {key:"pesticide_report",     label:"Pesticide Free Test Report – 1 Original"},
   {key:"ectn",                 label:"ECTN"},
   {key:"coc",                  label:"COC"},
+  {key:"other_document",        label:"Other Document"},
 ];
 const RODTEP_ST = ["Pending","Received","Error","NA"];
 const GST_ST = ["Pending","Received","Error","NA"];
@@ -1669,12 +1670,12 @@ function exportContractPDF(contract, buyer, consignee) {
 
   // ── Watermark (logo faded) ────────────────────────────────────────────────
   const addWatermark = () => {
-    // Watermark: very light grey text diagonal
-    doc.setFontSize(32); doc.setFont(undefined, "bold");
-    doc.setTextColor(225, 228, 235);
-    doc.text("DEVRATAN ENTERPRISES", 105, 165, { align: "center", angle: 38 });
-    doc.setFontSize(13); doc.setFont(undefined, "normal");
-    doc.text("We Create Not Produce", 105, 178, { align: "center", angle: 38 });
+    doc.setFontSize(42); doc.setFont(undefined, "bold");
+    doc.setTextColor(235, 237, 242);
+    doc.text("DEVRATAN", 108, 162, { align: "center", angle: 38 });
+    doc.setFontSize(18); doc.setFont(undefined, "normal");
+    doc.setTextColor(238, 240, 244);
+    doc.text("ENTERPRISES LLP", 105, 175, { align: "center", angle: 38 });
     doc.setTextColor(0, 0, 0);
   };
 
@@ -1782,15 +1783,15 @@ function exportContractPDF(contract, buyer, consignee) {
   doc.setDrawColor(...gold); doc.setLineWidth(1);
   doc.line(210 - M - tw, 16, 210 - M, 16);
 
-  // Contract No — bold white box
-  doc.setFillColor(...gold); doc.roundedRect(210 - M - 74, 19, 74, 8, 1, 1, "F");
-  doc.setFontSize(8); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
-  doc.text("Contract No:  " + (contract.contract_no || "---"), 210 - M - 37, 24, { align: "center" });
+  // Contract No — text lines (no box, no overlap)
+  doc.setFontSize(7); doc.setFont(undefined, "normal"); doc.setTextColor(...lgold);
+  doc.text("CONTRACT NO.", 210 - M, 21, { align: "right" });
+  doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(255, 255, 255);
+  doc.text(contract.contract_no || "---", 210 - M, 27, { align: "right" });
 
-  // Date — bold white box
-  doc.setFillColor(255, 255, 255, 0.15);
-  doc.setFontSize(7.5); doc.setFont(undefined, "normal"); doc.setTextColor(220, 230, 245);
-  doc.text("Date:  " + (contract.contract_date || ""), 210 - M, 31, { align: "right" });
+  // Date
+  doc.setFontSize(7); doc.setFont(undefined, "normal"); doc.setTextColor(180, 200, 230);
+  doc.text("Date:  " + (contract.contract_date || ""), 210 - M, 33, { align: "right" });
 
   // Status badge
   if (contract.status === "final") {
