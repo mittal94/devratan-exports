@@ -1687,9 +1687,7 @@ function exportContractPDF(contract, buyer, consignee) {
 
   // ── Page decorations ──────────────────────────────────────────────────────
   const addPageDecor = () => {
-    doc.setFillColor(...gold); doc.rect(0, 0, 210, 2.5, "F");
     doc.setFillColor(...navy); doc.rect(0, 288, 210, 9, "F");
-  doc.setFillColor(...gold); doc.rect(0, 288, 210, 1.2, "F");
     doc.setFontSize(6.5); doc.setTextColor(...white); doc.setFont(undefined, "normal");
     doc.text(COMPANY.name + "  |  +91-9111282828  |  akshay@devratan.com  |  www.devratan.com  |  GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D", 105, 294, { align: "center" });
     addWatermark();
@@ -1752,8 +1750,7 @@ function exportContractPDF(contract, buyer, consignee) {
   // ── Header: light blue background (matches brand) ─────────────────────────
   // Main header bg — light blue
   doc.setFillColor(...ltblue); doc.rect(0, 0, 210, 46, "F");
-  // Gold bottom stripe — narrow, only content width (no full bleed)
-  doc.setFillColor(...gold); doc.rect(M, 44.5, pw, 0.8, "F");
+
 
   // Logo — directly on light blue, no box needed (blue eagle on light bg)
   try {
@@ -2002,7 +1999,6 @@ function exportContractPDF(contract, buyer, consignee) {
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setFillColor(...gold); doc.rect(0, 0, 210, 2.5, "F");
     doc.setFillColor(...navy); doc.rect(0, 290, 210, 7, "F");
     doc.setFontSize(6.5); doc.setTextColor(...white); doc.setFont(undefined, "normal");
     doc.text(COMPANY.name + "  |  +91-9111282828  |  akshay@devratan.com  |  www.devratan.com  |  GSTIN: 23AARFD8883D1Z3  |  IEC: AARFD8883D", 105, 293.5, { align: "center" });
