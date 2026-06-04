@@ -1752,10 +1752,8 @@ function exportContractPDF(contract, buyer, consignee) {
   // ── Header: light blue background (matches brand) ─────────────────────────
   // Main header bg — light blue
   doc.setFillColor(...ltblue); doc.rect(0, 0, 210, 46, "F");
-  // Navy left accent bar
-  doc.setFillColor(...navy); doc.rect(0, 0, 6, 46, "F");
-  // Gold bottom stripe on header
-  doc.setFillColor(...gold); doc.rect(0, 44, 210, 2, "F");
+  // Gold bottom stripe — narrow, only content width (no full bleed)
+  doc.setFillColor(...gold); doc.rect(M, 44.5, pw, 0.8, "F");
 
   // Logo — directly on light blue, no box needed (blue eagle on light bg)
   try {
