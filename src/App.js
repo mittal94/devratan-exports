@@ -1400,7 +1400,7 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships,onResubmit,on
                       {pc.reviewed_by_name&&<span style={{color:"#94a3b8",fontSize:11}}> — by {pc.reviewed_by_name}</span>}
                     </div>
                   )}
-                  {pc.status==="rejected"&&isJunior&&String(pc.submitted_by)===String(userId)&&(
+                  {pc.status==="rejected"&&isJunior&&String(pc.submitted_by)===String(userInfo?.id)&&(
                     <div style={{marginTop:10,display:"flex",gap:8}}>
                       <button onClick={()=>onResubmit&&onResubmit(pc)} style={{background:"#1e3a5f",color:"#fff",border:"none",borderRadius:7,padding:"7px 16px",cursor:"pointer",fontWeight:700,fontSize:12}}>
                         ✏️ Edit & Resubmit
