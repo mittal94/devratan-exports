@@ -1265,8 +1265,16 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships,onResubmit,on
   const [saving,setSaving]=useState(false);
   const [activeTab,setActiveTab]=useState("pending");
 
-  const myItems=isJunior?pendings.filter(p=>String(p.submitted_by)===String(userInfo?.id)):pendings;
+  // Debug: log what we're working with
+  console.log("[Approvals Debug] isJunior:", isJunior, "userInfo.id:", userInfo?.id, "total pendings:", pendings.length);
+  console.log("[Approvals Debug] pendings statuses:", pendings.map(p=>({status:p.status,submitted_by:p.submitted_by,id:p.id})));
+  const myItems=isJunior?pendings.filter(p=>{
+    const match=String(p.submitted_by)===String(userInfo?.id);
+    console.log("[Approvals Debug] p.submitted_by:",p.submitted_by,"userInfo.id:",userInfo?.id,"match:",match);
+    return match;
+  }):pendings;
   const shown=myItems.filter(p=>p.status===activeTab);
+  console.log("[Approvals Debug] activeTab:", activeTab, "myItems:", myItems.length, "shown:", shown.length);
 
   const approve=async(pc)=>{
     setSaving(true);
