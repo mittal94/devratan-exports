@@ -1129,6 +1129,7 @@ function ProfitabilityContent({fy,fyProfits,canEdit,canDelete,openAddProfit,open
                 </div>
               </div>
             );
+            }catch(err){console.error("Card render error",err,pc);return null;}
           })}
         </div>
       }
@@ -1329,8 +1330,9 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships,onResubmit,on
 
         <div style={{display:"grid",gap:10}}>
           {shown.map(pc=>{
+            try{
             const ac=actionColors[pc.action]||{bg:"#f1f5f9",color:"#64748b",label:pc.action};
-            const data=pc.new_data||pc.old_data||{};
+            const data=(pc.new_data&&typeof pc.new_data==="object"?pc.new_data:null)||(pc.old_data&&typeof pc.old_data==="object"?pc.old_data:null)||{};
             const isRejecting=rejectId===pc.id;
             return(
               <div key={pc.id} style={{background:"#f8fafc",borderRadius:12,overflow:"hidden",border:"1px solid #e2e8f0"}}>
@@ -1342,7 +1344,7 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships,onResubmit,on
                   </div>
                   <div style={{fontSize:11,color:"#94a3b8",textAlign:"right"}}>
                     <div>By: <b style={{color:"#374151"}}>{pc.submitted_by_name}</b></div>
-                    <div>{new Date(pc.submitted_at).toLocaleDateString("en-IN")} {new Date(pc.submitted_at).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</div>
+                    <div>{pc.submitted_at?new Date(pc.submitted_at).toLocaleDateString("en-IN")+" "+new Date(pc.submitted_at).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):"—"}</div>
                   </div>
                 </div>
                 <div style={{padding:"10px 14px"}}>
