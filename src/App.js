@@ -1255,7 +1255,7 @@ function JuniorPendingBanner({pendings,userId,onViewRejected}){
 }
 
 // ─── Approvals Modal ─────────────────────────────────────────────────────────
-function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships}){
+function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships,onResubmit,onDeleteRejected}){
   const isJunior=userInfo?.role==="junior_accountant";
   const isAdmin=userInfo?.role==="admin";
   const isSenior=userInfo?.role==="senior_accountant";
@@ -1389,6 +1389,16 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships}){
                     <div style={{marginTop:8,background:"#fee2e2",borderRadius:6,padding:"8px 10px",fontSize:12}}>
                       <b style={{color:"#dc2626"}}>Rejection reason:</b> <span style={{color:"#7f1d1d"}}>{pc.rejection_note}</span>
                       {pc.reviewed_by_name&&<span style={{color:"#94a3b8",fontSize:11}}> — by {pc.reviewed_by_name}</span>}
+                    </div>
+                  )}
+                  {pc.status==="rejected"&&isJunior&&pc.submitted_by===userId&&(
+                    <div style={{marginTop:10,display:"flex",gap:8}}>
+                      <button onClick={()=>onResubmit&&onResubmit(pc)} style={{background:"#1e3a5f",color:"#fff",border:"none",borderRadius:7,padding:"7px 16px",cursor:"pointer",fontWeight:700,fontSize:12}}>
+                        ✏️ Edit & Resubmit
+                      </button>
+                      <button onClick={async()=>{if(!window.confirm("Delete this rejected entry?"))return;await onDeleteRejected&&onDeleteRejected(pc.id);}} style={{background:"#fee2e2",color:"#dc2626",border:"1px solid #fca5a5",borderRadius:7,padding:"7px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>
+                        🗑 Discard
+                      </button>
                     </div>
                   )}
                   {pc.status==="approved"&&(
@@ -2101,6 +2111,7 @@ export default function App(){
   const [loading,setLoading]=useState(false);
   const [showShipForm,setShowShipForm]=useState(false);
   const [editShipId,setEditShipId]=useState(null);
+  const [resubmitPcId,setResubmitPcId]=useState(null); // pending_changes id being resubmitted
   const [shipForm,setShipForm]=useState({});
   const [showBC,setShowBC]=useState(false);
   const [editBC,setEditBC]=useState(null);
@@ -2382,6 +2393,11 @@ export default function App(){
           submitted_by_name:userInfo.name,
           status:"pending"
         })});
+        // If resubmitting a rejected entry, delete the old rejected pending_change
+        if(resubmitPcId){
+          await sb(`pending_changes?id=eq.${resubmitPcId}`,{method:"DELETE"});
+          setResubmitPcId(null);
+        }
         await loadAll();setShowShipForm(false);
         alert("✅ Submitted for approval. Your entry will appear once approved by senior accountant or admin.");
       } else {
@@ -2878,7 +2894,7 @@ export default function App(){
       {showShipForm&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:12}}>
           <div style={{background:"#fff",borderRadius:14,padding:18,width:"100%",maxWidth:780,maxHeight:"93vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
-            <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:14}}>{editShipId?"Edit":"Add"} Shipment</h3>
+            <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:14}}>{resubmitPcId?"Resubmit Corrected Entry":editShipId?"Edit":"Add"} Shipment</h3>
             <p style={{margin:"0 0 12px",fontSize:11,color:"#64748b"}}>FY determined by invoice date.</p>
             {SHIP_SECTIONS.map(sec=>(
               <div key={sec.title} style={{marginBottom:12}}>
@@ -2933,7 +2949,23 @@ export default function App(){
 
       {shipDocsId&&ships.find(x=>x.id===shipDocsId)&&<ShipDocsModal shipment={ships.find(x=>x.id===shipDocsId)} canUpload={canEdit} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setShipDocsId(null)}/>}
       {bcDocsId&&bcs.find(x=>x.id===bcDocsId)&&<BCDocsModal bc={bcs.find(x=>x.id===bcDocsId)} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBCDocsId(null)}/>}
-      {showApprovals&&<ApprovalsModal pendings={pendings} userInfo={userInfo} onClose={()=>setShowApprovals(false)} onRefresh={loadAll} ships={ships}/>}
+      {showApprovals&&<ApprovalsModal
+          pendings={pendings} userInfo={userInfo}
+          onClose={()=>setShowApprovals(false)} onRefresh={loadAll} ships={ships}
+          onResubmit={pc=>{
+            setShowApprovals(false);
+            const data=pc.new_data||{};
+            setShipForm({...EMPTY_SHIP,...data});
+            setEditShipId(data.id||pc.record_id||null);
+            setResubmitPcId(pc.id);
+            setShowShipForm(true);
+          }}
+          onDeleteRejected={async id=>{
+            if(!window.confirm("Discard this rejected entry?"))return;
+            await sb(`pending_changes?id=eq.${id}`,{method:"DELETE"});
+            loadAll();
+          }}
+        />}
 
       {showBuyerForm&&<BuyerFormModal buyer={editBuyer} onSave={saveBuyer} onClose={()=>{setShowBuyerForm(false);setEditBuyer(null);}} saving={saving}/>}
       {showContractForm&&<ContractFormModal contract={editContract} buyers={buyers} userInfo={userInfo} onSave={saveContract} onClose={()=>{setShowContractForm(false);setEditContract(null);}} saving={saving}/>}
