@@ -1228,7 +1228,7 @@ function ApprovalBtn({pendings,onClick}){
 }
 
 function MyRequestsBtn({pendings,userId,onClick}){
-  const mine=pendings.filter(p=>p.submitted_by===userId);
+  const mine=pendings.filter(p=>String(p.submitted_by)===String(userId));
   const rej=mine.filter(p=>p.status==="rejected").length;
   const pend=mine.filter(p=>p.status==="pending").length;
   return(
@@ -1239,8 +1239,8 @@ function MyRequestsBtn({pendings,userId,onClick}){
 }
 
 function JuniorPendingBanner({pendings,userId,onViewRejected}){
-  const myPend=pendings.filter(p=>p.submitted_by===userId&&p.status==="pending");
-  const myRej=pendings.filter(p=>p.submitted_by===userId&&p.status==="rejected");
+  const myPend=pendings.filter(p=>String(p.submitted_by)===String(userId)&&p.status==="pending");
+  const myRej=pendings.filter(p=>String(p.submitted_by)===String(userId)&&p.status==="rejected");
   if(!myPend.length&&!myRej.length) return null;
   return(
     <>
@@ -1265,7 +1265,7 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships,onResubmit,on
   const [saving,setSaving]=useState(false);
   const [activeTab,setActiveTab]=useState("pending");
 
-  const myItems=isJunior?pendings.filter(p=>p.submitted_by===userInfo?.id):pendings;
+  const myItems=isJunior?pendings.filter(p=>String(p.submitted_by)===String(userInfo?.id)):pendings;
   const shown=myItems.filter(p=>p.status===activeTab);
 
   const approve=async(pc)=>{
@@ -1313,7 +1313,7 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships,onResubmit,on
         {/* Tabs */}
         <div style={{display:"flex",gap:4,marginBottom:14,borderBottom:"2px solid #f1f5f9",paddingBottom:4}}>
           {tabs.map(t=>{
-            const cnt=(isJunior?pendings.filter(p=>p.submitted_by===userInfo?.id):pendings).filter(p=>p.status===t).length;
+            const cnt=(isJunior?pendings.filter(p=>String(p.submitted_by)===String(userInfo?.id)):pendings).filter(p=>p.status===t).length;
             return(<button key={t} onClick={()=>setActiveTab(t)} style={{background:"none",border:"none",borderBottom:activeTab===t?"2px solid #1e3a5f":"2px solid transparent",color:activeTab===t?"#1e3a5f":"#64748b",padding:"6px 14px",cursor:"pointer",fontWeight:activeTab===t?700:500,fontSize:12,textTransform:"capitalize",marginBottom:-5}}>
               {t} {cnt>0&&<span style={{background:t==="pending"?"#fef3c7":t==="rejected"?"#fee2e2":"#dcfce7",color:t==="pending"?"#d97706":t==="rejected"?"#dc2626":"#16a34a",borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:700,marginLeft:3}}>{cnt}</span>}
             </button>);
@@ -1392,7 +1392,7 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships,onResubmit,on
                       {pc.reviewed_by_name&&<span style={{color:"#94a3b8",fontSize:11}}> — by {pc.reviewed_by_name}</span>}
                     </div>
                   )}
-                  {pc.status==="rejected"&&isJunior&&pc.submitted_by===userId&&(
+                  {pc.status==="rejected"&&isJunior&&String(pc.submitted_by)===String(userId)&&(
                     <div style={{marginTop:10,display:"flex",gap:8}}>
                       <button onClick={()=>onResubmit&&onResubmit(pc)} style={{background:"#1e3a5f",color:"#fff",border:"none",borderRadius:7,padding:"7px 16px",cursor:"pointer",fontWeight:700,fontSize:12}}>
                         ✏️ Edit & Resubmit
