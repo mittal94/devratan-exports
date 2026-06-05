@@ -1129,7 +1129,6 @@ function ProfitabilityContent({fy,fyProfits,canEdit,canDelete,openAddProfit,open
                 </div>
               </div>
             );
-            }catch(err){console.error("Card render error",err,pc);return null;}
           })}
         </div>
       }
@@ -1427,6 +1426,7 @@ function ApprovalsModal({pendings,userInfo,onClose,onRefresh,ships,onResubmit,on
                 </div>
               </div>
             );
+            }catch(err){console.error("Card render error",err,pc);return null;}
           })}
         </div>
       </div>
