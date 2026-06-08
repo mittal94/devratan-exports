@@ -2099,17 +2099,41 @@ function exportContractPDF(contract, buyer, consignee) {
 
   // ── Special Conditions ────────────────────────────────────────────────────
   if (contract.special_conditions && contract.special_conditions.trim()) {
-    if (y > 255) { doc.addPage(); addPageDecor(); y = 24; }
+    // Set font first so splitTextToSize uses correct metrics
+    doc.setFontSize(8.2); doc.setFont(undefined, "normal");
+    const scLines = doc.splitTextToSize(contract.special_conditions, pw - 12);
+    const lineH = 4.8;
+    const labelH = 8;
+    const padV = 5;
+    const boxH = labelH + scLines.length * lineH + padV;
+
+    // Page break if box won't fit
+    if (y + boxH > 275) { doc.addPage(); addPageDecor(); y = 24; }
+
+    // Draw box
     doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
-    const scLines = doc.splitTextToSize(contract.special_conditions, pw - 10);
-    const boxH = 10 + scLines.length * 4.8;
     doc.roundedRect(M, y, pw, boxH, 2, 2, "FD");
+
+    // Label
     doc.setFontSize(8.5); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
     doc.text("Special Conditions:", M + 5, y + 5.5);
-    y += 10;
+    y += labelH;
+
+    // Content lines — with per-line page break
     doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
-    scLines.forEach(line => { doc.text(line, M + 5, y); y += 4.8; });
-    y += 4;
+    scLines.forEach(line => {
+      if (y > 278) {
+        doc.addPage(); addPageDecor(); y = 24;
+        // Redraw box background for continuation
+        doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
+        const remH = (scLines.length * lineH) + padV;
+        doc.roundedRect(M, y - 2, pw, remH, 2, 2, "FD");
+        doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
+      }
+      doc.text(line, M + 6, y);
+      y += lineH;
+    });
+    y += padV;
   }
 
   // ── TERMS & CONDITIONS ────────────────────────────────────────────────────
