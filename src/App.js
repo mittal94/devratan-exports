@@ -1546,12 +1546,11 @@ function ContractFormModal({contract,buyers,userInfo,onSave,onClose,saving}){
     buyer_id:"",buyer_name:"",buyer_address:"",
     consignee_id:"",consignee_name:"",consignee_address:"",
     commodity:"INDIAN PARBOILED RICE – 5% BROKEN",
-    quantity_mt:"",quantity_tolerance:"+/- 5% at seller's option",
-    container_qty:"1",container_type:"20' FCL",
+    quantity_tolerance:"+/- 5% at seller's option",
+    items:[{id:1,packing:"In 20 Kg PP Bags",quantity_mt:"",container_qty:"1",container_type:"20' FCL",price_usd:"",price_per:"MTs"}],
     loading_port:"Any Indian Port",destination:"",
     specification:"Moisture 14% Max, Broken 5% Max, DD 2% Max, Length 5.9 mm Min",
-    shipment_period:"",packing:"In 20 Kg PP Bags",
-    price_usd:"",price_per:"MTs",delivery_terms:"CIF",
+    shipment_period:"",delivery_terms:"CIF",
     payment_condition:"",
     selected_docs:DEFAULT_DOCS,
     war_risk_clause:true,
@@ -1560,8 +1559,22 @@ function ContractFormModal({contract,buyers,userInfo,onSave,onClose,saving}){
   };
   const [form,setForm]=useState(()=>{
     if(contract){
+      // Migrate old single-field contracts to items array
+      let items = contract.items;
+      if(!items || !items.length) {
+        items = [{
+          id:1,
+          packing: contract.packing || "In 20 Kg PP Bags",
+          quantity_mt: contract.quantity_mt || "",
+          container_qty: contract.container_qty || "1",
+          container_type: contract.container_type || "20' FCL",
+          price_usd: contract.price_usd || "",
+          price_per: contract.price_per || "MTs",
+        }];
+      }
       return{
         ...EMPTY,...contract,
+        items,
         selected_docs:contract.selected_docs||DEFAULT_DOCS,
         war_risk_clause:contract.war_risk_clause!==undefined?contract.war_risk_clause:true,
         seller_company:contract.seller_company||"devratan",
@@ -1648,47 +1661,104 @@ function ContractFormModal({contract,buyers,userInfo,onSave,onClose,saving}){
           </div>}
         </div>
 
-        <SH t="Commodity & Quantity"/>
+        <SH t="Commodity & Specification"/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-          <div style={{gridColumn:"1/-1"}}>{fld("commodity","Commodity")}</div>
+          <div style={{gridColumn:"1/-1"}}>{fld("commodity","Commodity (same for all items)")}</div>
           <div>
-            <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Quantity (MT)</label>
-            <input type="number" value={form.quantity_mt||""} onChange={e=>sf("quantity_mt",e.target.value)} style={iS} step="any" placeholder="e.g. 27"/>
-          </div>
-          <div>
-            <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Tolerance</label>
+            <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Quantity Tolerance</label>
             <input value={form.quantity_tolerance||""} onChange={e=>sf("quantity_tolerance",e.target.value)} style={iS} placeholder="+/- 5% at seller's option"/>
           </div>
-          <div>
-            <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>No. of Containers</label>
-            <input type="number" value={form.container_qty||""} onChange={e=>sf("container_qty",e.target.value)} style={iS} min="1"/>
-          </div>
-          <div>
-            <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Container Type</label>
-            <select value={form.container_type||""} onChange={e=>sf("container_type",e.target.value)} style={iS}>
-              {CONTAINER_TYPES.map(o=><option key={o}>{o}</option>)}
-            </select>
-          </div>
-          {form.quantity_mt&&<div style={{gridColumn:"1/-1",background:"#eff6ff",borderRadius:6,padding:"6px 10px",fontSize:11,color:"#1d4ed8"}}>
-            Preview: <b>{form.quantity_mt} MTS {form.quantity_tolerance||""} {form.container_qty&&form.container_type?`${form.container_qty} x ${form.container_type}`:""}</b>
-          </div>}
-          {fld("specification","Specification")}
-          {fld("packing","Packing")}
-          {fld("shipment_period","Shipment Period (e.g. JUN-JUL 2026)")}
-          {fld("loading_port","Port of Loading")}
-          {fld("destination","Destination Port")}
           <div>
             <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Delivery Terms</label>
             <select value={form.delivery_terms||""} onChange={e=>sf("delivery_terms",e.target.value)} style={iS}>
               {DEL_TERMS.map(o=><option key={o}>{o}</option>)}
             </select>
           </div>
+          {fld("specification","Specification")}
+          {fld("shipment_period","Shipment Period (e.g. JUN-JUL 2026)")}
+          {fld("loading_port","Port of Loading")}
+          {fld("destination","Destination Port")}
         </div>
 
-        <SH t="Pricing"/>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
-          {fld("price_usd","Price (USD)","number")}
-          {fld("price_per","Per","select",["MTs","MT","Container","Lot"])}
+        <SH t="Items (Packing × Qty × Price)"/>
+        <div style={{marginBottom:12}}>
+          {(form.items||[]).map((item,idx)=>{
+            const updItem=(k,v)=>sf("items",(form.items||[]).map((it,i)=>i===idx?{...it,[k]:v}:it));
+            const totalQty=n(item.quantity_mt);
+            const totalVal=totalQty*n(item.price_usd);
+            return(
+              <div key={item.id||idx} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:12,marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <div style={{fontWeight:700,color:"#1e3a5f",fontSize:13}}>
+                    Item #{idx+1}
+                    {item.packing&&<span style={{fontWeight:400,color:"#64748b",fontSize:11,marginLeft:8}}>{item.packing}</span>}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {totalVal>0&&<span style={{fontSize:11,color:"#16a34a",fontWeight:600}}>≈ USD {(totalVal).toLocaleString("en-IN",{minimumFractionDigits:0,maximumFractionDigits:0})}</span>}
+                    {(form.items||[]).length>1&&(
+                      <button onClick={()=>sf("items",(form.items||[]).filter((_,i)=>i!==idx))}
+                        style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>Remove</button>
+                    )}
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div style={{gridColumn:"1/-1"}}>
+                    <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Packing Type *</label>
+                    <input value={item.packing||""} onChange={e=>updItem("packing",e.target.value)} style={iS} placeholder="e.g. In 20 Kg PP Bags"/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Quantity (MT)</label>
+                    <input type="number" value={item.quantity_mt||""} onChange={e=>updItem("quantity_mt",e.target.value)} style={iS} step="any" placeholder="e.g. 25"/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>No. of Containers</label>
+                    <input type="number" value={item.container_qty||""} onChange={e=>updItem("container_qty",e.target.value)} style={iS} min="1"/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Container Type</label>
+                    <select value={item.container_type||""} onChange={e=>updItem("container_type",e.target.value)} style={iS}>
+                      {CONTAINER_TYPES.map(o=><option key={o}>{o}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Price (USD)</label>
+                    <input type="number" value={item.price_usd||""} onChange={e=>updItem("price_usd",e.target.value)} style={iS} step="any" placeholder="e.g. 420"/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Per</label>
+                    <select value={item.price_per||"MTs"} onChange={e=>updItem("price_per",e.target.value)} style={iS}>
+                      {["MTs","MT","Container","Lot"].map(o=><option key={o}>{o}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {item.quantity_mt&&item.container_qty&&item.container_type&&(
+                  <div style={{marginTop:8,background:"#eff6ff",borderRadius:6,padding:"5px 10px",fontSize:11,color:"#1d4ed8"}}>
+                    📦 {item.quantity_mt} MTS · {item.container_qty} x {item.container_type}
+                    {item.price_usd?` · USD ${item.price_usd} per ${item.price_per||"MTs"}`:""} {form.delivery_terms||""}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <button onClick={()=>sf("items",[...(form.items||[]),{id:Date.now(),packing:"",quantity_mt:"",container_qty:"1",container_type:"20' FCL",price_usd:"",price_per:"MTs"}])}
+            style={{background:"linear-gradient(135deg,#eff6ff,#f0fdf4)",border:"2px dashed #bfdbfe",borderRadius:10,padding:"10px 0",width:"100%",cursor:"pointer",fontWeight:600,fontSize:13,color:"#1d4ed8"}}>
+            + Add Item
+          </button>
+          {(form.items||[]).length>1&&(()=>{
+            const totQty=(form.items||[]).reduce((s,it)=>s+n(it.quantity_mt),0);
+            const totVal=(form.items||[]).reduce((s,it)=>s+n(it.quantity_mt)*n(it.price_usd),0);
+            return(
+              <div style={{marginTop:8,background:"#1e3a5f",borderRadius:8,padding:"10px 14px",display:"flex",gap:20}}>
+                <div><div style={{fontSize:10,color:"#93c5fd"}}>Total Quantity</div><div style={{fontWeight:700,color:"#fff",fontSize:14}}>{totQty} MTS</div></div>
+                <div><div style={{fontSize:10,color:"#93c5fd"}}>Total Value</div><div style={{fontWeight:700,color:"#86efac",fontSize:14}}>USD {totVal.toLocaleString("en-IN",{minimumFractionDigits:0,maximumFractionDigits:0})}</div></div>
+                <div><div style={{fontSize:10,color:"#93c5fd"}}>Items</div><div style={{fontWeight:700,color:"#fff",fontSize:14}}>{(form.items||[]).length}</div></div>
+              </div>
+            );
+          })()}
+        </div>
+
+        <SH t="Payment"/>
+        <div style={{marginBottom:12}}>
           <div style={{gridColumn:"1/-1"}}>{fld("payment_condition","Payment Condition")}</div>
         </div>
 
@@ -1968,13 +2038,25 @@ function exportContractPDF(contract, buyer, consignee) {
   y += 6;
 
   // ── CONTRACT TERMS TABLE ──────────────────────────────────────────────────
-  const qtyDisplay = (contract.quantity_mt || "") + " MTS " +
-    (contract.quantity_tolerance || "+/- 5% at seller's option") +
-    (contract.container_qty && contract.container_type
-      ? "\n" + contract.container_qty + " x " + contract.container_type : "");
+  const items = (contract.items && contract.items.length)
+    ? contract.items
+    : [{packing:contract.packing||"", quantity_mt:contract.quantity_mt||"", container_qty:contract.container_qty||"", container_type:contract.container_type||"", price_usd:contract.price_usd||"", price_per:contract.price_per||"MTs"}];
 
   const baseTerms = (contract.delivery_terms || "CIF").split(" ")[0];
-  const priceDisplay = "USD " + (contract.price_usd || "") + " Per " + (contract.price_per || "MTs") + " " + (contract.delivery_terms || "CIF");
+
+  // Build items display string
+  const itemsDisplay = items.map((it,i)=>{
+    const parts = [];
+    if(it.packing) parts.push(it.packing);
+    if(it.quantity_mt) parts.push(it.quantity_mt+" MTS");
+    if(it.container_qty && it.container_type) parts.push(it.container_qty+" x "+it.container_type);
+    if(it.price_usd) parts.push("USD "+it.price_usd+" per "+(it.price_per||"MTs")+" "+baseTerms);
+    return (items.length>1?"("+(i+1)+") ":"")+parts.join(" | ");
+  }).join("
+");
+
+  const totQty = items.reduce((s,it)=>s+n(it.quantity_mt),0);
+  const totVal = items.reduce((s,it)=>s+n(it.quantity_mt)*n(it.price_usd),0);
 
   const selectedDocs = Array.isArray(contract.selected_docs) ? contract.selected_docs : [];
   const docsText = ALL_DOCS.filter(d => selectedDocs.includes(d.key)).map(d => {
@@ -1986,13 +2068,24 @@ function exportContractPDF(contract, buyer, consignee) {
 
   const termRows = [
     [{ content: "Commodity",       styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.commodity || "", styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
-    [{ content: "Quantity",        styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: qtyDisplay }],
+    ...(items.length===1
+      ? [
+          [{ content: "Packing",       styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: items[0].packing || "" }],
+          [{ content: "Quantity",      styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: (items[0].quantity_mt||"")+" MTS "+(contract.quantity_tolerance||"")+"
+"+(items[0].container_qty&&items[0].container_type?items[0].container_qty+" x "+items[0].container_type:"") }],
+          [{ content: "Price",         styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: "USD "+(items[0].price_usd||"")+" Per "+(items[0].price_per||"MTs")+" "+(contract.delivery_terms||"CIF"), styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
+        ]
+      : [
+          [{ content: "Items
+("+items.length+" lines)", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: itemsDisplay }],
+          [{ content: "Total Qty",     styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: totQty+" MTS "+( contract.quantity_tolerance||""), styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
+          [{ content: "Total Value",   styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: "USD "+totVal.toLocaleString("en-IN",{minimumFractionDigits:0,maximumFractionDigits:0})+" "+baseTerms, styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
+        ]
+    ),
     [{ content: "Loading Port",    styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.loading_port || "" }],
     [{ content: "Destination",     styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.destination || "" }],
     [{ content: "Specification",   styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.specification || "" }],
     [{ content: "Shipment",        styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.shipment_period || "" }],
-    [{ content: "Packing",         styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.packing || "" }],
-    [{ content: "Price",           styles: { fontStyle: "bold", fillColor: lgray, textColor: navy  } }, { content: priceDisplay, styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
     [{ content: "Payment Terms",   styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.payment_condition || "", styles: { fontStyle: "bold" } }],
     [{ content: "Documents\nRequired", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: docsText }],
   ];
@@ -2377,11 +2470,23 @@ export default function App(){
       const payload={...form,created_by:userInfo?.name,created_by_role:userInfo?.role,
         approval_status:isJA?"pending":"approved"};
       delete payload.id;delete payload.created_at;
-      // Convert empty strings to null for numeric fields
-      ["price_usd","quantity_mt","container_qty"].forEach(k=>{
-        if(payload[k]===""||payload[k]===undefined) payload[k]=null;
-        else payload[k]=Number(payload[k])||null;
-      });
+      // Normalize items array
+      if(payload.items && payload.items.length) {
+        payload.items = payload.items.map(it=>({
+          ...it,
+          quantity_mt: Number(it.quantity_mt)||null,
+          container_qty: it.container_qty||"1",
+          price_usd: Number(it.price_usd)||null,
+        }));
+      }
+      // Keep legacy fields in sync with first item for backward compatibility
+      const firstItem = (payload.items||[])[0]||{};
+      payload.quantity_mt = Number(firstItem.quantity_mt)||null;
+      payload.container_qty = firstItem.container_qty||null;
+      payload.container_type = firstItem.container_type||null;
+      payload.price_usd = Number(firstItem.price_usd)||null;
+      payload.price_per = firstItem.price_per||"MTs";
+      payload.packing = firstItem.packing||null;
       // Convert empty strings to null for UUID fields
       ["buyer_id","consignee_id"].forEach(k=>{
         if(!payload[k]||payload[k]==="") payload[k]=null;
@@ -2936,8 +3041,26 @@ export default function App(){
                       <div style={{padding:"12px 16px"}}>
                         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:8,fontSize:12}}>
                           <div><span style={{color:"#94a3b8",fontSize:11}}>Commodity</span><div style={{fontWeight:600,color:"#1e293b"}}>{c.commodity}</div></div>
-                          <div><span style={{color:"#94a3b8",fontSize:11}}>Quantity</span><div style={{fontWeight:600,color:"#1e293b"}}>{c.quantity}</div></div>
-                          <div><span style={{color:"#94a3b8",fontSize:11}}>Price</span><div style={{fontWeight:700,color:"#1e3a5f"}}>USD {c.price_usd} / {c.price_per} {c.delivery_terms}</div></div>
+                          {(c.items&&c.items.length>1)?(
+                            <div style={{gridColumn:"1/-1"}}>
+                              <span style={{color:"#94a3b8",fontSize:11}}>Items ({c.items.length})</span>
+                              <div style={{display:"grid",gap:4,marginTop:3}}>
+                                {(c.items||[]).map((it,i)=>(
+                                  <div key={i} style={{fontSize:11,background:"#f8fafc",borderRadius:5,padding:"4px 8px",display:"flex",gap:8,flexWrap:"wrap"}}>
+                                    <span style={{fontWeight:600,color:"#1e3a5f"}}>({i+1}) {it.packing}</span>
+                                    <span style={{color:"#64748b"}}>{it.quantity_mt} MTS</span>
+                                    {it.container_qty&&<span style={{color:"#64748b"}}>{it.container_qty}×{it.container_type}</span>}
+                                    {it.price_usd&&<span style={{color:"#16a34a",fontWeight:600}}>USD {it.price_usd}/{it.price_per||"MTs"}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ):(
+                            <>
+                              <div><span style={{color:"#94a3b8",fontSize:11}}>Packing</span><div style={{fontWeight:600,color:"#1e293b"}}>{(c.items&&c.items[0]?.packing)||c.packing||"—"}</div></div>
+                              <div><span style={{color:"#94a3b8",fontSize:11}}>Price</span><div style={{fontWeight:700,color:"#1e3a5f"}}>USD {(c.items&&c.items[0]?.price_usd)||c.price_usd} / {(c.items&&c.items[0]?.price_per)||c.price_per} {c.delivery_terms}</div></div>
+                            </>
+                          )}
                           <div><span style={{color:"#94a3b8",fontSize:11}}>Shipment Period</span><div style={{fontWeight:600,color:"#1e293b"}}>{c.shipment_period}</div></div>
                           <div><span style={{color:"#94a3b8",fontSize:11}}>Destination</span><div style={{fontWeight:600,color:"#1e293b"}}>{c.destination}</div></div>
                           <div><span style={{color:"#94a3b8",fontSize:11}}>Payment</span><div style={{fontWeight:600,color:"#16a34a"}}>{c.payment_condition}</div></div>
