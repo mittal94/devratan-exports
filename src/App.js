@@ -158,6 +158,12 @@ const toCSV = (h,r) => [h.map(escv).join(','),...r.map(x=>x.map(escv).join(','))
 const dlCSV = (name,csv) => { const blob=new Blob(["\uFEFF"+csv],{type:'text/csv;charset=utf-8'}); const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:name}); document.body.appendChild(a); a.click(); document.body.removeChild(a); };
 
 // ─── PDF Export Helper ───────────────────────────────────────────────────────
+const getDocx = () => {
+  if (window.docx) return window.docx;
+  alert("Word library not loaded. Please refresh and try again.");
+  return null;
+};
+
 const getPDF = () => {
   if(window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
   if(window.jsPDF) return window.jsPDF;
@@ -1918,7 +1924,18 @@ function ProformaInvoiceModal({contract, buyer, onClose, onSave}) {
             disabled={!piNo.trim()}
             style={{background:"linear-gradient(135deg,#92400e,#d97706)",color:"#fff",border:"none",borderRadius:8,padding:"8px 22px",cursor:"pointer",fontWeight:700,fontSize:13,opacity:piNo.trim()?1:0.5}}
           >
-            📄 Generate PI PDF
+            📄 PDF
+          </button>
+          <button
+            onClick={()=>{
+              exportProformaInvoiceWord(contract, buyer, piNo, validityDate, advancePct ? Number(advancePct) : null);
+              if (onSave) onSave({ pi_no: piNo, pi_validity: validityDate, pi_advance_pct: advancePct ? Number(advancePct) : null });
+              onClose();
+            }}
+            disabled={!piNo.trim()}
+            style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",color:"#fff",border:"none",borderRadius:8,padding:"8px 22px",cursor:"pointer",fontWeight:700,fontSize:13,opacity:piNo.trim()?1:0.5}}
+          >
+            📝 Word
           </button>
         </div>
       </div>
@@ -1944,6 +1961,608 @@ const BANK_DETAILS = {
     currency: "USD",
   },
 };
+
+// ─── Word Export — Contract ────────────────────────────────────────────────────
+async function exportContractWord(contract, buyer, consignee) {
+  const docx = getDocx();
+  if (!docx) return;
+  const {
+    Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+    AlignmentType, WidthType, BorderStyle, ShadingType, VerticalAlign,
+    Header, Footer, PageNumber
+  } = docx;
+
+  const seller = COMPANIES[(contract.seller_company||"devratan")] || COMPANIES.devratan;
+  const items  = (contract.items && contract.items.length)
+    ? contract.items
+    : [{packing:contract.packing||"", quantity_mt:contract.quantity_mt||"",
+        container_qty:contract.container_qty||"", container_type:contract.container_type||"",
+        price_usd:contract.price_usd||"", price_per:contract.price_per||"MTs"}];
+  const totQty = items.reduce((s,it)=>s+n(it.quantity_mt),0);
+  const totVal = items.reduce((s,it)=>s+n(it.quantity_mt)*n(it.price_usd),0);
+  const fmt2   = v => Number(v).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // Colours (hex)
+  const NAVY  = "123458";
+  const STEEL = "4682B4";
+  const LGRAY = "EBF3FC";
+  const GOLD  = "A27832";
+  const WHITE = "FFFFFF";
+  const GREEN = "155C33";
+
+  const TW = 9360; // content width in DXA (A4 with 18mm margins each side ≈ 9360)
+  const border = (c) => ({ style: BorderStyle.SINGLE, size: 4, color: c || "CCCCCC" });
+  const allBorders = (c) => ({ top:border(c), bottom:border(c), left:border(c), right:border(c) });
+  const noBorders  = () => {
+    const nb = { style: BorderStyle.NIL, size: 0, color: "FFFFFF" };
+    return { top:nb, bottom:nb, left:nb, right:nb };
+  };
+
+  const hdrCell = (txt, w, options={}) => new TableCell({
+    width: { size:w, type:WidthType.DXA },
+    shading: { fill:NAVY, type:ShadingType.CLEAR },
+    borders: allBorders("FFFFFF"),
+    margins: { top:80, bottom:80, left:140, right:140 },
+    verticalAlign: VerticalAlign.CENTER,
+    children: [new Paragraph({
+      alignment: options.align || AlignmentType.LEFT,
+      children: [new TextRun({ text:txt, bold:true, color:WHITE, size:18, font:"Arial" })]
+    })]
+  });
+
+  const labelCell = (txt, w) => new TableCell({
+    width: { size:w, type:WidthType.DXA },
+    shading: { fill:LGRAY, type:ShadingType.CLEAR },
+    borders: allBorders("D0DCE8"),
+    margins: { top:80, bottom:80, left:140, right:140 },
+    verticalAlign: VerticalAlign.CENTER,
+    children: [new Paragraph({ children: [new TextRun({ text:txt, bold:true, color:NAVY, size:18, font:"Arial" })] })]
+  });
+
+  const valueCell = (txt, w, options={}) => new TableCell({
+    width: { size:w, type:WidthType.DXA },
+    shading: { fill:options.fill||WHITE, type:ShadingType.CLEAR },
+    borders: allBorders("D0DCE8"),
+    margins: { top:80, bottom:80, left:140, right:140 },
+    verticalAlign: VerticalAlign.CENTER,
+    children: [new Paragraph({
+      alignment: options.align || AlignmentType.LEFT,
+      children: [new TextRun({ text:String(txt||""), bold:!!options.bold, color:options.color||"111111", size:18, font:"Arial" })]
+    })]
+  });
+
+  // Title block
+  const titleBlock = [
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before:0, after:80 },
+      children: [new TextRun({ text:seller.name, bold:true, size:26, color:NAVY, font:"Arial" })]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before:0, after:40 },
+      children: [new TextRun({ text:seller.address, size:16, color:"444444", font:"Arial" })]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before:0, after:200 },
+      children: [new TextRun({ text:(seller.phone||"")+(seller.email?"   |   "+seller.email:"")+(seller.gstin?"   |   "+seller.gstin:""), size:15, color:STEEL, font:"Arial" })]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before:0, after:60 },
+      border: { bottom:{ style:BorderStyle.SINGLE, size:8, color:GOLD } },
+      children: [new TextRun({ text:"SALE CONTRACT", bold:true, size:32, color:NAVY, font:"Arial" })]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before:60, after:200 },
+      children: [
+        new TextRun({ text:"Contract No: ", size:18, font:"Arial", color:"444444" }),
+        new TextRun({ text:contract.contract_no||"", bold:true, size:18, font:"Arial", color:NAVY }),
+        new TextRun({ text:"     Date: ", size:18, font:"Arial", color:"444444" }),
+        new TextRun({ text:contract.contract_date||"", bold:true, size:18, font:"Arial", color:NAVY }),
+      ]
+    }),
+  ];
+
+  // Parties table
+  const buyerAddr = contract.buyer_address || buyer?.address || "";
+  const consigneeAddr = consignee?.address || "";
+  const partiesTable = new Table({
+    width: { size:TW, type:WidthType.DXA },
+    columnWidths: [1400, 2800, TW-4200],
+    rows: [
+      new TableRow({ children: [
+        hdrCell("SELLER", 1400, {align:AlignmentType.CENTER}),
+        new TableCell({
+          width:{size:2800,type:WidthType.DXA}, columnSpan:2,
+          shading:{fill:"EFF6FF",type:ShadingType.CLEAR}, borders:allBorders("D0DCE8"),
+          margins:{top:80,bottom:80,left:140,right:140},
+          children:[
+            new Paragraph({children:[new TextRun({text:seller.name, bold:true, size:19, color:NAVY, font:"Arial"})]}),
+            new Paragraph({children:[new TextRun({text:seller.address, size:17, color:"444444", font:"Arial"})]}),
+          ]
+        }),
+      ]}),
+      new TableRow({ children: [
+        hdrCell("BUYER", 1400, {align:AlignmentType.CENTER}),
+        new TableCell({
+          width:{size:2800,type:WidthType.DXA},
+          shading:{fill:"EFF6FF",type:ShadingType.CLEAR}, borders:allBorders("D0DCE8"),
+          margins:{top:80,bottom:80,left:140,right:140},
+          children:[new Paragraph({children:[new TextRun({text:contract.buyer_name||"", bold:true, size:19, color:NAVY, font:"Arial"})]})]
+        }),
+        new TableCell({
+          width:{size:TW-4200,type:WidthType.DXA},
+          shading:{fill:"EFF6FF",type:ShadingType.CLEAR}, borders:allBorders("D0DCE8"),
+          margins:{top:80,bottom:80,left:140,right:140},
+          children:[new Paragraph({children:[new TextRun({text:buyerAddr, size:17, color:"444444", font:"Arial"})]})]
+        }),
+      ]}),
+      ...(consignee ? [new TableRow({ children: [
+        hdrCell("CONSIGNEE", 1400, {align:AlignmentType.CENTER}),
+        new TableCell({
+          width:{size:2800,type:WidthType.DXA},
+          shading:{fill:"EFF6FF",type:ShadingType.CLEAR}, borders:allBorders("D0DCE8"),
+          margins:{top:80,bottom:80,left:140,right:140},
+          children:[new Paragraph({children:[new TextRun({text:consignee.name||"", bold:true, size:19, color:NAVY, font:"Arial"})]})]
+        }),
+        new TableCell({
+          width:{size:TW-4200,type:WidthType.DXA},
+          shading:{fill:"EFF6FF",type:ShadingType.CLEAR}, borders:allBorders("D0DCE8"),
+          margins:{top:80,bottom:80,left:140,right:140},
+          children:[new Paragraph({children:[new TextRun({text:consigneeAddr, size:17, color:"444444", font:"Arial"})]})]
+        }),
+      ]})] : []),
+    ]
+  });
+
+  // Terms table
+  const termRow = (label, value, bold) => new TableRow({ children: [
+    labelCell(label, 2200),
+    valueCell(value, TW-2200, {bold:!!bold}),
+  ]});
+
+  // Items rows
+  const itemRows = items.map((it, i) => {
+    const qty   = n(it.quantity_mt);
+    const price = n(it.price_usd);
+    const amt   = qty * price;
+    return new TableRow({ children: [
+      valueCell(String(i+1), 600, {align:AlignmentType.CENTER}),
+      valueCell(contract.commodity||"", 2600),
+      valueCell(it.packing||"", 1700),
+      valueCell(qty ? fmt2(qty)+" MTS" : "", 1200, {align:AlignmentType.RIGHT}),
+      valueCell(it.container_qty&&it.container_type ? it.container_qty+" x "+it.container_type : "", 1400, {align:AlignmentType.CENTER}),
+      valueCell(price ? "USD "+fmt2(price) : "", 1400, {align:AlignmentType.RIGHT}),
+      valueCell(amt ? "USD "+fmt2(amt) : "", TW-8900, {align:AlignmentType.RIGHT, bold:true, color:GREEN}),
+    ]});
+  });
+
+  const itemsTotalRow = new TableRow({ children: [
+    new TableCell({width:{size:600,type:WidthType.DXA}, shading:{fill:LGRAY,type:ShadingType.CLEAR}, borders:allBorders("D0DCE8"), margins:{top:80,bottom:80,left:140,right:140}, children:[new Paragraph({children:[new TextRun({text:"",size:18,font:"Arial"})]})]}),
+    new TableCell({width:{size:2600,type:WidthType.DXA}, shading:{fill:LGRAY,type:ShadingType.CLEAR}, borders:allBorders("D0DCE8"), margins:{top:80,bottom:80,left:140,right:140}, children:[new Paragraph({children:[new TextRun({text:"TOTAL",bold:true,color:NAVY,size:18,font:"Arial"})]})]}),
+    new TableCell({columnSpan:3, width:{size:4300,type:WidthType.DXA}, shading:{fill:LGRAY,type:ShadingType.CLEAR}, borders:allBorders("D0DCE8"), margins:{top:80,bottom:80,left:140,right:140}, children:[new Paragraph({children:[new TextRun({text:contract.quantity_tolerance||"+/- 5% at seller's option", size:17, color:"555555", font:"Arial"})]})]}),
+    new TableCell({width:{size:1400,type:WidthType.DXA}, shading:{fill:LGRAY,type:ShadingType.CLEAR}, borders:allBorders("D0DCE8"), margins:{top:80,bottom:80,left:140,right:140}, children:[new Paragraph({children:[new TextRun({text:"",size:18,font:"Arial"})]})]}),
+    new TableCell({width:{size:TW-8900,type:WidthType.DXA}, shading:{fill:GOLD,type:ShadingType.CLEAR}, borders:allBorders(GOLD), margins:{top:80,bottom:80,left:140,right:140}, children:[new Paragraph({alignment:AlignmentType.RIGHT, children:[new TextRun({text:"USD "+fmt2(totVal),bold:true,color:WHITE,size:18,font:"Arial"})]})]}),
+  ]});
+
+  const itemsTable = new Table({
+    width: { size:TW, type:WidthType.DXA },
+    columnWidths: [600, 2600, 1700, 1200, 1400, 1400, TW-8900],
+    rows: [
+      new TableRow({ tableHeader:true, children: [
+        hdrCell("#", 600, {align:AlignmentType.CENTER}),
+        hdrCell("Description", 2600),
+        hdrCell("Packing", 1700),
+        hdrCell("Qty (MTS)", 1200, {align:AlignmentType.RIGHT}),
+        hdrCell("Containers", 1400, {align:AlignmentType.CENTER}),
+        hdrCell("Unit Price (USD)", 1400, {align:AlignmentType.RIGHT}),
+        hdrCell("Amount (USD)", TW-8900, {align:AlignmentType.RIGHT}),
+      ]}),
+      ...itemRows,
+      itemsTotalRow,
+    ]
+  });
+
+  // Selected docs text
+  const selectedDocs = Array.isArray(contract.selected_docs) ? contract.selected_docs : [];
+  const docsText = ALL_DOCS.filter(d=>selectedDocs.includes(d.key)).map(d=>d.label).join(", ") || "As per contract";
+
+  const termsTable = new Table({
+    width: { size:TW, type:WidthType.DXA },
+    columnWidths: [2200, TW-2200],
+    rows: [
+      termRow("Commodity",      contract.commodity||"", true),
+      termRow("Loading Port",   contract.loading_port||""),
+      termRow("Destination",    contract.destination||""),
+      termRow("Specification",  contract.specification||""),
+      termRow("Shipment",       contract.shipment_period||""),
+      termRow("Delivery Terms", contract.delivery_terms||""),
+      termRow("Payment Terms",  contract.payment_condition||"", true),
+      termRow("Documents",      docsText),
+      ...(contract.special_conditions ? [termRow("Special Conditions", contract.special_conditions)] : []),
+    ]
+  });
+
+  // Signature row
+  const sigTable = new Table({
+    width: { size:TW, type:WidthType.DXA },
+    columnWidths: [TW/2, TW/2],
+    rows: [
+      new TableRow({ children: [
+        new TableCell({
+          width:{size:TW/2,type:WidthType.DXA},
+          borders:noBorders(),
+          margins:{top:200,bottom:200,left:0,right:200},
+          children:[
+            new Paragraph({children:[new TextRun({text:"For Buyer:", bold:true, size:18, color:NAVY, font:"Arial"})]}),
+            new Paragraph({spacing:{before:600}, children:[new TextRun({text:contract.buyer_name||"", size:17, color:"444444", font:"Arial"})]}),
+            new Paragraph({children:[new TextRun({text:"Authorized Signatory", size:16, color:"888888", font:"Arial"})]}),
+          ]
+        }),
+        new TableCell({
+          width:{size:TW/2,type:WidthType.DXA},
+          borders:noBorders(),
+          margins:{top:200,bottom:200,left:200,right:0},
+          children:[
+            new Paragraph({children:[new TextRun({text:"For "+seller.name+":", bold:true, size:18, color:NAVY, font:"Arial"})]}),
+            new Paragraph({spacing:{before:600}, children:[new TextRun({text:"", size:17, font:"Arial"})]}),
+            new Paragraph({children:[new TextRun({text:"Authorized Signatory", size:16, color:"888888", font:"Arial"})]}),
+          ]
+        }),
+      ]})
+    ]
+  });
+
+  const spacer = new Paragraph({ spacing:{ before:240, after:240 }, children:[new TextRun("")] });
+  const sectionHdr = (txt) => new Paragraph({
+    spacing:{ before:280, after:120 },
+    border:{ bottom:{ style:BorderStyle.SINGLE, size:6, color:GOLD } },
+    children:[new TextRun({ text:txt, bold:true, size:20, color:NAVY, font:"Arial" })]
+  });
+
+  const doc = new Document({
+    sections: [{
+      properties: {
+        page: {
+          size: { width:11906, height:16838 },
+          margin: { top:1080, right:1080, bottom:1080, left:1080 }
+        }
+      },
+      headers: {
+        default: new Header({ children:[
+          new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            children:[new TextRun({ text:seller.name+"  |  SALE CONTRACT  |  "+( contract.contract_no||""), size:15, color:STEEL, font:"Arial" })]
+          })
+        ]})
+      },
+      footers: {
+        default: new Footer({ children:[
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            border: { top:{ style:BorderStyle.SINGLE, size:4, color:NAVY } },
+            children:[
+              new TextRun({ text:seller.address, size:15, color:"555555", font:"Arial" }),
+              new TextRun({ text:"    |    Page ", size:15, color:"555555", font:"Arial" }),
+              new TextRun({ children:[PageNumber.CURRENT], size:15, color:NAVY, font:"Arial" }),
+            ]
+          })
+        ]})
+      },
+      children: [
+        ...titleBlock,
+        spacer,
+        sectionHdr("Parties"),
+        partiesTable,
+        spacer,
+        sectionHdr("Contract Items"),
+        itemsTable,
+        spacer,
+        sectionHdr("Terms & Conditions"),
+        termsTable,
+        spacer,
+        sectionHdr("War Risk & Extraordinary Charges"),
+        new Paragraph({
+          spacing:{ before:80, after:80 },
+          children:[new TextRun({
+            text: contract.war_risk_clause
+              ? "Include War Risk & Extraordinary Charges Clause: Any additional charges due to war, hostilities, geopolitical tensions shall be borne by the Buyer."
+              : "War Risk & Extraordinary Charges Clause: Not applicable.",
+            size:17, font:"Arial", color:"333333"
+          })]
+        }),
+        spacer,
+        sectionHdr("Signatures"),
+        sigTable,
+      ]
+    }]
+  });
+
+  const buffer = await Packer.toBuffer(doc);
+  const blob = new Blob([buffer], { type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "Contract_"+(contract.contract_no||"draft")+".docx";
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+// ─── Word Export — Proforma Invoice ───────────────────────────────────────────
+async function exportProformaInvoiceWord(contract, buyer, piNo, validityDate, advancePct) {
+  const docx = getDocx();
+  if (!docx) return;
+  const {
+    Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+    AlignmentType, WidthType, BorderStyle, ShadingType, VerticalAlign,
+    Header, Footer, PageNumber
+  } = docx;
+
+  const seller = COMPANIES[(contract.seller_company||"devratan")] || COMPANIES.devratan;
+  const bank   = BANK_DETAILS[(contract.seller_company||"devratan")] || BANK_DETAILS.devratan;
+  const items  = (contract.items && contract.items.length)
+    ? contract.items
+    : [{packing:contract.packing||"", quantity_mt:contract.quantity_mt||"",
+        container_qty:contract.container_qty||"", container_type:contract.container_type||"",
+        price_usd:contract.price_usd||"", price_per:contract.price_per||"MTs"}];
+  const totQty = items.reduce((s,it)=>s+n(it.quantity_mt),0);
+  const totVal = items.reduce((s,it)=>s+n(it.quantity_mt)*n(it.price_usd),0);
+  const advAmt = advancePct ? (totVal * advancePct / 100) : 0;
+  const fmt2   = v => Number(v).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const usd    = v => "USD "+fmt2(v);
+
+  const NAVY  = "123458";
+  const STEEL = "4682B4";
+  const LGRAY = "EBF3FC";
+  const GOLD  = "A27832";
+  const WHITE = "FFFFFF";
+  const GREEN = "155C33";
+  const AMBER = "923E0E";
+  const CREAM = "FFF8DC";
+
+  const TW = 9360;
+  const border = (c) => ({ style:BorderStyle.SINGLE, size:4, color:c||"CCCCCC" });
+  const allBorders = (c) => ({ top:border(c), bottom:border(c), left:border(c), right:border(c) });
+  const noBorders  = () => { const nb={style:BorderStyle.NIL,size:0,color:"FFFFFF"}; return {top:nb,bottom:nb,left:nb,right:nb}; };
+
+  const hdrCell = (txt, w, align) => new TableCell({
+    width:{size:w,type:WidthType.DXA}, shading:{fill:NAVY,type:ShadingType.CLEAR},
+    borders:allBorders("FFFFFF"), margins:{top:80,bottom:80,left:140,right:140}, verticalAlign:VerticalAlign.CENTER,
+    children:[new Paragraph({alignment:align||AlignmentType.LEFT, children:[new TextRun({text:txt,bold:true,color:WHITE,size:18,font:"Arial"})]})]
+  });
+  const lCell = (txt, w) => new TableCell({
+    width:{size:w,type:WidthType.DXA}, shading:{fill:LGRAY,type:ShadingType.CLEAR},
+    borders:allBorders("D0DCE8"), margins:{top:80,bottom:80,left:140,right:140}, verticalAlign:VerticalAlign.CENTER,
+    children:[new Paragraph({children:[new TextRun({text:txt,bold:true,color:NAVY,size:18,font:"Arial"})]})]
+  });
+  const vCell = (txt, w, opts={}) => new TableCell({
+    width:{size:w,type:WidthType.DXA}, shading:{fill:opts.fill||WHITE,type:ShadingType.CLEAR},
+    borders:allBorders("D0DCE8"), margins:{top:80,bottom:80,left:140,right:140}, verticalAlign:VerticalAlign.CENTER,
+    children:[new Paragraph({alignment:opts.align||AlignmentType.LEFT, children:[new TextRun({text:String(txt||""),bold:!!opts.bold,color:opts.color||"111111",size:18,font:"Arial"})]})]
+  });
+
+  // Title
+  const titleBlock = [
+    new Paragraph({alignment:AlignmentType.CENTER, spacing:{before:0,after:80},
+      children:[new TextRun({text:seller.name, bold:true, size:26, color:NAVY, font:"Arial"})]}),
+    new Paragraph({alignment:AlignmentType.CENTER, spacing:{before:0,after:200},
+      children:[new TextRun({text:seller.address, size:16, color:"444444", font:"Arial"})]}),
+    new Paragraph({alignment:AlignmentType.CENTER, spacing:{before:0,after:60},
+      border:{bottom:{style:BorderStyle.SINGLE,size:8,color:GOLD}},
+      children:[new TextRun({text:"PROFORMA INVOICE", bold:true, size:32, color:NAVY, font:"Arial"})]}),
+    new Paragraph({alignment:AlignmentType.CENTER, spacing:{before:80,after:200},
+      children:[
+        new TextRun({text:"PI No: ", size:18, font:"Arial", color:"444444"}),
+        new TextRun({text:piNo||"---", bold:true, size:18, font:"Arial", color:NAVY}),
+        new TextRun({text:"     Date: ", size:18, font:"Arial", color:"444444"}),
+        new TextRun({text:contract.contract_date||"", bold:true, size:18, font:"Arial", color:NAVY}),
+        new TextRun({text:"     Valid Till: ", size:18, font:"Arial", color:"444444"}),
+        new TextRun({text:validityDate||"", bold:true, size:18, font:"Arial", color:AMBER}),
+      ]
+    }),
+  ];
+
+  // Parties
+  const buyerAddr = contract.buyer_address || buyer?.address || "";
+  const partiesTable = new Table({
+    width:{size:TW,type:WidthType.DXA}, columnWidths:[1200,2800,TW-4000],
+    rows:[
+      new TableRow({children:[
+        hdrCell("SELLER",1200,AlignmentType.CENTER),
+        vCell(seller.name, 2800, {bold:true,color:NAVY,fill:"EFF6FF"}),
+        vCell(seller.address, TW-4000, {fill:"EFF6FF",color:"444444"}),
+      ]}),
+      new TableRow({children:[
+        hdrCell("BUYER",1200,AlignmentType.CENTER),
+        vCell(contract.buyer_name||"", 2800, {bold:true,color:NAVY,fill:"EFF6FF"}),
+        vCell(buyerAddr, TW-4000, {fill:"EFF6FF",color:"444444"}),
+      ]}),
+    ]
+  });
+
+  // Items
+  const COL = [600, 2400, 1600, 1100, 1400, 1330, TW - 8430];
+  const dataRows = items.map((it,i)=>{
+    const qty=n(it.quantity_mt), price=n(it.price_usd), amt=qty*price;
+    return new TableRow({children:[
+      vCell(String(i+1),COL[0],{align:AlignmentType.CENTER}),
+      vCell(contract.commodity||"",COL[1]),
+      vCell(it.packing||"",COL[2]),
+      vCell(qty?fmt2(qty):"",COL[3],{align:AlignmentType.RIGHT,bold:true}),
+      vCell(it.container_qty&&it.container_type?it.container_qty+" x "+it.container_type:"",COL[4],{align:AlignmentType.CENTER}),
+      vCell(price?fmt2(price):"",COL[5],{align:AlignmentType.RIGHT}),
+      vCell(amt?fmt2(amt):"",COL[6],{align:AlignmentType.RIGHT,bold:true,color:GREEN}),
+    ]});
+  });
+
+  // Total row
+  const mkCell = (txt,w,opts={}) => new TableCell({
+    width:{size:w,type:WidthType.DXA}, shading:{fill:opts.fill||LGRAY,type:ShadingType.CLEAR},
+    borders:allBorders("D0DCE8"), margins:{top:80,bottom:80,left:140,right:140}, verticalAlign:VerticalAlign.CENTER,
+    children:[new Paragraph({alignment:opts.align||AlignmentType.LEFT, children:[new TextRun({text:String(txt||""),bold:!!opts.bold,color:opts.color||NAVY,size:18,font:"Arial"})]})]
+  });
+  const totalRow = new TableRow({children:[
+    mkCell("",COL[0]), mkCell("TOTAL",COL[1],{bold:true}),
+    mkCell("",COL[2]), mkCell(fmt2(totQty),COL[3],{align:AlignmentType.RIGHT,bold:true}),
+    mkCell("",COL[4]), mkCell("",COL[5]),
+    mkCell(usd(totVal),COL[6],{fill:GOLD,color:WHITE,bold:true,align:AlignmentType.RIGHT}),
+  ]});
+
+  const advRow = advancePct ? new TableRow({children:[
+    mkCell("",COL[0],{fill:CREAM}), mkCell("Advance ("+advancePct+"%) Due",COL[1],{bold:true,color:AMBER,fill:CREAM}),
+    mkCell("",COL[2],{fill:CREAM}), mkCell("",COL[3],{fill:CREAM}),
+    mkCell("",COL[4],{fill:CREAM}), mkCell("",COL[5],{fill:CREAM}),
+    mkCell(usd(advAmt),COL[6],{fill:CREAM,color:AMBER,bold:true,align:AlignmentType.RIGHT}),
+  ]}) : null;
+
+  const itemsTable = new Table({
+    width:{size:TW,type:WidthType.DXA}, columnWidths:COL,
+    rows:[
+      new TableRow({tableHeader:true, children:[
+        hdrCell("#",COL[0],AlignmentType.CENTER),
+        hdrCell("Description",COL[1]),
+        hdrCell("Packing",COL[2]),
+        hdrCell("Qty (MTS)",COL[3],AlignmentType.RIGHT),
+        hdrCell("Containers",COL[4],AlignmentType.CENTER),
+        hdrCell("Unit Price (USD)",COL[5],AlignmentType.RIGHT),
+        hdrCell("Amount (USD)",COL[6],AlignmentType.RIGHT),
+      ]}),
+      ...dataRows,
+      totalRow,
+      ...(advRow ? [advRow] : []),
+    ]
+  });
+
+  // Terms
+  const termRow = (label, value, bold) => new TableRow({children:[
+    lCell(label, 2200),
+    vCell(value, TW-2200, {bold:!!bold}),
+  ]});
+
+  const termsTable = new Table({
+    width:{size:TW,type:WidthType.DXA}, columnWidths:[2200,TW-2200],
+    rows:[
+      termRow("Delivery Terms",   contract.delivery_terms||""),
+      termRow("Port of Loading",  contract.loading_port||""),
+      termRow("Port of Discharge",contract.destination||""),
+      termRow("Shipment Period",  contract.shipment_period||""),
+      termRow("Payment Terms",    contract.payment_condition||"", true),
+      termRow("Contract Ref.",    contract.contract_no||""),
+    ]
+  });
+
+  // Bank
+  const bankRows = [
+    ["Beneficiary", seller.name, true],
+    ["Bank Name",   bank.bankName],
+    ["Branch",      bank.branch],
+    ["Account No.", bank.accNo, true],
+    ...(bank.iban ? [["IBAN", bank.iban, true]] : []),
+    ["SWIFT Code",  bank.swift, true],
+    ["Currency",    bank.currency||"USD"],
+  ].map(([l,v,b])=>new TableRow({children:[lCell(l,2200), vCell(v,TW-2200,{bold:!!b})]}));
+
+  const bankTable = new Table({
+    width:{size:TW,type:WidthType.DXA}, columnWidths:[2200,TW-2200],
+    rows:bankRows
+  });
+
+  // Remarks
+  const remarksBlock = [
+    new Paragraph({spacing:{before:80,after:40},
+      border:{bottom:{style:BorderStyle.SINGLE,size:2,color:"DDCC88"}},
+      shading:{fill:CREAM,type:ShadingType.CLEAR},
+      children:[new TextRun({text:"Remarks", bold:true, size:18, color:AMBER, font:"Arial"})]}),
+    new Paragraph({spacing:{before:60,after:40},
+      children:[new TextRun({text:"1.  This is a Proforma Invoice only and not a Commercial Invoice.", size:17, font:"Arial", color:"333333"})]}),
+    new Paragraph({spacing:{before:40,after:40},
+      children:[new TextRun({text:"2.  Goods will be shipped upon receipt of payment as per agreed payment terms.", size:17, font:"Arial", color:"333333"})]}),
+    new Paragraph({spacing:{before:40,after:40},
+      children:[new TextRun({text:"3.  All terms remain same as per the contract.", size:17, font:"Arial", color:"333333"})]}),
+    new Paragraph({spacing:{before:60,after:80},
+      children:[
+        new TextRun({text:"* This Proforma Invoice is valid till:  ", size:17, font:"Arial", color:"333333"}),
+        new TextRun({text:validityDate||"", bold:true, size:17, font:"Arial", color:NAVY}),
+      ]}),
+  ];
+
+  // Sig
+  const sigTable = new Table({
+    width:{size:TW,type:WidthType.DXA}, columnWidths:[TW/2,TW/2],
+    rows:[new TableRow({children:[
+      new TableCell({
+        width:{size:TW/2,type:WidthType.DXA}, borders:noBorders(), margins:{top:200,bottom:200,left:0,right:200},
+        children:[
+          new Paragraph({children:[new TextRun({text:"For Buyer:", bold:true, size:18, color:NAVY, font:"Arial"})]}),
+          new Paragraph({spacing:{before:600}, children:[new TextRun({text:contract.buyer_name||"", size:17, color:"444444", font:"Arial"})]}),
+          new Paragraph({children:[new TextRun({text:"Authorized Signatory", size:16, color:"888888", font:"Arial"})]}),
+        ]
+      }),
+      new TableCell({
+        width:{size:TW/2,type:WidthType.DXA}, borders:noBorders(), margins:{top:200,bottom:200,left:200,right:0},
+        children:[
+          new Paragraph({children:[new TextRun({text:"For "+seller.name+":", bold:true, size:18, color:NAVY, font:"Arial"})]}),
+          new Paragraph({spacing:{before:600}, children:[new TextRun({text:"", size:17, font:"Arial"})]}),
+          new Paragraph({children:[new TextRun({text:"Authorized Signatory", size:16, color:"888888", font:"Arial"})]}),
+        ]
+      }),
+    ]})]
+  });
+
+  const spacer = new Paragraph({spacing:{before:240,after:120}, children:[new TextRun("")]});
+  const secHdr = (txt) => new Paragraph({
+    spacing:{before:280,after:120},
+    border:{bottom:{style:BorderStyle.SINGLE,size:6,color:GOLD}},
+    children:[new TextRun({text:txt, bold:true, size:20, color:NAVY, font:"Arial"})]
+  });
+
+  const doc = new Document({
+    sections:[{
+      properties:{
+        page:{
+          size:{width:11906,height:16838},
+          margin:{top:1080,right:1080,bottom:1080,left:1080}
+        }
+      },
+      headers:{
+        default: new Header({children:[
+          new Paragraph({alignment:AlignmentType.RIGHT,
+            children:[new TextRun({text:seller.name+"  |  PROFORMA INVOICE  |  "+(piNo||""), size:15, color:STEEL, font:"Arial"})]})
+        ]})
+      },
+      footers:{
+        default: new Footer({children:[
+          new Paragraph({alignment:AlignmentType.CENTER,
+            border:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY}},
+            children:[
+              new TextRun({text:seller.address, size:15, color:"555555", font:"Arial"}),
+              new TextRun({text:"    |    Page ", size:15, color:"555555", font:"Arial"}),
+              new TextRun({children:[PageNumber.CURRENT], size:15, color:NAVY, font:"Arial"}),
+            ]})
+        ]})
+      },
+      children:[
+        ...titleBlock, spacer,
+        secHdr("Parties"), partiesTable, spacer,
+        secHdr("Items"), itemsTable, spacer,
+        secHdr("Terms"), termsTable, spacer,
+        secHdr("Bank Details for Payment"), bankTable, spacer,
+        ...remarksBlock, spacer,
+        secHdr("Signatures"), sigTable,
+      ]
+    }]
+  });
+
+  const buffer = await Packer.toBuffer(doc);
+  const blob = new Blob([buffer], {type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "PI_"+(piNo||contract.contract_no||"draft")+".docx";
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
 
 function exportContractPDF(contract, buyer, consignee) {
   const JPDF = getPDF();
@@ -3495,6 +4114,7 @@ export default function App(){
                           <span style={{background:sc.bg,color:sc.color,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,textTransform:"capitalize"}}>{c.status}</span>
                           {c.approval_status==="pending"&&<span style={{background:"#fef3c7",color:"#d97706",borderRadius:20,padding:"3px 10px",fontSize:10,fontWeight:700}}>⏳ Pending Approval</span>}
                           <button onClick={()=>exportContractPDF(c,buyer,buyers.find(b=>b.id===c.consignee_id)||null)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📄 PDF</button>
+                          <button onClick={()=>exportContractWord(c,buyer,buyers.find(b=>b.id===c.consignee_id)||null)} style={{background:"rgba(99,179,237,0.25)",color:"#bfdbfe",border:"1px solid rgba(99,179,237,0.4)",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📝 Word</button>
                           <button onClick={()=>setPiModal({contract:c,buyer})} style={{background:"rgba(251,191,36,0.25)",color:"#fde68a",border:"1px solid rgba(251,191,36,0.4)",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>🧾 PI</button>
                           {canManageContracts&&<button onClick={()=>{setEditContract(c);setShowContractForm(true);}} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
                           {canDeleteContracts&&<button onClick={()=>deleteContract(c.id)} style={{background:"rgba(220,38,38,0.3)",color:"#fca5a5",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
