@@ -27,7 +27,10 @@ const SHIP_DOCS = [
 ];
 
 const BC_DOCS = [
-  {key:"bc_ref_copy",   label:"BC Reference Copy",   accept:".pdf", maxMB:3},
+  {key:"bc_ref_copy",        label:"BC Reference Copy",         accept:".pdf", maxMB:3},
+  {key:"bc_swift_copy",      label:"SWIFT / Bank Advice Copy",  accept:".pdf", maxMB:3},
+  {key:"bc_bank_statement",  label:"Bank Statement",            accept:".pdf", maxMB:5},
+  {key:"bc_lc_copy",         label:"LC Copy (if applicable)",   accept:".pdf", maxMB:5},
 ];
 
 const r2Upload = async (folder, docKey, file) => {
@@ -1005,12 +1008,49 @@ function BCDocsModal({bc, canUpload, canDelete, onClose}){
 
   const fmtSize = bytes => bytes<1024*1024?(bytes/1024).toFixed(0)+"KB":(bytes/1024/1024).toFixed(1)+"MB";
 
-  // Build full doc list: BC ref + IRM wise + BRC wise
-  const allDocs = [
-    ...BC_DOCS,
-    ...(bc.irm_entries||[]).map((irm,i) => ({key:`irm_${i}`, label:`IRM Copy — ${irm.irm_no||"IRM #"+(i+1)}`, accept:".pdf", maxMB:3})),
-    ...(bc.brc_entries||[]).map((brc,i) => ({key:`brc_${i}`, label:`BRC Copy — ${brc.brc_no||"BRC #"+(i+1)}`, accept:".pdf", maxMB:3})),
-  ];
+  // Build sectioned doc list
+  const bcLevelDocs = BC_DOCS;
+  const irmDocs = (bc.irm_entries||[]).map((irm,i) => ({
+    key:`irm_${i}`,
+    label:`IRM Copy — ${irm.irm_no||"IRM #"+(i+1)}`,
+    accept:".pdf", maxMB:3,
+    sub: irm.irm_no ? `IRM No: ${irm.irm_no} | Date: ${irm.irm_date||"—"} | Amt: $${irm.irm_amt_usd||0}` : ""
+  }));
+  const brcDocs = (bc.brc_entries||[]).map((brc,i) => ({
+    key:`brc_${i}`,
+    label:`BRC Copy — ${brc.brc_no||"BRC #"+(i+1)}`,
+    accept:".pdf", maxMB:3,
+    sub: brc.brc_no ? `BRC No: ${brc.brc_no} | Date: ${brc.brc_date||"—"} | Amt: $${brc.brc_amt_usd||0}` : ""
+  }));
+  const allDocs = [...bcLevelDocs, ...irmDocs, ...brcDocs];
+
+  const renderDocRow = (doc) => {
+    const uploaded=files[doc.key];
+    const isUploading=uploading[doc.key];
+    const isDeleting=deleting[doc.key];
+    return(
+      <div key={doc.key} style={{background:uploaded?"#f0fdf4":"#f8fafc",border:`1px solid ${uploaded?"#86efac":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{doc.label}</div>
+          {doc.sub&&<div style={{fontSize:10,color:"#0369a1",marginTop:1}}>{doc.sub}</div>}
+          <div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>PDF only · Max {doc.maxMB}MB</div>
+          {uploaded&&<div style={{fontSize:10,color:"#16a34a",marginTop:2}}>✅ {fmtSize(uploaded.size)} · {new Date(uploaded.uploaded).toLocaleDateString("en-IN")}</div>}
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+          {uploaded&&<a href={r2ViewUrl(uploaded.key)} target="_blank" rel="noreferrer" style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none"}}>👁 View</a>}
+          {canUpload&&(
+            <>
+              <input type="file" accept=".pdf" ref={el=>fileRefs.current[doc.key]=el} onChange={e=>{const f=e.target.files[0];if(f)handleUpload(doc.key,f,doc.maxMB);e.target.value="";}} style={{display:"none"}}/>
+              <button onClick={()=>fileRefs.current[doc.key]?.click()} disabled={isUploading} style={{background:uploaded?"#fef3c7":"#dcfce7",color:uploaded?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+                {isUploading?"⏳":uploaded?"🔄 Replace":"⬆ Upload"}
+              </button>
+            </>
+          )}
+          {canDelete&&uploaded&&<button onClick={()=>handleDelete(doc.key)} disabled={isDeleting} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>{isDeleting?"⏳":"🗑"}</button>}
+        </div>
+      </div>
+    );
+  };
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:10}}>
@@ -1026,36 +1066,42 @@ function BCDocsModal({bc, canUpload, canDelete, onClose}){
           <div style={{padding:30,textAlign:"center",color:"#64748b"}}>Loading documents...</div>
         ):(
           <div style={{padding:14}}>
-            <div style={{display:"grid",gap:8}}>
-              {allDocs.map(doc=>{
-                const uploaded=files[doc.key];
-                const isUploading=uploading[doc.key];
-                const isDeleting=deleting[doc.key];
-                return(
-                  <div key={doc.key} style={{background:uploaded?"#f0fdf4":"#f8fafc",border:`1px solid ${uploaded?"#86efac":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{doc.label}</div>
-                      <div style={{fontSize:10,color:"#94a3b8"}}>PDF only · Max {doc.maxMB}MB</div>
-                      {uploaded&&<div style={{fontSize:10,color:"#16a34a",marginTop:2}}>✅ {fmtSize(uploaded.size)} · {new Date(uploaded.uploaded).toLocaleDateString("en-IN")}</div>}
-                    </div>
-                    <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
-                      {uploaded&&<a href={r2ViewUrl(uploaded.key)} target="_blank" rel="noreferrer" style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none"}}>👁 View</a>}
-                      {canUpload&&(
-                        <>
-                          <input type="file" accept=".pdf" ref={el=>fileRefs.current[doc.key]=el} onChange={e=>{const f=e.target.files[0];if(f)handleUpload(doc.key,f,doc.maxMB);e.target.value="";}} style={{display:"none"}}/>
-                          <button onClick={()=>fileRefs.current[doc.key]?.click()} disabled={isUploading} style={{background:uploaded?"#fef3c7":"#dcfce7",color:uploaded?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
-                            {isUploading?"⏳":uploaded?"🔄 Replace":"⬆ Upload"}
-                          </button>
-                        </>
-                      )}
-                      {canDelete&&uploaded&&<button onClick={()=>handleDelete(doc.key)} disabled={isDeleting} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>{isDeleting?"⏳":"🗑"}</button>}
-                    </div>
-                  </div>
-                );
-              })}
+            {/* ── BC Level Documents ── */}
+            <div style={{background:"#1e3a5f",borderRadius:8,padding:"8px 12px",marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:14}}>🏦</span>
+              <span style={{fontWeight:700,color:"#fff",fontSize:12}}>BC Level Documents</span>
+              <span style={{fontSize:10,color:"#93c5fd",marginLeft:"auto"}}>{bcLevelDocs.filter(d=>files[d.key]).length}/{bcLevelDocs.length} uploaded</span>
             </div>
-            <div style={{marginTop:12,padding:"10px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
-              📌 {Object.keys(files).length} of {allDocs.length} documents uploaded
+            <div style={{display:"grid",gap:6,marginBottom:14}}>
+              {bcLevelDocs.map(doc=>renderDocRow(doc))}
+            </div>
+
+            {/* ── IRM-wise Documents ── */}
+            {irmDocs.length>0&&<>
+              <div style={{background:"#0369a1",borderRadius:8,padding:"8px 12px",marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:14}}>📥</span>
+                <span style={{fontWeight:700,color:"#fff",fontSize:12}}>IRM Documents ({irmDocs.length} entries)</span>
+                <span style={{fontSize:10,color:"#bae6fd",marginLeft:"auto"}}>{irmDocs.filter(d=>files[d.key]).length}/{irmDocs.length} uploaded</span>
+              </div>
+              <div style={{display:"grid",gap:6,marginBottom:14}}>
+                {irmDocs.map(doc=>renderDocRow(doc))}
+              </div>
+            </>}
+
+            {/* ── BRC-wise Documents ── */}
+            {brcDocs.length>0&&<>
+              <div style={{background:"#15803d",borderRadius:8,padding:"8px 12px",marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:14}}>✅</span>
+                <span style={{fontWeight:700,color:"#fff",fontSize:12}}>BRC Documents ({brcDocs.length} entries)</span>
+                <span style={{fontSize:10,color:"#bbf7d0",marginLeft:"auto"}}>{brcDocs.filter(d=>files[d.key]).length}/{brcDocs.length} uploaded</span>
+              </div>
+              <div style={{display:"grid",gap:6,marginBottom:14}}>
+                {brcDocs.map(doc=>renderDocRow(doc))}
+              </div>
+            </>}
+
+            <div style={{marginTop:4,padding:"10px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
+              📌 {Object.keys(files).length} of {allDocs.length} total documents uploaded
             </div>
           </div>
         )}
@@ -2335,6 +2381,10 @@ export default function App(){
       ["price_usd","quantity_mt","container_qty"].forEach(k=>{
         if(payload[k]===""||payload[k]===undefined) payload[k]=null;
         else payload[k]=Number(payload[k])||null;
+      });
+      // Convert empty strings to null for UUID fields
+      ["buyer_id","consignee_id"].forEach(k=>{
+        if(!payload[k]||payload[k]==="") payload[k]=null;
       });
       // Convert empty date to null
       if(!payload.contract_date) payload.contract_date=null;
