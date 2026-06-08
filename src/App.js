@@ -2459,10 +2459,8 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate) {
       { content: "Packing", styles: { fontStyle: "bold", fillColor: navy, textColor: white } },
       { content: "Qty (MTS)", styles: { fontStyle: "bold", fillColor: navy, textColor: white, halign: "right" } },
       { content: "Containers", styles: { fontStyle: "bold", fillColor: navy, textColor: white, halign: "center" } },
-      { content: "Unit Price
-(USD)", styles: { fontStyle: "bold", fillColor: navy, textColor: white, halign: "right" } },
-      { content: "Amount
-(USD)", styles: { fontStyle: "bold", fillColor: navy, textColor: white, halign: "right" } },
+      { content: "Unit Price (USD)", styles: { fontStyle: "bold", fillColor: navy, textColor: white, halign: "right" } },
+      { content: "Amount (USD)", styles: { fontStyle: "bold", fillColor: navy, textColor: white, halign: "right" } },
     ]
   ];
 
