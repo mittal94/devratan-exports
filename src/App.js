@@ -1832,18 +1832,19 @@ const WATERMARK_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAGuCAI
 
 
 // ─── Proforma Invoice Modal ────────────────────────────────────────────────────
-function ProformaInvoiceModal({contract, buyer, onClose}) {
+function ProformaInvoiceModal({contract, buyer, onClose, onSave}) {
   const today = new Date();
   const defaultValidity = new Date(today);
   defaultValidity.setDate(today.getDate() + 15);
   const fmt = d => d.toISOString().split("T")[0];
 
   const [piNo, setPiNo] = useState(
+    contract.pi_no ||
     "PI-" + (contract.contract_no || "").replace(/[^A-Z0-9]/gi,"") + "-" +
     String(today.getFullYear()).slice(2) + String(today.getMonth()+1).padStart(2,"0")
   );
-  const [validityDate, setValidityDate] = useState(fmt(defaultValidity));
-  const [advancePct, setAdvancePct] = useState("");
+  const [validityDate, setValidityDate] = useState(contract.pi_validity || fmt(defaultValidity));
+  const [advancePct, setAdvancePct] = useState(contract.pi_advance_pct != null ? String(contract.pi_advance_pct) : "");
 
   const seller = COMPANIES[(contract.seller_company||"devratan")] || COMPANIES.devratan;
   const bank   = BANK_DETAILS[(contract.seller_company||"devratan")] || BANK_DETAILS.devratan;
@@ -1909,7 +1910,11 @@ function ProformaInvoiceModal({contract, buyer, onClose}) {
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
           <button
-            onClick={()=>{ exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePct ? Number(advancePct) : null); onClose(); }}
+            onClick={()=>{
+              exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePct ? Number(advancePct) : null);
+              if (onSave) onSave({ pi_no: piNo, pi_validity: validityDate, pi_advance_pct: advancePct ? Number(advancePct) : null });
+              onClose();
+            }}
             disabled={!piNo.trim()}
             style={{background:"linear-gradient(135deg,#92400e,#d97706)",color:"#fff",border:"none",borderRadius:8,padding:"8px 22px",cursor:"pointer",fontWeight:700,fontSize:13,opacity:piNo.trim()?1:0.5}}
           >
@@ -1927,7 +1932,6 @@ const BANK_DETAILS = {
     bankName: "STATE BANK OF INDIA",
     branch:   "IFB Branch, Indore",
     accNo:    "41289547389",
-    ifsc:     "SBININBB711",
     swift:    "SBININBB711",
     currency: "USD",
   },
@@ -2470,8 +2474,8 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
   // Columns: # | Description | Packing | Qty | Containers | Unit Price | Amount
   // Total must equal pw = 182mm
   // 8 + 52 + 34 + 22 + 26 + 20 + 20 = 182
-  const C = { no:8, desc:52, pack:34, qty:22, cont:26, price:20, amt:20 };
-  // Verify: 8+52+34+22+26+20+20 = 182 ✓
+  const C = { no:8, desc:50, pack:30, qty:20, cont:24, price:22, amt:28 };
+  // Verify: 8+50+30+20+24+22+28 = 182 ✓
 
   const hSt = (extra) => ({
     fontStyle:"bold", fillColor:navy, textColor:white,
@@ -3616,6 +3620,16 @@ export default function App(){
           contract={piModal.contract}
           buyer={piModal.buyer}
           onClose={()=>setPiModal(null)}
+          onSave={async(fields)=>{
+            if(!piModal.contract.id) return;
+            try {
+              await sb(`contracts?id=eq.${piModal.contract.id}`, {
+                method:"PATCH",
+                body: JSON.stringify(fields)
+              });
+              loadAll();
+            } catch(e) { console.error("PI save error",e); }
+          }}
         />
       )}
       {showContractForm&&<ContractFormModal contract={editContract} buyers={buyers} userInfo={userInfo} onSave={saveContract} onClose={()=>{setShowContractForm(false);setEditContract(null);}} saving={saving}/>}
