@@ -2290,8 +2290,7 @@ async function exportContractWord(contract, buyer, consignee) {
     }]
   });
 
-  const buffer = await Packer.toBuffer(doc);
-  const blob = new Blob([buffer], { type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+  const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url; a.download = "Contract_"+(contract.contract_no||"draft")+".docx";
@@ -2564,8 +2563,7 @@ async function exportProformaInvoiceWord(contract, buyer, piNo, validityDate, ad
     }]
   });
 
-  const buffer = await Packer.toBuffer(doc);
-  const blob = new Blob([buffer], {type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+  const blob = await Packer.toBlob(doc);
   const url  = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url; a.download = "PI_"+(piNo||contract.contract_no||"draft")+".docx";
