@@ -2052,8 +2052,7 @@ function exportContractPDF(contract, buyer, consignee) {
     if(it.container_qty && it.container_type) parts.push(it.container_qty+" x "+it.container_type);
     if(it.price_usd) parts.push("USD "+it.price_usd+" per "+(it.price_per||"MTs")+" "+baseTerms);
     return (items.length>1?"("+(i+1)+") ":"")+parts.join(" | ");
-  }).join("
-");
+  }).join("\n");
 
   const totQty = items.reduce((s,it)=>s+n(it.quantity_mt),0);
   const totVal = items.reduce((s,it)=>s+n(it.quantity_mt)*n(it.price_usd),0);
