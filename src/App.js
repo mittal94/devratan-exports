@@ -159,8 +159,14 @@ const dlCSV = (name,csv) => { const blob=new Blob(["\uFEFF"+csv],{type:'text/csv
 
 // ─── PDF Export Helper ───────────────────────────────────────────────────────
 const getDocx = () => {
-  if (window.docx) return window.docx;
-  alert("Word library not loaded. Please refresh and try again.");
+  // docx 7.x UMD exposes window.docx
+  const lib = window.docx || window.DocxJS || window.DOCX;
+  if (lib && lib.Document && lib.Packer) return lib;
+  // Fallback: try to find it anywhere on window
+  const keys = Object.keys(window).filter(k => window[k] && window[k].Packer && window[k].Document);
+  if (keys.length > 0) return window[keys[0]];
+  console.error("docx library not found on window. Keys:", Object.keys(window).filter(k=>k.toLowerCase().includes("doc")));
+  alert("Word library not loaded. Please hard-refresh the page (Ctrl+Shift+R) and try again.");
   return null;
 };
 
@@ -1928,9 +1934,12 @@ function ProformaInvoiceModal({contract, buyer, onClose, onSave}) {
           </button>
           <button
             onClick={()=>{
-              exportProformaInvoiceWord(contract, buyer, piNo, validityDate, advancePct ? Number(advancePct) : null);
-              if (onSave) onSave({ pi_no: piNo, pi_validity: validityDate, pi_advance_pct: advancePct ? Number(advancePct) : null });
-              onClose();
+              exportProformaInvoiceWord(contract, buyer, piNo, validityDate, advancePct ? Number(advancePct) : null)
+                .then(()=>{
+                  if (onSave) onSave({ pi_no: piNo, pi_validity: validityDate, pi_advance_pct: advancePct ? Number(advancePct) : null });
+                  onClose();
+                })
+                .catch(e=>{alert("Word export failed: "+e.message);console.error(e);});
             }}
             disabled={!piNo.trim()}
             style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",color:"#fff",border:"none",borderRadius:8,padding:"8px 22px",cursor:"pointer",fontWeight:700,fontSize:13,opacity:piNo.trim()?1:0.5}}
@@ -4114,7 +4123,7 @@ export default function App(){
                           <span style={{background:sc.bg,color:sc.color,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,textTransform:"capitalize"}}>{c.status}</span>
                           {c.approval_status==="pending"&&<span style={{background:"#fef3c7",color:"#d97706",borderRadius:20,padding:"3px 10px",fontSize:10,fontWeight:700}}>⏳ Pending Approval</span>}
                           <button onClick={()=>exportContractPDF(c,buyer,buyers.find(b=>b.id===c.consignee_id)||null)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📄 PDF</button>
-                          <button onClick={()=>exportContractWord(c,buyer,buyers.find(b=>b.id===c.consignee_id)||null)} style={{background:"rgba(99,179,237,0.25)",color:"#bfdbfe",border:"1px solid rgba(99,179,237,0.4)",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📝 Word</button>
+                          <button onClick={()=>exportContractWord(c,buyer,buyers.find(b=>b.id===c.consignee_id)||null).catch(e=>{alert("Word export failed: "+e.message);console.error(e);})} style={{background:"rgba(99,179,237,0.25)",color:"#bfdbfe",border:"1px solid rgba(99,179,237,0.4)",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📝 Word</button>
                           <button onClick={()=>setPiModal({contract:c,buyer})} style={{background:"rgba(251,191,36,0.25)",color:"#fde68a",border:"1px solid rgba(251,191,36,0.4)",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>🧾 PI</button>
                           {canManageContracts&&<button onClick={()=>{setEditContract(c);setShowContractForm(true);}} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
                           {canDeleteContracts&&<button onClick={()=>deleteContract(c.id)} style={{background:"rgba(220,38,38,0.3)",color:"#fca5a5",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
