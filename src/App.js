@@ -2074,8 +2074,7 @@ function exportContractPDF(contract, buyer, consignee) {
           [{ content: "Price",         styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: "USD "+(items[0].price_usd||"")+" Per "+(items[0].price_per||"MTs")+" "+(contract.delivery_terms||"CIF"), styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
         ]
       : [
-          [{ content: "Items
-("+items.length+" lines)", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: itemsDisplay }],
+          [{ content: "Items\n("+items.length+" lines)", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: itemsDisplay }],
           [{ content: "Total Qty",     styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: totQty+" MTS "+( contract.quantity_tolerance||""), styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
           [{ content: "Total Value",   styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: "USD "+totVal.toLocaleString("en-IN",{minimumFractionDigits:0,maximumFractionDigits:0})+" "+baseTerms, styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
         ]
