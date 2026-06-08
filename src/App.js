@@ -2070,8 +2070,7 @@ function exportContractPDF(contract, buyer, consignee) {
     ...(items.length===1
       ? [
           [{ content: "Packing",       styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: items[0].packing || "" }],
-          [{ content: "Quantity",      styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: (items[0].quantity_mt||"")+" MTS "+(contract.quantity_tolerance||"")+"
-"+(items[0].container_qty&&items[0].container_type?items[0].container_qty+" x "+items[0].container_type:"") }],
+          [{ content: "Quantity",      styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: (items[0].quantity_mt||"")+" MTS "+(contract.quantity_tolerance||"")+"\n"+(items[0].container_qty&&items[0].container_type?items[0].container_qty+" x "+items[0].container_type:"") }],
           [{ content: "Price",         styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: "USD "+(items[0].price_usd||"")+" Per "+(items[0].price_per||"MTs")+" "+(contract.delivery_terms||"CIF"), styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
         ]
       : [
