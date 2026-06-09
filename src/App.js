@@ -788,195 +788,397 @@ function ChangePwdModal({onClose}){
 }
 
 function BCModal({bc,allShips,onSave,onClose,saving}){
-  const mkIRM=()=>({id:Date.now()+Math.random(),irmNo:"",irmDate:"",irmAmtUSD:"",exchangeRate:"",irmAmtINR:0,intermediaryChargesUSD:""});
-  const mkBRC=()=>({id:Date.now()+Math.random(),brcNo:"",brcDate:"",brcAmtUSD:""});
+  // ── Data model ──────────────────────────────────────────────────────────────
+  // IRM: { id, irmNo, irmDate, irmTotalUSD, exchangeRate, irmAmtINR,
+  //         intermediaryChargesUSD,
+  //         allocations: [{ invoiceNo, allocAmt }] }
+  // BRC: { id, brcNo, brcDate, brcAmtUSD, linkedIrmId, linkedInvoiceNo }
+
+  const mkAlloc  = (inv="") => ({ invoiceNo:inv, allocAmt:"" });
+  const mkIRM    = ()        => ({ id:Date.now()+Math.random(), irmNo:"", irmDate:"",
+                                   irmTotalUSD:"", exchangeRate:"", irmAmtINR:0,
+                                   intermediaryChargesUSD:"",
+                                   allocations:[mkAlloc()] });
+  const mkBRC    = ()        => ({ id:Date.now()+Math.random(), brcNo:"", brcDate:"",
+                                   brcAmtUSD:"", linkedIrmId:"", linkedInvoiceNo:"" });
+
   const [form,setForm]=useState(()=>{
-    if(bc){return{...bc,irm_entries:bc.irm_entries?.map(i=>({id:i.id,irmNo:i.irm_no,irmDate:i.irm_date,irmAmtUSD:i.irm_amt_usd,exchangeRate:i.exchange_rate,irmAmtINR:i.irm_amt_inr,intermediaryChargesUSD:i.intermediary_charges_usd||0}))||[mkIRM()],brc_entries:bc.brc_entries?.map(b=>({id:b.id,brcNo:b.brc_no,brcDate:b.brc_date,brcAmtUSD:b.brc_amt_usd}))||[mkBRC()]};}
-    return{id:null,bank_name:"SBI",bc_no:"",bc_date:"",linked_invoices:[],irm_entries:[mkIRM()],brc_entries:[mkBRC()],total_amt_usd:0,total_amt_inr:0};
+    if(bc){
+      return{
+        ...bc,
+        bc_amount_usd: bc.bc_amount_usd||"",
+        irm_entries: (bc.irm_entries||[]).map(i=>({
+          id: i.id, irmNo:i.irm_no||"", irmDate:i.irm_date||"",
+          irmTotalUSD: i.irm_total_usd||i.irm_amt_usd||"",
+          exchangeRate: i.exchange_rate||"", irmAmtINR: i.irm_amt_inr||0,
+          intermediaryChargesUSD: i.intermediary_charges_usd||"",
+          allocations: (i.allocations||[]).length
+            ? i.allocations
+            : [{invoiceNo:(bc.linked_invoices||[])[0]||"", allocAmt:i.irm_amt_usd||""}],
+        }))||[mkIRM()],
+        brc_entries: (bc.brc_entries||[]).map(b=>({
+          id:b.id, brcNo:b.brc_no||"", brcDate:b.brc_date||"",
+          brcAmtUSD:b.brc_amt_usd||"",
+          linkedIrmId:b.linked_irm_id||"",
+          linkedInvoiceNo:b.linked_invoice_no||"",
+        }))||[mkBRC()],
+      };
+    }
+    return{id:null,bank_name:"SBI",bc_no:"",bc_date:"",bc_amount_usd:"",
+           linked_invoices:[],irm_entries:[mkIRM()],brc_entries:[mkBRC()],
+           total_amt_usd:0,total_amt_inr:0};
   });
+
   const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const updIRM=(id,k,v)=>setForm(f=>({...f,irm_entries:f.irm_entries.map(i=>{if(i.id!==id)return i;const u={...i,[k]:v};if(k==="irmAmtUSD"||k==="exchangeRate")u.irmAmtINR=n(k==="irmAmtUSD"?v:u.irmAmtUSD)*n(k==="exchangeRate"?v:u.exchangeRate);return u;})}));
-  const updBRC=(id,k,v)=>setForm(f=>({...f,brc_entries:f.brc_entries.map(b=>b.id!==id?b:{...b,[k]:v})}));
-  const togInv=inv=>sf("linked_invoices",form.linked_invoices?.includes(inv)?form.linked_invoices.filter(x=>x!==inv):[...(form.linked_invoices||[]),inv]);
-  const totUSD=form.irm_entries?.reduce((s,i)=>s+n(i.irmAmtUSD)+n(i.intermediaryChargesUSD),0)||0;
-  const totINR=form.irm_entries?.reduce((s,i)=>s+n(i.irmAmtINR),0)||0;
-  const save=()=>{if(!form.bc_no){alert("BC No required.");return;}onSave({...form,total_amt_usd:totUSD,total_amt_inr:totINR});};
+  const togInv=inv=>sf("linked_invoices",
+    form.linked_invoices?.includes(inv)
+      ? form.linked_invoices.filter(x=>x!==inv)
+      : [...(form.linked_invoices||[]),inv]);
+
+  // IRM helpers
+  const updIRM=(id,k,v)=>setForm(f=>({...f,irm_entries:f.irm_entries.map(irm=>{
+    if(irm.id!==id) return irm;
+    const u={...irm,[k]:v};
+    if(k==="irmTotalUSD"||k==="exchangeRate")
+      u.irmAmtINR=n(k==="irmTotalUSD"?v:u.irmTotalUSD)*n(k==="exchangeRate"?v:u.exchangeRate);
+    return u;
+  })}));
+  const updAlloc=(irmId,aIdx,k,v)=>setForm(f=>({...f,irm_entries:f.irm_entries.map(irm=>{
+    if(irm.id!==irmId) return irm;
+    const allocs=[...irm.allocations];
+    allocs[aIdx]={...allocs[aIdx],[k]:v};
+    return {...irm,allocations:allocs};
+  })}));
+  const addAlloc=(irmId)=>setForm(f=>({...f,irm_entries:f.irm_entries.map(irm=>
+    irm.id!==irmId ? irm : {...irm,allocations:[...irm.allocations,mkAlloc()]})}));
+  const remAlloc=(irmId,aIdx)=>setForm(f=>({...f,irm_entries:f.irm_entries.map(irm=>
+    irm.id!==irmId ? irm : {...irm,allocations:irm.allocations.filter((_,i)=>i!==aIdx)})}));
+
+  // BRC helpers
+  const updBRC=(id,k,v)=>setForm(f=>({...f,brc_entries:f.brc_entries.map(b=>
+    b.id!==id?b:{...b,[k]:v})}));
+
+  // Computed totals
+  const totIRMusd = form.irm_entries?.reduce((s,i)=>s+n(i.irmTotalUSD),0)||0;
+  const totIRMinr = form.irm_entries?.reduce((s,i)=>s+n(i.irmAmtINR),0)||0;
+  const totBRCusd = form.brc_entries?.reduce((s,b)=>s+n(b.brcAmtUSD),0)||0;
+  const bcAmt     = n(form.bc_amount_usd)||0;
+
+  // IRM utilisation per IRM
+  const irmUtilised = (irm) => (irm.allocations||[]).reduce((s,a)=>s+n(a.allocAmt),0);
+  const irmBalance  = (irm) => n(irm.irmTotalUSD) - irmUtilised(irm);
+
+  // Linked invoice options (only invoices selected in linked_invoices)
+  const linkedInvShips = allShips.filter(s=>(form.linked_invoices||[]).includes(s.invoice_no));
+
+  const save=()=>{
+    if(!form.bc_no){alert("BC No required.");return;}
+    onSave({...form, total_amt_usd:totIRMusd, total_amt_inr:totIRMinr});
+  };
+
+  const labelStyle={fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3};
+  const sectionBg={background:"#1e3a5f",borderRadius:8,padding:"8px 14px",
+                   color:"#fff",fontWeight:700,fontSize:13,marginBottom:10,marginTop:14,
+                   display:"flex",justifyContent:"space-between",alignItems:"center"};
+
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:12}}>
-      <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:820,maxHeight:"95vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><h3 style={{margin:0,color:"#1e3a5f",fontSize:17}}>{bc?"Edit":"Create"} Bill Collection</h3><button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>X</button></div>
-        <SH t="Bank Details"/>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-          <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Bank</label><select value={form.bank_name||"SBI"} onChange={e=>sf("bank_name",e.target.value)} style={iS}>{BANKS.map(b=><option key={b}>{b}</option>)}</select></div>
-          <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>BC No *</label><input value={form.bc_no||""} onChange={e=>sf("bc_no",e.target.value)} style={iS}/></div>
-          <div><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>BC Date</label><input type="date" value={form.bc_date||""} onChange={e=>sf("bc_date",e.target.value)} style={iS}/></div>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",
+                 alignItems:"center",justifyContent:"center",zIndex:200,padding:12}}>
+      <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:860,
+                   maxHeight:"95vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h3 style={{margin:0,color:"#1e3a5f",fontSize:17}}>{bc?"Edit":"Create"} Bill Collection</h3>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,
+                                           padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
         </div>
-        <SH t="Linked Invoices"/>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>{allShips.map(s=>{const lk=form.linked_invoices?.includes(s.invoice_no);return<button key={s.id} onClick={()=>togInv(s.invoice_no)} style={{background:lk?"#1e3a5f":"#f1f5f9",color:lk?"#fff":"#64748b",border:lk?"none":"1px solid #e2e8f0",borderRadius:20,padding:"4px 12px",cursor:"pointer",fontSize:12,fontWeight:lk?700:400}}>{s.invoice_no}</button>;})}</div>
-        <SH t="IRM Entries"/>
-        {form.irm_entries?.map((irm,idx)=>(
-          <div key={irm.id} style={{background:"#f8fafc",borderRadius:10,padding:14,marginBottom:10,border:"1px solid #e2e8f0"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{fontWeight:700,color:"#1e3a5f",fontSize:13}}>IRM #{idx+1}</span>{form.irm_entries.length>1&&<button onClick={()=>setForm(f=>({...f,irm_entries:f.irm_entries.filter(i=>i.id!==irm.id)}))} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>Remove</button>}</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-              {[["irmNo","IRM No","text"],["irmDate","IRM Date","date"],["irmAmtUSD","IRM Amt (USD)","number"],["exchangeRate","Exchange Rate","number"],["intermediaryChargesUSD","Intermediary Charges (USD)","number"]].map(([k,l,t])=><div key={k}><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label><input type={t} value={irm[k]||""} onChange={e=>updIRM(irm.id,k,e.target.value)} style={iS} step={t==="number"?"any":undefined}/></div>)}
-              <div><label style={{fontSize:11.5,fontWeight:600,color:"#0369a1",display:"block",marginBottom:3}}>IRM Amt (INR) Auto</label><input readOnly value={fR(irm.irmAmtINR||0)} style={cS}/></div>
+
+        {/* ── BC Details ── */}
+        <div style={sectionBg}>
+          <span>📋 BC Details</span>
+          {bcAmt>0&&<span style={{fontSize:11,color:"#93c5fd"}}>BC Amount: USD {fU(bcAmt)}</span>}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,marginBottom:4}}>
+          <div><label style={labelStyle}>Bank</label>
+            <select value={form.bank_name||"SBI"} onChange={e=>sf("bank_name",e.target.value)} style={iS}>
+              {BANKS.map(b=><option key={b}>{b}</option>)}
+            </select>
+          </div>
+          <div><label style={labelStyle}>BC No *</label>
+            <input value={form.bc_no||""} onChange={e=>sf("bc_no",e.target.value)} style={iS}/>
+          </div>
+          <div><label style={labelStyle}>BC Date</label>
+            <input type="date" value={form.bc_date||""} onChange={e=>sf("bc_date",e.target.value)} style={iS}/>
+          </div>
+          <div><label style={labelStyle}>BC Amount (USD)</label>
+            <input type="number" step="any" value={form.bc_amount_usd||""}
+                   onChange={e=>sf("bc_amount_usd",e.target.value)} style={iS}
+                   placeholder="Total lodged amount"/>
+          </div>
+        </div>
+
+        {/* ── Linked Invoices ── */}
+        <div style={sectionBg}>
+          <span>🔗 Linked Invoices (Shipments)</span>
+          <span style={{fontSize:11,color:"#93c5fd"}}>{(form.linked_invoices||[]).length} selected</span>
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:4}}>
+          {allShips.map(s=>{
+            const lk=form.linked_invoices?.includes(s.invoice_no);
+            const invAmt = s.qty && s.rate_per_mt ? n(s.qty)*n(s.rate_per_mt) : 0;
+            return(
+              <button key={s.id} onClick={()=>togInv(s.invoice_no)}
+                style={{background:lk?"#1e3a5f":"#f1f5f9",color:lk?"#fff":"#64748b",
+                        border:lk?"2px solid #3b82f6":"1px solid #e2e8f0",
+                        borderRadius:8,padding:"5px 12px",cursor:"pointer",
+                        fontSize:12,fontWeight:lk?700:400,textAlign:"left"}}>
+                <div style={{fontWeight:700}}>{s.invoice_no}</div>
+                {invAmt>0&&<div style={{fontSize:10,opacity:0.8}}>USD {invAmt.toLocaleString("en-IN",{maximumFractionDigits:0})}</div>}
+              </button>
+            );
+          })}
+        </div>
+        {/* Total of linked invoices */}
+        {(form.linked_invoices||[]).length>0&&(()=>{
+          const total=allShips
+            .filter(s=>form.linked_invoices.includes(s.invoice_no))
+            .reduce((sum,s)=>sum+n(s.qty)*n(s.rate_per_mt),0);
+          return total>0&&(
+            <div style={{background:"#eff6ff",borderRadius:6,padding:"6px 12px",
+                         marginBottom:4,fontSize:12,color:"#1d4ed8"}}>
+              Combined Invoice Value: <strong>USD {fU(total)}</strong>
             </div>
-          </div>
-        ))}
-        <button onClick={()=>setForm(f=>({...f,irm_entries:[...f.irm_entries,mkIRM()]}))} style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600,marginBottom:4}}>+ Add IRM</button>
-        <SH t="BRC Entries"/>
-        {form.brc_entries?.map((brc,idx)=>(
-          <div key={brc.id} style={{background:"#f8fafc",borderRadius:10,padding:14,marginBottom:10,border:"1px solid #e2e8f0"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{fontWeight:700,color:"#1e3a5f",fontSize:13}}>BRC #{idx+1}</span>{form.brc_entries.length>1&&<button onClick={()=>setForm(f=>({...f,brc_entries:f.brc_entries.filter(b=>b.id!==brc.id)}))} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>Remove</button>}</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>{[["brcNo","BRC No","text"],["brcDate","BRC Date","date"],["brcAmtUSD","BRC Amt (USD)","number"]].map(([k,l,t])=><div key={k}><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label><input type={t} value={brc[k]||""} onChange={e=>updBRC(brc.id,k,e.target.value)} style={iS} step={t==="number"?"any":undefined}/></div>)}</div>
-          </div>
-        ))}
-        <button onClick={()=>setForm(f=>({...f,brc_entries:[...f.brc_entries,mkBRC()]}))} style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>+ Add BRC</button>
-        <div style={{background:"#1e3a5f",borderRadius:10,padding:14,marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div><div style={{fontSize:11,color:"#94a3b8",marginBottom:2}}>Total Received (USD)</div><div style={{fontSize:20,fontWeight:700,color:"#fff"}}>{fU(totUSD)}</div></div>
-          <div><div style={{fontSize:11,color:"#94a3b8",marginBottom:2}}>Total Received (INR)</div><div style={{fontSize:20,fontWeight:700,color:"#86efac"}}>{fR(totINR)}</div></div>
-        </div>
-        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20}}>
-          <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
-          <button onClick={save} disabled={saving} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 24px",cursor:"pointer",fontWeight:700}}>{saving?"Saving...":"Save BC"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+          );
+        })()}
 
-
-// ─── Ship Documents Modal ────────────────────────────────────────────────────
-function ShipDocsModal({shipment, canUpload, canDelete, onClose}){
-  const [files, setFiles] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState({});
-  const [deleting, setDeleting] = useState({});
-  const fileRefs = useRef({});
-  const folder = `shipments/${shipment.invoice_no}`;
-
-  const loadFiles = async () => {
-    setLoading(true);
-    try {
-      const list = await r2List(folder);
-      const map = {};
-      list.forEach(f => { map[f.docType] = f; });
-      setFiles(map);
-    } catch(e) { console.error(e); }
-    setLoading(false);
-  };
-
-  useEffect(() => { loadFiles(); }, []);
-
-  const handleUpload = async (docKey, file, maxMB, accept) => {
-    // Validate format
-    const ext = "."+file.name.split(".").pop().toLowerCase();
-    const allowed = accept.split(",");
-    if(!allowed.includes(ext)) { alert(`Invalid format. Allowed: ${accept}`); return; }
-    // Validate size
-    if(file.size > maxMB*1024*1024) { alert(`File too large. Max size: ${maxMB}MB`); return; }
-    setUploading(u => ({...u, [docKey]:true}));
-    try {
-      // Delete old if exists
-      if(files[docKey]) await r2Delete(files[docKey].key);
-      await r2Upload(folder, docKey, file);
-      await loadFiles();
-    } catch(e) { alert("Upload failed: "+e.message); }
-    setUploading(u => ({...u, [docKey]:false}));
-  };
-
-  const handleDelete = async (docKey) => {
-    if(!window.confirm("Delete this document?")) return;
-    setDeleting(d => ({...d, [docKey]:true}));
-    try {
-      await r2Delete(files[docKey].key);
-      await loadFiles();
-    } catch(e) { alert("Delete failed: "+e.message); }
-    setDeleting(d => ({...d, [docKey]:false}));
-  };
-
-  const fmtSize = bytes => bytes < 1024*1024 ? (bytes/1024).toFixed(0)+"KB" : (bytes/1024/1024).toFixed(1)+"MB";
-
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:10}}>
-      <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:640,maxHeight:"95vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
-        <div style={{background:"linear-gradient(135deg,#1e3a5f,#1e5799)",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
-          <div>
-            <div style={{fontWeight:700,color:"#fff",fontSize:14}}>📁 Documents — {shipment.invoice_no}</div>
-            <div style={{fontSize:11,color:"#93c5fd"}}>{shipment.buyer_name} · {shipment.invoice_date}</div>
-          </div>
-          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
+        {/* ── IRM Entries ── */}
+        <div style={sectionBg}>
+          <span>📥 IRM Entries</span>
+          <span style={{fontSize:11,color:"#93c5fd"}}>Total Received: USD {fU(totIRMusd)}</span>
         </div>
 
-        {loading ? (
-          <div style={{padding:30,textAlign:"center",color:"#64748b"}}>Loading documents...</div>
-        ) : (
-          <div style={{padding:14}}>
-            <div style={{display:"grid",gap:8}}>
-              {SHIP_DOCS.map(doc => {
-                const uploaded = files[doc.key];
-                const isUploading = uploading[doc.key];
-                const isDeleting = deleting[doc.key];
-                return(
-                  <div key={doc.key} style={{background:uploaded?"#f0fdf4":"#f8fafc",border:`1px solid ${uploaded?"#86efac":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{doc.label}</div>
-                      <div style={{fontSize:10,color:"#94a3b8"}}>{doc.accept.replace(/\./g,"").toUpperCase()} · Max {doc.maxMB}MB</div>
-                      {uploaded && (
-                        <div style={{fontSize:10,color:"#16a34a",marginTop:2}}>
-                          ✅ {fmtSize(uploaded.size)} · {new Date(uploaded.uploaded).toLocaleDateString("en-IN")}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
-                      {uploaded && (
-                        <a href={r2ViewUrl(uploaded.key)} target="_blank" rel="noreferrer" style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none"}}>
-                          👁 View
-                        </a>
-                      )}
-                      {canUpload && (
-                        <>
-                          <input
-                            type="file"
-                            accept={doc.accept}
-                            ref={el => fileRefs.current[doc.key]=el}
-                            onChange={e => { const f=e.target.files[0]; if(f) handleUpload(doc.key,f,doc.maxMB,doc.accept); e.target.value=""; }}
-                            style={{display:"none"}}
-                          />
-                          <button
-                            onClick={() => fileRefs.current[doc.key]?.click()}
-                            disabled={isUploading}
-                            style={{background:uploaded?"#fef3c7":"#dcfce7",color:uploaded?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}
-                          >
-                            {isUploading?"⏳":uploaded?"🔄 Replace":"⬆ Upload"}
-                          </button>
-                        </>
-                      )}
-                      {canDelete && uploaded && (
-                        <button
-                          onClick={() => handleDelete(doc.key)}
-                          disabled={isDeleting}
-                          style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}
-                        >
-                          {isDeleting?"⏳":"🗑"}
-                        </button>
-                      )}
-                    </div>
+        {form.irm_entries?.map((irm,idx)=>{
+          const util    = irmUtilised(irm);
+          const balance = irmBalance(irm);
+          const isOver  = balance < -0.01;
+          return(
+            <div key={irm.id} style={{background:"#f8fafc",borderRadius:10,padding:14,
+                                      marginBottom:12,border:`1px solid ${isOver?"#fca5a5":"#e2e8f0"}`}}>
+              {/* IRM header */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span style={{fontWeight:700,color:"#1e3a5f",fontSize:13}}>IRM #{idx+1}</span>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  {n(irm.irmTotalUSD)>0&&(
+                    <span style={{fontSize:11,fontWeight:600,
+                                  color:isOver?"#dc2626":balance>0.01?"#0369a1":"#16a34a"}}>
+                      {isOver?"⚠️ Over-allocated":"Balance: USD "+fU(balance)}
+                    </span>
+                  )}
+                  {form.irm_entries.length>1&&(
+                    <button onClick={()=>setForm(f=>({...f,irm_entries:f.irm_entries.filter(i=>i.id!==irm.id)}))}
+                      style={{background:"#fee2e2",color:"#dc2626",border:"none",
+                              borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>Remove</button>
+                  )}
+                </div>
+              </div>
+
+              {/* IRM core fields */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:10,marginBottom:12}}>
+                {[["irmNo","IRM No","text"],["irmDate","IRM Date","date"],
+                  ["irmTotalUSD","Total IRM Amt (USD)","number"],
+                  ["exchangeRate","Exchange Rate","number"],
+                  ["intermediaryChargesUSD","Intermediary Charges","number"]
+                ].map(([k,l,t])=>(
+                  <div key={k}>
+                    <label style={labelStyle}>{l}</label>
+                    <input type={t} value={irm[k]||""} onChange={e=>updIRM(irm.id,k,e.target.value)}
+                           style={iS} step={t==="number"?"any":undefined}/>
                   </div>
-                );
-              })}
+                ))}
+                <div>
+                  <label style={{...labelStyle,color:"#0369a1"}}>IRM Amt (INR) — Auto</label>
+                  <input readOnly value={fR(irm.irmAmtINR||0)} style={cS}/>
+                </div>
+              </div>
+
+              {/* Allocations */}
+              {n(irm.irmTotalUSD)>0&&(
+                <>
+                  <div style={{fontSize:11.5,fontWeight:700,color:"#1e3a5f",
+                                marginBottom:6,borderTop:"1px solid #e2e8f0",paddingTop:8}}>
+                    Allocate IRM to Invoices
+                    <span style={{fontWeight:400,color:"#64748b",marginLeft:8,fontSize:11}}>
+                      Total IRM: USD {fU(n(irm.irmTotalUSD))} · Allocated: USD {fU(util)}
+                    </span>
+                  </div>
+                  {(irm.allocations||[]).map((alloc,aIdx)=>(
+                    <div key={aIdx} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",
+                                            gap:8,marginBottom:6,alignItems:"flex-end"}}>
+                      <div>
+                        <label style={labelStyle}>Invoice (Shipment)</label>
+                        <select value={alloc.invoiceNo||""} onChange={e=>updAlloc(irm.id,aIdx,"invoiceNo",e.target.value)} style={iS}>
+                          <option value="">-- Select Invoice --</option>
+                          {(linkedInvShips.length>0?linkedInvShips:allShips).map(s=>(
+                            <option key={s.id} value={s.invoice_no}>{s.invoice_no}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Amount to Allocate (USD)</label>
+                        <input type="number" step="any" value={alloc.allocAmt||""}
+                               onChange={e=>updAlloc(irm.id,aIdx,"allocAmt",e.target.value)}
+                               style={iS} placeholder="e.g. 100.00"/>
+                      </div>
+                      <div style={{paddingBottom:2}}>
+                        {aIdx===0
+                          ? <button onClick={()=>addAlloc(irm.id)}
+                              style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
+                                      borderRadius:6,padding:"7px 12px",cursor:"pointer",fontSize:12}}>
+                              + Add
+                            </button>
+                          : <button onClick={()=>remAlloc(irm.id,aIdx)}
+                              style={{background:"#fee2e2",color:"#dc2626",border:"none",
+                                      borderRadius:6,padding:"7px 10px",cursor:"pointer",fontSize:12}}>
+                              ✕
+                            </button>
+                        }
+                      </div>
+                    </div>
+                  ))}
+                  {/* Balance bar */}
+                  {n(irm.irmTotalUSD)>0&&(
+                    <div style={{background:isOver?"#fee2e2":balance<0.01?"#dcfce7":"#eff6ff",
+                                 borderRadius:6,padding:"5px 10px",fontSize:11,
+                                 color:isOver?"#dc2626":balance<0.01?"#16a34a":"#1d4ed8",fontWeight:600}}>
+                      {isOver
+                        ? "⚠️ Over-allocated by USD "+fU(Math.abs(balance))
+                        : balance<0.01
+                          ? "✅ Fully Allocated"
+                          : "Unutilised Balance: USD "+fU(balance)}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-            <div style={{marginTop:12,padding:"10px 12px",background:"#eff6ff",borderRadius:8,fontSize:11,color:"#1d4ed8"}}>
-              📌 {Object.keys(files).length} of {SHIP_DOCS.length} documents uploaded
+          );
+        })}
+        <button onClick={()=>setForm(f=>({...f,irm_entries:[...f.irm_entries,mkIRM()]}))}
+          style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
+                  borderRadius:6,padding:"5px 12px",cursor:"pointer",
+                  fontSize:12,fontWeight:600,marginBottom:4}}>
+          + Add IRM
+        </button>
+
+        {/* ── BRC Entries ── */}
+        <div style={sectionBg}>
+          <span>✅ BRC Entries</span>
+          <span style={{fontSize:11,color:"#93c5fd"}}>Total BRC: USD {fU(totBRCusd)}</span>
+        </div>
+
+        {form.brc_entries?.map((brc,idx)=>{
+          // Find the linked IRM to show its allocations as invoice options
+          const linkedIRM = form.irm_entries.find(i=>String(i.id)===String(brc.linkedIrmId));
+          const invOptions = linkedIRM
+            ? (linkedIRM.allocations||[]).filter(a=>a.invoiceNo)
+            : [];
+          // Show allocated amount for chosen invoice in chosen IRM
+          const chosenAlloc = invOptions.find(a=>a.invoiceNo===brc.linkedInvoiceNo);
+          return(
+            <div key={brc.id} style={{background:"#f8fafc",borderRadius:10,padding:14,
+                                      marginBottom:10,border:"1px solid #e2e8f0"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span style={{fontWeight:700,color:"#1e3a5f",fontSize:13}}>BRC #{idx+1}</span>
+                {chosenAlloc&&n(chosenAlloc.allocAmt)>0&&(
+                  <span style={{fontSize:11,color:"#0369a1",fontWeight:600}}>
+                    IRM allocation for this invoice: USD {fU(n(chosenAlloc.allocAmt))}
+                  </span>
+                )}
+                {form.brc_entries.length>1&&(
+                  <button onClick={()=>setForm(f=>({...f,brc_entries:f.brc_entries.filter(b=>b.id!==brc.id)}))}
+                    style={{background:"#fee2e2",color:"#dc2626",border:"none",
+                            borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>Remove</button>
+                )}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:10}}>
+                {/* Link to IRM */}
+                <div>
+                  <label style={labelStyle}>Linked IRM</label>
+                  <select value={String(brc.linkedIrmId||"")}
+                          onChange={e=>updBRC(brc.id,"linkedIrmId",e.target.value)} style={iS}>
+                    <option value="">-- Select IRM --</option>
+                    {form.irm_entries.map((irm,i)=>(
+                      <option key={irm.id} value={String(irm.id)}>
+                        {irm.irmNo||"IRM #"+(i+1)}{irm.irmTotalUSD?" (USD "+fU(n(irm.irmTotalUSD))+")":""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {/* Invoice from that IRM's allocations */}
+                <div>
+                  <label style={labelStyle}>Invoice</label>
+                  <select value={brc.linkedInvoiceNo||""}
+                          onChange={e=>updBRC(brc.id,"linkedInvoiceNo",e.target.value)} style={iS}>
+                    <option value="">-- Select Invoice --</option>
+                    {invOptions.map(a=>(
+                      <option key={a.invoiceNo} value={a.invoiceNo}>
+                        {a.invoiceNo} (USD {fU(n(a.allocAmt))})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div><label style={labelStyle}>BRC No</label>
+                  <input value={brc.brcNo||""} onChange={e=>updBRC(brc.id,"brcNo",e.target.value)} style={iS}/>
+                </div>
+                <div><label style={labelStyle}>BRC Date</label>
+                  <input type="date" value={brc.brcDate||""} onChange={e=>updBRC(brc.id,"brcDate",e.target.value)} style={iS}/>
+                </div>
+                <div><label style={labelStyle}>BRC Amt (USD)</label>
+                  <input type="number" step="any" value={brc.brcAmtUSD||""}
+                         onChange={e=>updBRC(brc.id,"brcAmtUSD",e.target.value)} style={iS}/>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })}
+        <button onClick={()=>setForm(f=>({...f,brc_entries:[...f.brc_entries,mkBRC()]}))}
+          style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
+                  borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+          + Add BRC
+        </button>
+
+        {/* ── Summary bar ── */}
+        <div style={{background:"#1e3a5f",borderRadius:10,padding:14,marginTop:16,
+                     display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12}}>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>BC Amount (USD)</div>
+               <div style={{fontSize:16,fontWeight:700,color:"#fde68a"}}>{bcAmt>0?fU(bcAmt):"—"}</div></div>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>Total IRM Recd (USD)</div>
+               <div style={{fontSize:16,fontWeight:700,color:"#fff"}}>{fU(totIRMusd)}</div></div>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>Total IRM (INR)</div>
+               <div style={{fontSize:16,fontWeight:700,color:"#86efac"}}>{fR(totIRMinr)}</div></div>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>Total BRC (USD)</div>
+               <div style={{fontSize:16,fontWeight:700,color:"#7dd3fc"}}>{fU(totBRCusd)}</div></div>
+        </div>
+
+        {/* ── Actions ── */}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20}}>
+          <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",
+                                           borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>
+            Cancel
+          </button>
+          <button onClick={save} disabled={saving}
+            style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",color:"#fff",border:"none",
+                    borderRadius:8,padding:"8px 24px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+            {saving?"Saving…":"💾 Save BC"}
+          </button>
+        </div>
+
       </div>
     </div>
   );
 }
 
-// ─── BC Documents Modal ──────────────────────────────────────────────────────
+
 function BCDocsModal({bc, canUpload, canDelete, onClose}){
   const [files, setFiles] = useState({});
   const [loading, setLoading] = useState(true);
@@ -3783,15 +3985,32 @@ export default function App(){
       let bcId=bc.id;
       const isExisting=bcs.find(b=>b.id===bc.id);
       if(isExisting){
-        await sb(`bill_collections?id=eq.${bc.id}`,{method:"PATCH",body:JSON.stringify({bank_name:bcData.bank_name,bc_no:bcData.bc_no,bc_date:bcData.bc_date,linked_invoices:bcData.linked_invoices,total_amt_usd:bcData.total_amt_usd,total_amt_inr:bcData.total_amt_inr})});
+        await sb(`bill_collections?id=eq.${bc.id}`,{method:"PATCH",body:JSON.stringify({bank_name:bcData.bank_name,bc_no:bcData.bc_no,bc_date:bcData.bc_date,bc_amount_usd:n(bcData.bc_amount_usd)||null,linked_invoices:bcData.linked_invoices,total_amt_usd:bcData.total_amt_usd,total_amt_inr:bcData.total_amt_inr})});
         await sb(`irm_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});
         await sb(`brc_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});
       }else{
-        const res=await sb("bill_collections",{method:"POST",body:JSON.stringify({bank_name:bcData.bank_name,bc_no:bcData.bc_no,bc_date:bcData.bc_date,linked_invoices:bcData.linked_invoices,total_amt_usd:bcData.total_amt_usd,total_amt_inr:bcData.total_amt_inr})});
+        const res=await sb("bill_collections",{method:"POST",body:JSON.stringify({bank_name:bcData.bank_name,bc_no:bcData.bc_no,bc_date:bcData.bc_date,bc_amount_usd:n(bcData.bc_amount_usd)||null,linked_invoices:bcData.linked_invoices,total_amt_usd:bcData.total_amt_usd,total_amt_inr:bcData.total_amt_inr})});
         bcId=res[0]?.id;
       }
-      if(irm_entries?.length){await sb("irm_entries",{method:"POST",body:JSON.stringify(irm_entries.map(i=>({bc_id:bcId,irm_no:i.irmNo||i.irm_no||"",irm_date:i.irmDate||i.irm_date||null,irm_amt_usd:n(i.irmAmtUSD||i.irm_amt_usd),exchange_rate:n(i.exchangeRate||i.exchange_rate),irm_amt_inr:n(i.irmAmtINR||i.irm_amt_inr),intermediary_charges_usd:n(i.intermediaryChargesUSD||i.intermediary_charges_usd||0)})))});}
-      if(brc_entries?.length){await sb("brc_entries",{method:"POST",body:JSON.stringify(brc_entries.map(b=>({bc_id:bcId,brc_no:b.brcNo||b.brc_no||"",brc_date:b.brcDate||b.brc_date||null,brc_amt_usd:n(b.brcAmtUSD||b.brc_amt_usd)})))});}
+      if(irm_entries?.length){await sb("irm_entries",{method:"POST",body:JSON.stringify(irm_entries.map(i=>({
+        bc_id:bcId,
+        irm_no:i.irmNo||i.irm_no||"",
+        irm_date:i.irmDate||i.irm_date||null,
+        irm_total_usd:n(i.irmTotalUSD||i.irm_total_usd||i.irmAmtUSD||i.irm_amt_usd),
+        irm_amt_usd:n(i.irmTotalUSD||i.irm_total_usd||i.irmAmtUSD||i.irm_amt_usd),
+        exchange_rate:n(i.exchangeRate||i.exchange_rate),
+        irm_amt_inr:n(i.irmAmtINR||i.irm_amt_inr),
+        intermediary_charges_usd:n(i.intermediaryChargesUSD||i.intermediary_charges_usd||0),
+        allocations:i.allocations||[],
+      })))});}
+      if(brc_entries?.length){await sb("brc_entries",{method:"POST",body:JSON.stringify(brc_entries.map(b=>({
+        bc_id:bcId,
+        brc_no:b.brcNo||b.brc_no||"",
+        brc_date:b.brcDate||b.brc_date||null,
+        brc_amt_usd:n(b.brcAmtUSD||b.brc_amt_usd),
+        linked_irm_id:b.linkedIrmId||b.linked_irm_id||null,
+        linked_invoice_no:b.linkedInvoiceNo||b.linked_invoice_no||null,
+      })))});}
       await loadAll();setShowBC(false);setEditBC(null);
     }catch(e){alert("Error saving BC: "+e.message);}
     setSaving(false);
