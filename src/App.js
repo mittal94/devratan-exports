@@ -1055,7 +1055,7 @@ function BCModal({bc, allShips, allBCs, allIRMs, allBRCs, onSave, onClose, savin
 
 
 // ─── IRM Modal ─────────────────────────────────────────────────────────────────
-function IRMModal({irm, bcId, bcList, allIRMs, onSave, onClose, saving}){
+function IRMModal({irm, allIRMs, onSave, onClose, saving}){
   const [form,setForm]=useState({
     id:       irm?.id||null,
     irm_no:   irm?.irm_no||"",
@@ -1065,16 +1065,11 @@ function IRMModal({irm, bcId, bcList, allIRMs, onSave, onClose, saving}){
     irm_amt_inr:   irm?.irm_amt_inr||0,
     intermediary_charges_usd: irm?.intermediary_charges_usd||"",
   });
-  const [selectedBcId, setSelectedBcId] = useState(bcId||"");
   const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
 
-  const autoINR=(irmUSD, exRate)=>setForm(f=>({...f,
-    irm_amt_inr:n(irmUSD)*n(exRate)
-  }));
+  const autoINR=(irmUSD,exRate)=>setForm(f=>({...f,irm_amt_inr:n(irmUSD)*n(exRate)}));
 
   const save=()=>{
-    const resolvedBcId = bcId || selectedBcId;
-    if(!resolvedBcId){ alert("Please select a BC to link this IRM to."); return; }
     if(!form.irm_no.trim()){alert("IRM No is required.");return;}
     if(allIRMs.some(i=>i.id!==form.id && i.irm_no===form.irm_no.trim())){
       alert("IRM No "+form.irm_no+" already exists. IRM No must be unique.");return;
@@ -1082,7 +1077,7 @@ function IRMModal({irm, bcId, bcList, allIRMs, onSave, onClose, saving}){
     if(!form.irm_date){alert("IRM Date is required.");return;}
     if(!form.irm_total_usd){alert("Total IRM Amount (USD) is required.");return;}
     if(!form.exchange_rate){alert("Exchange Rate is required.");return;}
-    onSave(form, resolvedBcId);
+    onSave(form);
   };
   const lbl={fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3};
 
@@ -1095,22 +1090,6 @@ function IRMModal({irm, bcId, bcList, allIRMs, onSave, onClose, saving}){
           <h3 style={{margin:0,color:"#1e3a5f",fontSize:17}}>{irm?"Edit":"Create"} IRM Entry</h3>
           <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
         </div>
-        {/* BC selector — only shown when not launched from a specific BC card */}
-        {!bcId&&bcList&&bcList.length>0&&(
-          <div style={{marginBottom:14}}>
-            <label style={lbl}>Link to BC *</label>
-            <select value={selectedBcId} onChange={e=>setSelectedBcId(e.target.value)} style={iS}>
-              <option value="">-- Select BC --</option>
-              {bcList.map(b=><option key={b.id} value={b.id}>{b.bc_no} ({b.bank_name}){b.bc_amount_usd?" — USD "+fU(b.bc_amount_usd):""}</option>)}
-            </select>
-          </div>
-        )}
-        {bcId&&bcList&&(()=>{
-          const bc=bcList.find(b=>b.id===bcId);
-          return bc&&<div style={{background:"#eff6ff",borderRadius:7,padding:"6px 12px",marginBottom:12,fontSize:12,color:"#1d4ed8"}}>
-            Adding IRM to BC: <strong>{bc.bc_no}</strong> ({bc.bank_name})
-          </div>;
-        })()}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <div><label style={lbl}>IRM No *</label>
             <input value={form.irm_no} onChange={e=>sf("irm_no",e.target.value)} style={iS} placeholder="e.g. IRM-001"/>
@@ -3804,6 +3783,7 @@ export default function App(){
   const [fy,setFy]=useState(CURR_FY);
   const [ships,setShips]=useState([]);
   const [bcs,setBcs]=useState([]);
+  const [standaloneIRMs,setStandaloneIRMs]=useState([]);
   const [profits,setProfits]=useState([]);
   const [users,setUsers]=useState([]);
   const [buyers,setBuyers]=useState([]);
@@ -3876,14 +3856,9 @@ export default function App(){
       safe("buyers?select=*&order=buyer_name.asc"),
       safe("contracts?select=*&order=created_at.desc"),
     ]);
-    // Merge standalone IRMs (bc_id=null) into display
-    const standaloneIRMs = irm0||[];
-    if(standaloneIRMs.length>0){
-      setBcs([...(b||[]),{id:"__standalone__",bc_no:"(Unlinked)",bank_name:"",bc_amount_usd:0,
-                          irm_entries:standaloneIRMs,brc_entries:[],linked_invoices:[],linked_brcs:[]}]);
-    } else {
-      setBcs(b||[]);
-    }
+    setBcs(b||[]);
+    // Store standalone IRMs (bc_id=null) separately for the IRM sub-tab
+    setStandaloneIRMs(irm0||[]);
     setShips(s||[]);setProfits(p||[]);setUsers(u||[]);setPendings(pc||[]);setBuyers(by||[]);setContracts(ct||[]);
     setLoading(false);
   },[session]);
@@ -4573,7 +4548,7 @@ export default function App(){
 
             {/* ════════════ IRM SUB-TAB ════════════ */}
             {bcSubTab==="irm"&&(()=>{
-              const allIRMs = bcs.flatMap(b=>b.irm_entries||[]);
+              const allIRMs = [...bcs.flatMap(b=>b.irm_entries||[]), ...standaloneIRMs];
               const totIRM  = allIRMs.reduce((s,i)=>s+n(i.irm_total_usd||i.irm_amt_usd),0);
               const totINR  = allIRMs.reduce((s,i)=>s+n(i.irm_amt_inr),0);
               return(
@@ -4878,7 +4853,7 @@ export default function App(){
 
       {showProfit&&<ProfitFormModal fy={fy} editId={editProfitId} form={profitForm} calc={profitCalc} fyShips={fyShips} setF={setPF} onSelectInvoice={selectProfitInv} onSave={saveProfit} onClose={()=>setShowProfit(false)} saving={saving}/>}
       {showBC&&<BCModal bc={editBC} allShips={ships} allBCs={bcs} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} allBRCs={bcs.flatMap(b=>b.brc_entries||[])} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
-      {irmModal&&<IRMModal irm={irmModal.irm} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} onSave={async(f)=>{
+      {irmModal&&<IRMModal irm={irmModal.irm} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} onSave={async(f)=>{
         setSaving(true);
         try{
           if(f.id){
@@ -4890,7 +4865,7 @@ export default function App(){
         }catch(e){alert("Error saving IRM: "+e.message);}
         setSaving(false);
       }} onClose={()=>setIrmModal(null)} saving={saving}/>}
-      {brcModal&&<BRCModal brc={brcModal.brc} allBRCs={bcs.flatMap(b=>b.brc_entries||[])} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} allShips={ships} allBCs={bcs} onSave={async(f)=>{
+      {brcModal&&<BRCModal brc={brcModal.brc} allBRCs={bcs.flatMap(b=>b.brc_entries||[])} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} allShips={ships} allBCs={bcs} onSave={async(f)=>{
         setSaving(true);
         try{
           const bcId=brcModal.bcId;
