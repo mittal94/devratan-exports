@@ -962,11 +962,14 @@ function BCModal({bc, allShips, allBCs, allIRMs, allBRCs, onSave, onClose, savin
             </div>
           );
         })}
-        <button onClick={addInv}
+        {(bcAmt<=0||invBal>0.01)&&<button onClick={addInv}
           style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
                   borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600,marginBottom:4}}>
           + Add Invoice
-        </button>
+        </button>}
+        {bcAmt>0&&invBal<=0.01&&<div style={{fontSize:11,color:"#16a34a",fontWeight:600,marginBottom:4}}>
+          ✅ Invoices fully cover BC amount
+        </div>}
 
         {/* ── BRC Allocation ── */}
         {secHdr("✅","BRC Allocation",
@@ -1020,11 +1023,14 @@ function BCModal({bc, allShips, allBCs, allIRMs, allBRCs, onSave, onClose, savin
             </div>
           );
         })}
-        <button onClick={addBrc}
+        {(bcAmt<=0||brcBal>0.01)&&<button onClick={addBrc}
           style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
                   borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>
           + Add BRC
-        </button>
+        </button>}
+        {bcAmt>0&&brcBal<=0.01&&<div style={{fontSize:11,color:"#16a34a",fontWeight:600}}>
+          ✅ BRCs fully cover BC amount
+        </div>}
 
         {/* ── Summary bar ── */}
         <div style={{background:"#1e3a5f",borderRadius:10,padding:14,marginTop:16,
@@ -1187,8 +1193,18 @@ function BRCModal({brc, allBRCs, allIRMs, allShips, allBCs, onSave, onClose, sav
     if(!form.linked_invoice_no){alert("Invoice is required.");return;}
     const validIRMs=form.irm_allocations.filter(a=>a.irmId&&a.irmUtilAmt);
     if(!validIRMs.length){alert("At least one IRM allocation is required.");return;}
+    const totalUtil=validIRMs.reduce((s,a)=>s+n(a.irmUtilAmt),0);
+    if(totalUtil>brcAmt+0.01){
+      alert("Total IRM utilisation (USD "+fU(totalUtil)+") cannot exceed BRC amount (USD "+fU(brcAmt)+").");return;
+    }
     for(const a of validIRMs){
-      if(n(a.irmUtilAmt)>brcAmt+0.01){alert("IRM utilisation cannot exceed BRC amount.");return;}
+      const irmObj=allIRMs.find(i=>String(i.id)===String(a.irmId));
+      if(irmObj){
+        const available=n(irmObj.irm_total_usd||irmObj.irm_amt_usd)-irmUsedElsewhere(a.irmId);
+        if(n(a.irmUtilAmt)>available+0.01){
+          alert("IRM "+irmObj.irm_no+": amount to utilise (USD "+fU(n(a.irmUtilAmt))+") exceeds available balance (USD "+fU(available)+").");return;
+        }
+      }
     }
     onSave({...form, irm_allocations:validIRMs});
   };
@@ -1278,11 +1294,14 @@ function BRCModal({brc, allBRCs, allIRMs, allShips, allBCs, onSave, onClose, sav
             </div>
           );
         })}
-        <button onClick={addIRM}
+        {irmBal>0.01&&<button onClick={addIRM}
           style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
                   borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600,marginBottom:4}}>
           + Add IRM
-        </button>
+        </button>}
+        {brcAmt>0&&irmBal<=0.01&&<div style={{fontSize:11,color:"#16a34a",fontWeight:600,marginBottom:4}}>
+          ✅ IRM fully covers BRC amount
+        </div>}
 
         {/* ── Invoice Allocation ── */}
         {secHdr("📄","Invoice Allocation","One invoice per BRC")}
@@ -4854,7 +4873,7 @@ export default function App(){
       )}
 
       {showProfit&&<ProfitFormModal fy={fy} editId={editProfitId} form={profitForm} calc={profitCalc} fyShips={fyShips} setF={setPF} onSelectInvoice={selectProfitInv} onSave={saveProfit} onClose={()=>setShowProfit(false)} saving={saving}/>}
-      {showBC&&<BCModal bc={editBC} allShips={ships} allBCs={bcs} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} allBRCs={bcs.flatMap(b=>b.brc_entries||[])} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
+      {showBC&&<BCModal bc={editBC} allShips={ships} allBCs={bcs} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} allBRCs={[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs]} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
       {irmModal&&<IRMModal irm={irmModal.irm} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} onSave={async(f)=>{
         setSaving(true);
         try{
