@@ -1055,7 +1055,7 @@ function BCModal({bc, allShips, allBCs, allIRMs, allBRCs, onSave, onClose, savin
 
 
 // ─── IRM Modal ─────────────────────────────────────────────────────────────────
-function IRMModal({irm, allIRMs, onSave, onClose, saving}){
+function IRMModal({irm, bcId, bcList, allIRMs, onSave, onClose, saving}){
   const [form,setForm]=useState({
     id:       irm?.id||null,
     irm_no:   irm?.irm_no||"",
@@ -1064,8 +1064,8 @@ function IRMModal({irm, allIRMs, onSave, onClose, saving}){
     exchange_rate: irm?.exchange_rate||"",
     irm_amt_inr:   irm?.irm_amt_inr||0,
     intermediary_charges_usd: irm?.intermediary_charges_usd||"",
-    // utilised_usd tracked at BRC level, computed on display
   });
+  const [selectedBcId, setSelectedBcId] = useState(bcId||"");
   const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
 
   const autoINR=(irmUSD, exRate)=>setForm(f=>({...f,
@@ -1073,6 +1073,8 @@ function IRMModal({irm, allIRMs, onSave, onClose, saving}){
   }));
 
   const save=()=>{
+    const resolvedBcId = bcId || selectedBcId;
+    if(!resolvedBcId){ alert("Please select a BC to link this IRM to."); return; }
     if(!form.irm_no.trim()){alert("IRM No is required.");return;}
     if(allIRMs.some(i=>i.id!==form.id && i.irm_no===form.irm_no.trim())){
       alert("IRM No "+form.irm_no+" already exists. IRM No must be unique.");return;
@@ -1080,7 +1082,7 @@ function IRMModal({irm, allIRMs, onSave, onClose, saving}){
     if(!form.irm_date){alert("IRM Date is required.");return;}
     if(!form.irm_total_usd){alert("Total IRM Amount (USD) is required.");return;}
     if(!form.exchange_rate){alert("Exchange Rate is required.");return;}
-    onSave(form);
+    onSave(form, resolvedBcId);
   };
   const lbl={fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3};
 
@@ -1093,6 +1095,22 @@ function IRMModal({irm, allIRMs, onSave, onClose, saving}){
           <h3 style={{margin:0,color:"#1e3a5f",fontSize:17}}>{irm?"Edit":"Create"} IRM Entry</h3>
           <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
         </div>
+        {/* BC selector — only shown when not launched from a specific BC card */}
+        {!bcId&&bcList&&bcList.length>0&&(
+          <div style={{marginBottom:14}}>
+            <label style={lbl}>Link to BC *</label>
+            <select value={selectedBcId} onChange={e=>setSelectedBcId(e.target.value)} style={iS}>
+              <option value="">-- Select BC --</option>
+              {bcList.map(b=><option key={b.id} value={b.id}>{b.bc_no} ({b.bank_name}){b.bc_amount_usd?" — USD "+fU(b.bc_amount_usd):""}</option>)}
+            </select>
+          </div>
+        )}
+        {bcId&&bcList&&(()=>{
+          const bc=bcList.find(b=>b.id===bcId);
+          return bc&&<div style={{background:"#eff6ff",borderRadius:7,padding:"6px 12px",marginBottom:12,fontSize:12,color:"#1d4ed8"}}>
+            Adding IRM to BC: <strong>{bc.bc_no}</strong> ({bc.bank_name})
+          </div>;
+        })()}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <div><label style={lbl}>IRM No *</label>
             <input value={form.irm_no} onChange={e=>sf("irm_no",e.target.value)} style={iS} placeholder="e.g. IRM-001"/>
@@ -4527,6 +4545,7 @@ export default function App(){
                 {canEditBC&&<button onClick={()=>{setEditBC(null);setShowBC(true);}} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New BC</button>}
                 {canEditBC&&<button onClick={()=>setIrmModal({irm:null,bcId:null})} style={{background:"linear-gradient(135deg,#0369a1,#0284c7)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New IRM</button>}
                 {canEditBC&&<button onClick={()=>setBrcModal({brc:null,bcId:null})} style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New BRC</button>}
+
               </div>
             </div>
             {bcs.length===0&&<div style={{background:"#fff",borderRadius:12,padding:30,textAlign:"center",color:"#94a3b8",fontSize:13}}>No bill collections yet.</div>}
@@ -4693,17 +4712,18 @@ export default function App(){
 
       {showProfit&&<ProfitFormModal fy={fy} editId={editProfitId} form={profitForm} calc={profitCalc} fyShips={fyShips} setF={setPF} onSelectInvoice={selectProfitInv} onSave={saveProfit} onClose={()=>setShowProfit(false)} saving={saving}/>}
       {showBC&&<BCModal bc={editBC} allShips={ships} allBCs={bcs} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} allBRCs={bcs.flatMap(b=>b.brc_entries||[])} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
-      {irmModal&&<IRMModal irm={irmModal.irm} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} onSave={async(f)=>{
+      {irmModal&&<IRMModal irm={irmModal.irm} bcId={irmModal.bcId} bcList={bcs} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} onSave={async(f, resolvedBcId)=>{
         setSaving(true);
         try{
-          const bcId=irmModal.bcId;
+          const bcId = resolvedBcId || irmModal.bcId;
+          if(!bcId){ alert("Please select a BC to link this IRM to."); setSaving(false); return; }
           if(f.id){
             await sb(`irm_entries?id=eq.${f.id}`,{method:"PATCH",body:JSON.stringify({irm_no:f.irm_no,irm_date:f.irm_date||null,irm_total_usd:n(f.irm_total_usd),irm_amt_usd:n(f.irm_total_usd),exchange_rate:n(f.exchange_rate),irm_amt_inr:n(f.irm_amt_inr),intermediary_charges_usd:n(f.intermediary_charges_usd||0)})});
           } else {
             await sb("irm_entries",{method:"POST",body:JSON.stringify({bc_id:bcId,irm_no:f.irm_no,irm_date:f.irm_date||null,irm_total_usd:n(f.irm_total_usd),irm_amt_usd:n(f.irm_total_usd),exchange_rate:n(f.exchange_rate),irm_amt_inr:n(f.irm_amt_inr),intermediary_charges_usd:n(f.intermediary_charges_usd||0),allocations:[]})});
           }
           await loadAll(); setIrmModal(null);
-        }catch(e){alert("Error: "+e.message);}
+        }catch(e){alert("Error saving IRM: "+e.message);}
         setSaving(false);
       }} onClose={()=>setIrmModal(null)} saving={saving}/>}
       {brcModal&&<BRCModal brc={brcModal.brc} allBRCs={bcs.flatMap(b=>b.brc_entries||[])} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} allShips={ships} allBCs={bcs} onSave={async(f)=>{
