@@ -2972,6 +2972,42 @@ async function exportProformaInvoiceWord(contract, buyer, piNo, validityDate, ad
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
+// ─── Compute effective payment for an invoice ─────────────────────────────────
+// Rule: IRM bank charges are absorbed by the FIRST invoice linked to that IRM
+// (first = earliest BRC insertion order in irm_allocations array order)
+function calcEffectivePaid(invoiceNo, allBRCs, allIRMs) {
+  // Build a map: irmId -> first invoice that uses it (by BRC array order)
+  // allBRCs is ordered by insertion (DB order preserved in fetch)
+  const irmFirstInvoice = {};
+  allBRCs.forEach(brc => {
+    if (!brc.linked_invoice_no) return;
+    (brc.irm_allocations || []).forEach(a => {
+      if (a.irmId && !(a.irmId in irmFirstInvoice)) {
+        irmFirstInvoice[String(a.irmId)] = brc.linked_invoice_no;
+      }
+    });
+  });
+
+  // Now sum payments for this invoice
+  const sBRCs = allBRCs.filter(b => b.linked_invoice_no === invoiceNo);
+  let paidUSD = 0, paidINR = 0;
+  sBRCs.forEach(brc => {
+    (brc.irm_allocations || []).forEach(a => {
+      const irm = allIRMs.find(i => String(i.id) === String(a.irmId));
+      if (!irm) return;
+      const util = n(a.irmUtilAmt);
+      const rate = n(irm.exchange_rate);
+      // Absorb charges if this invoice is the first linked to this IRM
+      const charges = irmFirstInvoice[String(a.irmId)] === invoiceNo
+        ? n(irm.intermediary_charges_usd || 0)
+        : 0;
+      paidUSD += util + charges;
+      paidINR += (util + charges) * rate;
+    });
+  });
+  return { paidUSD, paidINR };
+}
+
 function exportContractPDF(contract, buyer, consignee) {
   const JPDF = getPDF();
   if (!JPDF) { alert("PDF library not loaded. Please refresh and try again."); return; }
@@ -3979,16 +4015,22 @@ export default function App(){
   const fyShips=useMemo(()=>ships.filter(s=>getFY(s.invoice_date)===fy),[ships,fy]);
   const fyProfits=useMemo(()=>profits.filter(p=>{const s=ships.find(x=>x.invoice_no===p.invoice_no);return s&&getFY(s.invoice_date)===fy;}),[profits,ships,fy]);
 
-  const totals=useMemo(()=>fyShips.reduce((a,s)=>{
-    const c=calcShip(s),bc=getBC(s);
-    a.count++;a.invUSD+=c.invoiceAmtUSD;a.invINR+=c.invoiceAmtINR;
-    a.fobUSD+=n(s.fob_value_usd);a.fobINR+=c.fobValueINR;a.gross+=c.grossTotal;
-    a.paidUSD+=bc?bc.total_amt_usd:0;a.paidINR+=bc?bc.total_amt_inr:0;
-    a.bal+=bc?c.invoiceAmtUSD-bc.total_amt_usd:c.invoiceAmtUSD;
-    a.brcPend+=(!bc||bc.brc_entries?.every(b=>!b.brc_no))?1:0;
-    a.rodPend+=s.rodtep_status==="Pending"?1:0;a.gstPend+=s.gst_status==="Pending"?1:0;
-    return a;
-  },{count:0,invUSD:0,invINR:0,fobUSD:0,fobINR:0,gross:0,paidUSD:0,paidINR:0,bal:0,brcPend:0,rodPend:0,gstPend:0}),[fyShips,bcs]);
+  const totals=useMemo(()=>{
+    const _brcs=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
+    const _irms=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
+    return fyShips.reduce((a,s)=>{
+      const c=calcShip(s);
+      const sBRCs=_brcs.filter(b=>b.linked_invoice_no===s.invoice_no);
+      const {paidUSD:pU,paidINR:pI}=calcEffectivePaid(s.invoice_no,_brcs,_irms);
+      a.count++;a.invUSD+=c.invoiceAmtUSD;a.invINR+=c.invoiceAmtINR;
+      a.fobUSD+=n(s.fob_value_usd);a.fobINR+=c.fobValueINR;a.gross+=c.grossTotal;
+      a.paidUSD+=pU;a.paidINR+=pI;
+      a.bal+=c.invoiceAmtUSD-pU;
+      a.brcPend+=sBRCs.length===0?1:0;
+      a.rodPend+=s.rodtep_status==="Pending"?1:0;a.gstPend+=s.gst_status==="Pending"?1:0;
+      return a;
+    },{count:0,invUSD:0,invINR:0,fobUSD:0,fobINR:0,gross:0,paidUSD:0,paidINR:0,bal:0,brcPend:0,rodPend:0,gstPend:0});
+  },[fyShips,bcs,standaloneBRCs,standaloneIRMs]);
 
   const allYears=useMemo(()=>ALL_FYS.map(f=>{const ss=ships.filter(s=>getFY(s.invoice_date)===f);return ss.reduce((a,s)=>{const c=calcShip(s),bc=getBC(s);a.count++;a.inv+=c.invoiceAmtUSD;a.fob+=n(s.fob_value_usd);a.paid+=bc?bc.total_amt_usd:0;a.bal+=bc?c.invoiceAmtUSD-bc.total_amt_usd:c.invoiceAmtUSD;return a;},{fy:f,count:0,inv:0,fob:0,paid:0,bal:0});}), [ships,bcs]);
 
@@ -4444,8 +4486,7 @@ export default function App(){
                       const sBRCs=allBRCsReg.filter(b=>b.linked_invoice_no===s.invoice_no);
                       const brcNos=sBRCs.map(b=>b.brc_no).filter(Boolean).join(", ")||"—";
                       const brcDts=sBRCs.map(b=>b.brc_date).filter(Boolean).join(", ")||"—";
-                      const paidUSD=sBRCs.reduce((ss,b)=>(b.irm_allocations||[]).reduce((sss,a)=>sss+n(a.irmUtilAmt),ss),0);
-                      const paidINR=sBRCs.reduce((ss,b)=>(b.irm_allocations||[]).reduce((sss,a)=>{const irm=allIRMsReg.find(i=>String(i.id)===String(a.irmId));return sss+(irm?n(a.irmUtilAmt)*n(irm.exchange_rate):0);},ss),0);
+                      const {paidUSD,paidINR}=calcEffectivePaid(s.invoice_no,allBRCsReg,allIRMsReg);
                       return(
                       <tr key={s.id} style={{borderBottom:"1px solid #f1f5f9"}} onDoubleClick={()=>setViewShipId(s.id)}>
                         <td style={{padding:"7px 10px",fontWeight:600,color:"#1e3a5f",whiteSpace:"nowrap",position:"sticky",left:0,background:"#f8fafc",zIndex:5,boxShadow:"2px 0 4px rgba(0,0,0,0.06)",minWidth:130}}>{s.invoice_no}</td>
@@ -4597,9 +4638,8 @@ export default function App(){
                   <div style={{display:"grid",gap:8}}>
                     {allIRMs.map(irm=>{
                       const parentBC=bcs.find(b=>(b.irm_entries||[]).some(i=>i.id===irm.id));
-                      const allBRCsForUtil=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
-                      const utilised=allBRCsForUtil
-                        .flatMap(b=>(b.irm_allocations||[]))
+                      const utilised=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs]
+                        .flatMap(b=>b.irm_allocations||[])
                         .filter(a=>String(a.irmId)===String(irm.id))
                         .reduce((s,a)=>s+n(a.irmUtilAmt),0);
                       const balance=n(irm.irm_total_usd||irm.irm_amt_usd)-utilised;
@@ -4662,7 +4702,7 @@ export default function App(){
                   <div style={{display:"grid",gap:8}}>
                     {allBRCs.map(brc=>{
                       const parentBC=bcs.find(b=>(b.brc_entries||[]).some(x=>x.id===brc.id));
-                      const allIRMs=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
+                      const allIRMsForBRC=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
                       return(
                         <div key={brc.id} style={{background:"#fff",borderRadius:10,padding:14,
                                                    boxShadow:"0 1px 4px rgba(0,0,0,0.06)",
@@ -4678,7 +4718,7 @@ export default function App(){
                               <div style={{display:"flex",gap:16,fontSize:12,flexWrap:"wrap"}}>
                                 <span>Amount: <strong style={{color:"#1e3a5f"}}>{fU(n(brc.brc_amt_usd))}</strong></span>
                                 {(brc.irm_allocations||[]).map((a,i)=>{
-                                  const irm=allIRMs.find(x=>String(x.id)===String(a.irmId));
+                                  const irm=allIRMsForBRC.find(x=>String(x.id)===String(a.irmId));
                                   return<span key={i} style={{color:"#0369a1"}}>IRM: {irm?.irm_no||a.irmId} → {fU(n(a.irmUtilAmt))}</span>;
                                 })}
                               </div>
@@ -4758,15 +4798,9 @@ export default function App(){
                         const bcIRMIds=new Set(bcBRCs.flatMap(b=>(b.irm_allocations||[]).map(a=>String(a.irmId))));
                         const bcIRMs=allIRMsAll.filter(i=>bcIRMIds.has(String(i.id)));
                         // Payment totals: sum of IRM amounts allocated in linked BRCs
-                        const totPmtUSD=bcBRCs.reduce((s,b)=>{
-                          return s+(b.irm_allocations||[]).reduce((ss,a)=>ss+n(a.irmUtilAmt),0);
-                        },0);
-                        const totPmtINR=bcBRCs.reduce((s,b)=>{
-                          return s+(b.irm_allocations||[]).reduce((ss,a)=>{
-                            const irm=allIRMsAll.find(i=>String(i.id)===String(a.irmId));
-                            return ss+(irm?n(a.irmUtilAmt)*n(irm.exchange_rate):0);
-                          },0);
-                        },0);
+                        // Payment per invoice, with bank charges absorbed on first IRM link
+                        const totPmtUSD=(bc.linked_invoices||[]).reduce((s,inv)=>s+calcEffectivePaid(inv,allBRCsAll,allIRMsAll).paidUSD,0);
+                        const totPmtINR=(bc.linked_invoices||[]).reduce((s,inv)=>s+calcEffectivePaid(inv,allBRCsAll,allIRMsAll).paidINR,0);
                         return(
                           <>
                             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,borderTop:"1px solid #f1f5f9",paddingTop:8}}>
