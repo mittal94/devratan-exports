@@ -1338,9 +1338,9 @@ function BRCModal({brc, allBRCs, allIRMs, allShips, allBCs, onSave, onClose, sav
                      display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
           <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>BRC Amount</div>
                <div style={{fontSize:15,fontWeight:700,color:"#fde68a"}}>{brcAmt>0?fU(brcAmt):"—"}</div></div>
-          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>IRM Utilised</div>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>IRM Allocated</div>
                <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{fU(totIRMUtil)}</div></div>
-          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>IRM Remaining</div>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>BRC Unallocated</div>
                <div style={{fontSize:15,fontWeight:700,color:irmBal<-0.01?"#fca5a5":irmBal<0.01?"#86efac":"#7dd3fc"}}>{fU(irmBal)}</div></div>
         </div>
 
@@ -3784,6 +3784,7 @@ export default function App(){
   const [ships,setShips]=useState([]);
   const [bcs,setBcs]=useState([]);
   const [standaloneIRMs,setStandaloneIRMs]=useState([]);
+  const [standaloneBRCs,setStandaloneBRCs]=useState([]);
   const [profits,setProfits]=useState([]);
   const [users,setUsers]=useState([]);
   const [buyers,setBuyers]=useState([]);
@@ -3846,10 +3847,11 @@ export default function App(){
     setLoading(true);
     // Fetch each table independently so one failure doesn't blank the whole app
     const safe=q=>sb(q).catch(e=>{console.warn("Fetch error:",q,e);return[];});
-    const[s,b,irm0,p,u,pc,by,ct]=await Promise.all([
+    const[s,b,irm0,brc0,p,u,pc,by,ct]=await Promise.all([
       safe("shipments?select=*&order=invoice_date.desc"),
       safe("bill_collections?select=*,irm_entries(*),brc_entries(*)"),
       safe("irm_entries?bc_id=is.null&select=*"),
+      safe("brc_entries?bc_id=is.null&select=*"),
       safe("profitability?select=*&order=created_at.desc"),
       safe("users?select=*&order=name.asc"),
       safe("pending_changes?select=*&order=submitted_at.desc"),
@@ -3857,8 +3859,8 @@ export default function App(){
       safe("contracts?select=*&order=created_at.desc"),
     ]);
     setBcs(b||[]);
-    // Store standalone IRMs (bc_id=null) separately for the IRM sub-tab
     setStandaloneIRMs(irm0||[]);
+    setStandaloneBRCs(brc0||[]);
     setShips(s||[]);setProfits(p||[]);setUsers(u||[]);setPendings(pc||[]);setBuyers(by||[]);setContracts(ct||[]);
     setLoading(false);
   },[session]);
@@ -4526,8 +4528,8 @@ export default function App(){
             {/* ── Sub-tab bar ── */}
             <div style={{display:"flex",gap:0,marginBottom:16,background:"#f1f5f9",borderRadius:10,padding:4}}>
               {[
-                {key:"irm", label:"📥 IRM",  count:bcs.flatMap(b=>b.irm_entries||[]).length},
-                {key:"brc", label:"✅ BRC",  count:bcs.flatMap(b=>b.brc_entries||[]).length},
+                {key:"irm", label:"📥 IRM",  count:bcs.flatMap(b=>b.irm_entries||[]).length + standaloneIRMs.length},
+                {key:"brc", label:"✅ BRC",  count:bcs.flatMap(b=>b.brc_entries||[]).length + standaloneBRCs.length},
                 {key:"bc",  label:"🏦 Bill Collection", count:bcs.length},
               ].map(({key,label,count})=>(
                 <button key={key} onClick={()=>setBcSubTab(key)}
@@ -4613,7 +4615,7 @@ export default function App(){
 
             {/* ════════════ BRC SUB-TAB ════════════ */}
             {bcSubTab==="brc"&&(()=>{
-              const allBRCs = bcs.flatMap(b=>b.brc_entries||[]);
+              const allBRCs = [...bcs.flatMap(b=>b.brc_entries||[]), ...standaloneBRCs];
               const totBRC  = allBRCs.reduce((s,b)=>s+n(b.brc_amt_usd),0);
               return(
                 <div>
@@ -4865,15 +4867,14 @@ export default function App(){
         }catch(e){alert("Error saving IRM: "+e.message);}
         setSaving(false);
       }} onClose={()=>setIrmModal(null)} saving={saving}/>}
-      {brcModal&&<BRCModal brc={brcModal.brc} allBRCs={bcs.flatMap(b=>b.brc_entries||[])} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} allShips={ships} allBCs={bcs} onSave={async(f)=>{
+      {brcModal&&<BRCModal brc={brcModal.brc} allBRCs={[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs]} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} allShips={ships} allBCs={bcs} onSave={async(f)=>{
         setSaving(true);
         try{
-          const bcId=brcModal.bcId;
           const payload={brc_no:f.brc_no,brc_date:f.brc_date||null,brc_amt_usd:n(f.brc_amt_usd),linked_invoice_no:f.linked_invoice_no||null,irm_allocations:f.irm_allocations||[]};
           if(f.id){
             await sb(`brc_entries?id=eq.${f.id}`,{method:"PATCH",body:JSON.stringify(payload)});
           } else {
-            await sb("brc_entries",{method:"POST",body:JSON.stringify({...payload,bc_id:bcId})});
+            await sb("brc_entries",{method:"POST",body:JSON.stringify({...payload,bc_id:null})});
           }
           await loadAll(); setBrcModal(null);
         }catch(e){alert("Error: "+e.message);}
