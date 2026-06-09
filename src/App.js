@@ -3814,6 +3814,7 @@ export default function App(){
   const [editBuyer,setEditBuyer]=useState(null);
   const [showContractForm,setShowContractForm]=useState(false);
   const [piModal,setPiModal]=useState(null); // {contract, buyer} when open
+  const [bcSubTab,setBcSubTab]=useState("irm"); // "irm" | "brc" | "bc"
   const [irmModal,setIrmModal]=useState(null);  // null | {irm|null}
   const [brcModal,setBrcModal]=useState(null);  // null | {brc|null}
   const [editContract,setEditContract]=useState(null);
@@ -3865,16 +3866,25 @@ export default function App(){
     setLoading(true);
     // Fetch each table independently so one failure doesn't blank the whole app
     const safe=q=>sb(q).catch(e=>{console.warn("Fetch error:",q,e);return[];});
-    const[s,b,p,u,pc,by,ct]=await Promise.all([
+    const[s,b,irm0,p,u,pc,by,ct]=await Promise.all([
       safe("shipments?select=*&order=invoice_date.desc"),
       safe("bill_collections?select=*,irm_entries(*),brc_entries(*)"),
+      safe("irm_entries?bc_id=is.null&select=*"),
       safe("profitability?select=*&order=created_at.desc"),
       safe("users?select=*&order=name.asc"),
       safe("pending_changes?select=*&order=submitted_at.desc"),
       safe("buyers?select=*&order=buyer_name.asc"),
       safe("contracts?select=*&order=created_at.desc"),
     ]);
-    setShips(s||[]);setBcs(b||[]);setProfits(p||[]);setUsers(u||[]);setPendings(pc||[]);setBuyers(by||[]);setContracts(ct||[]);
+    // Merge standalone IRMs (bc_id=null) into display
+    const standaloneIRMs = irm0||[];
+    if(standaloneIRMs.length>0){
+      setBcs([...(b||[]),{id:"__standalone__",bc_no:"(Unlinked)",bank_name:"",bc_amount_usd:0,
+                          irm_entries:standaloneIRMs,brc_entries:[],linked_invoices:[],linked_brcs:[]}]);
+    } else {
+      setBcs(b||[]);
+    }
+    setShips(s||[]);setProfits(p||[]);setUsers(u||[]);setPendings(pc||[]);setBuyers(by||[]);setContracts(ct||[]);
     setLoading(false);
   },[session]);
 
@@ -4538,71 +4548,227 @@ export default function App(){
 
         {tab==="bcmanager"&&(
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:14}}>
-              <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Bill Collections</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>{bcs.length} total</p></div>
-              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                <button onClick={()=>setExportModal("bc")} style={{background:"#15803d",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:11}}>📤 Export</button>
-                {canEditBC&&<button onClick={()=>{setEditBC(null);setShowBC(true);}} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New BC</button>}
-                {canEditBC&&<button onClick={()=>setIrmModal({irm:null,bcId:null})} style={{background:"linear-gradient(135deg,#0369a1,#0284c7)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New IRM</button>}
-                {canEditBC&&<button onClick={()=>setBrcModal({brc:null,bcId:null})} style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New BRC</button>}
-
-              </div>
-            </div>
-            {bcs.length===0&&<div style={{background:"#fff",borderRadius:12,padding:30,textAlign:"center",color:"#94a3b8",fontSize:13}}>No bill collections yet.</div>}
-            <div style={{display:"grid",gap:10}}>
-              {bcs.map(bc=>(
-                <div key={bc.id} style={{background:"#fff",borderRadius:12,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:10}}>
-                    <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontWeight:700,color:"#1e3a5f",fontSize:14}}>{bc.bc_no}</span><Badge val={bc.bank_name} map={{SBI:{bg:"#dcfce7",color:"#16a34a"},INDUSIND:{bg:"#dbeafe",color:"#1d4ed8"}}}/></div><div style={{fontSize:11,color:"#64748b"}}>Date: {bc.bc_date} · Linked: {bc.linked_invoices?.join(", ")||"None"}</div></div>
-                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                      <div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:700,color:"#16a34a"}}>{fU(bc.total_amt_usd)}</div><div style={{fontSize:11,color:"#15803d"}}>{fR(bc.total_amt_inr)}</div></div>
-                      <button onClick={()=>exportBCPDF(bc)} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📄 PDF</button>
-                      <button onClick={()=>setBCDocsId(bc.id)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📁 Docs</button>
-                      {canEdit&&<button onClick={()=>{setEditBC(bc);setShowBC(true);}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
-                      {canDelete&&<button onClick={async()=>{if(!window.confirm(`Delete BC ${bc.bc_no}?`))return;try{await sb(`brc_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});await sb(`irm_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});await sb(`bill_collections?id=eq.${bc.id}`,{method:"DELETE"});await loadAll();}catch(e){alert("Error: "+e.message);}}} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
-                    </div>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <div>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                        <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>IRM ENTRIES</span>
-                        {canEditBC&&<button onClick={()=>setIrmModal({irm:null,bcId:bc.id})} style={{background:"#eff6ff",color:"#1d4ed8",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:10,fontWeight:600}}>+ Add</button>}
-                      </div>
-                      {bc.irm_entries?.map((irm,i)=>(
-                        <div key={irm.id} style={{background:"#f8fafc",borderRadius:6,padding:"6px 8px",marginBottom:3,fontSize:11}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                            <span style={{fontWeight:600}}>{irm.irm_no}</span>
-                            <div style={{display:"flex",alignItems:"center",gap:4}}>
-                              <span style={{color:"#16a34a",fontWeight:600}}>{fU(irm.irm_total_usd||irm.irm_amt_usd)}</span>
-                              {canEditBC&&<button onClick={()=>setIrmModal({irm,bcId:bc.id})} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:10}}>Edit</button>}
-                            </div>
-                          </div>
-                          <div style={{color:"#64748b"}}>{irm.irm_date} · {fR(irm.irm_amt_inr)}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                        <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>BRC ENTRIES</span>
-                        {canEditBC&&<button onClick={()=>setBrcModal({brc:null,bcId:bc.id})} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:10,fontWeight:600}}>+ Add</button>}
-                      </div>
-                      {bc.brc_entries?.map((brc,i)=>(
-                        <div key={brc.id} style={{background:"#f8fafc",borderRadius:6,padding:"6px 8px",marginBottom:3,fontSize:11}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                            <span style={{fontWeight:600}}>{brc.brc_no||"—"}</span>
-                            <div style={{display:"flex",alignItems:"center",gap:4}}>
-                              <span style={{color:"#0369a1",fontWeight:600}}>{fU(brc.brc_amt_usd)}</span>
-                              {canEditBC&&<button onClick={()=>setBrcModal({brc,bcId:bc.id})} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:10}}>Edit</button>}
-                            </div>
-                          </div>
-                          <div style={{color:"#64748b"}}>{brc.linked_invoice_no?"Invoice: "+brc.linked_invoice_no+" · ":""}{brc.brc_date||"—"}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+            {/* ── Sub-tab bar ── */}
+            <div style={{display:"flex",gap:0,marginBottom:16,background:"#f1f5f9",borderRadius:10,padding:4}}>
+              {[
+                {key:"irm", label:"📥 IRM",  count:bcs.flatMap(b=>b.irm_entries||[]).length},
+                {key:"brc", label:"✅ BRC",  count:bcs.flatMap(b=>b.brc_entries||[]).length},
+                {key:"bc",  label:"🏦 Bill Collection", count:bcs.length},
+              ].map(({key,label,count})=>(
+                <button key={key} onClick={()=>setBcSubTab(key)}
+                  style={{flex:1,padding:"8px 4px",border:"none",borderRadius:7,cursor:"pointer",
+                          fontWeight:700,fontSize:12,transition:"all 0.15s",
+                          background:bcSubTab===key?"#fff":"transparent",
+                          color:bcSubTab===key?"#1e3a5f":"#64748b",
+                          boxShadow:bcSubTab===key?"0 1px 4px rgba(0,0,0,0.10)":"none"}}>
+                  {label}
+                  <span style={{marginLeft:6,background:bcSubTab===key?"#1e3a5f":"#e2e8f0",
+                                color:bcSubTab===key?"#fff":"#64748b",
+                                borderRadius:10,padding:"1px 7px",fontSize:10}}>
+                    {count}
+                  </span>
+                </button>
               ))}
             </div>
+
+            {/* ════════════ IRM SUB-TAB ════════════ */}
+            {bcSubTab==="irm"&&(()=>{
+              const allIRMs = bcs.flatMap(b=>b.irm_entries||[]);
+              const totIRM  = allIRMs.reduce((s,i)=>s+n(i.irm_total_usd||i.irm_amt_usd),0);
+              const totINR  = allIRMs.reduce((s,i)=>s+n(i.irm_amt_inr),0);
+              return(
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <div>
+                      <h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:16}}>IRM Entries</h2>
+                      <p style={{margin:0,fontSize:11,color:"#64748b"}}>{allIRMs.length} entries · USD {fU(totIRM)} · {fR(totINR)}</p>
+                    </div>
+                    {canEditBC&&<button onClick={()=>setIrmModal({irm:null,bcId:null})}
+                      style={{background:"linear-gradient(135deg,#0369a1,#0284c7)",color:"#fff",border:"none",
+                              borderRadius:8,padding:"7px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>
+                      + New IRM
+                    </button>}
+                  </div>
+                  {allIRMs.length===0&&<div style={{background:"#fff",borderRadius:12,padding:30,textAlign:"center",color:"#94a3b8",fontSize:13}}>No IRM entries yet. Create your first IRM.</div>}
+                  <div style={{display:"grid",gap:8}}>
+                    {allIRMs.map(irm=>{
+                      const parentBC=bcs.find(b=>(b.irm_entries||[]).some(i=>i.id===irm.id));
+                      const utilised=bcs.flatMap(b=>b.brc_entries||[])
+                        .flatMap(b=>(b.irm_allocations||[]))
+                        .filter(a=>String(a.irmId)===String(irm.id))
+                        .reduce((s,a)=>s+n(a.irmUtilAmt),0);
+                      const balance=n(irm.irm_total_usd||irm.irm_amt_usd)-utilised;
+                      return(
+                        <div key={irm.id} style={{background:"#fff",borderRadius:10,padding:14,
+                                                   boxShadow:"0 1px 4px rgba(0,0,0,0.06)",
+                                                   borderLeft:`4px solid ${balance<0.01?"#86efac":"#93c5fd"}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+                            <div>
+                              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                                <span style={{fontWeight:700,color:"#1e3a5f",fontSize:14}}>{irm.irm_no}</span>
+                                <span style={{fontSize:10,background:"#dbeafe",color:"#1d4ed8",borderRadius:10,padding:"1px 8px"}}>{irm.irm_date}</span>
+                                {parentBC&&<span style={{fontSize:10,background:"#f0fdf4",color:"#16a34a",borderRadius:10,padding:"1px 8px"}}>BC: {parentBC.bc_no}</span>}
+                              </div>
+                              <div style={{display:"flex",gap:16,fontSize:12,flexWrap:"wrap"}}>
+                                <span>Total: <strong style={{color:"#1e3a5f"}}>{fU(n(irm.irm_total_usd||irm.irm_amt_usd))}</strong></span>
+                                <span>Utilised: <strong style={{color:"#dc2626"}}>{fU(utilised)}</strong></span>
+                                <span>Balance: <strong style={{color:balance<0.01?"#16a34a":"#0369a1"}}>{fU(balance)}</strong></span>
+                                <span style={{color:"#64748b"}}>INR: {fR(irm.irm_amt_inr)}</span>
+                                {n(irm.intermediary_charges_usd)>0&&<span style={{color:"#64748b"}}>Charges: {fU(n(irm.intermediary_charges_usd))}</span>}
+                              </div>
+                            </div>
+                            <div style={{display:"flex",gap:6}}>
+                              {canEditBC&&<button onClick={()=>setIrmModal({irm,bcId:parentBC?.id})}
+                                style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,
+                                        padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
+                              {canDelete&&<button onClick={async()=>{
+                                if(!window.confirm("Delete IRM "+irm.irm_no+"?"))return;
+                                try{await sb(`irm_entries?id=eq.${irm.id}`,{method:"DELETE"});await loadAll();}
+                                catch(e){alert("Error: "+e.message);}
+                              }} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ════════════ BRC SUB-TAB ════════════ */}
+            {bcSubTab==="brc"&&(()=>{
+              const allBRCs = bcs.flatMap(b=>b.brc_entries||[]);
+              const totBRC  = allBRCs.reduce((s,b)=>s+n(b.brc_amt_usd),0);
+              return(
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <div>
+                      <h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:16}}>BRC Entries</h2>
+                      <p style={{margin:0,fontSize:11,color:"#64748b"}}>{allBRCs.length} entries · Total: USD {fU(totBRC)}</p>
+                    </div>
+                    {canEditBC&&<button onClick={()=>setBrcModal({brc:null,bcId:null})}
+                      style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",
+                              borderRadius:8,padding:"7px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>
+                      + New BRC
+                    </button>}
+                  </div>
+                  {allBRCs.length===0&&<div style={{background:"#fff",borderRadius:12,padding:30,textAlign:"center",color:"#94a3b8",fontSize:13}}>No BRC entries yet. Create IRM first, then BRC.</div>}
+                  <div style={{display:"grid",gap:8}}>
+                    {allBRCs.map(brc=>{
+                      const parentBC=bcs.find(b=>(b.brc_entries||[]).some(x=>x.id===brc.id));
+                      const allIRMs=bcs.flatMap(b=>b.irm_entries||[]);
+                      return(
+                        <div key={brc.id} style={{background:"#fff",borderRadius:10,padding:14,
+                                                   boxShadow:"0 1px 4px rgba(0,0,0,0.06)",
+                                                   borderLeft:"4px solid #86efac"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+                            <div>
+                              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                                <span style={{fontWeight:700,color:"#1e3a5f",fontSize:14}}>{brc.brc_no||"—"}</span>
+                                <span style={{fontSize:10,background:"#dcfce7",color:"#16a34a",borderRadius:10,padding:"1px 8px"}}>{brc.brc_date||"—"}</span>
+                                {parentBC&&<span style={{fontSize:10,background:"#f0fdf4",color:"#15803d",borderRadius:10,padding:"1px 8px"}}>BC: {parentBC.bc_no}</span>}
+                                {brc.linked_invoice_no&&<span style={{fontSize:10,background:"#fef9c3",color:"#92400e",borderRadius:10,padding:"1px 8px"}}>Inv: {brc.linked_invoice_no}</span>}
+                              </div>
+                              <div style={{display:"flex",gap:16,fontSize:12,flexWrap:"wrap"}}>
+                                <span>Amount: <strong style={{color:"#1e3a5f"}}>{fU(n(brc.brc_amt_usd))}</strong></span>
+                                {(brc.irm_allocations||[]).map((a,i)=>{
+                                  const irm=allIRMs.find(x=>String(x.id)===String(a.irmId));
+                                  return<span key={i} style={{color:"#0369a1"}}>IRM: {irm?.irm_no||a.irmId} → {fU(n(a.irmUtilAmt))}</span>;
+                                })}
+                              </div>
+                            </div>
+                            <div style={{display:"flex",gap:6}}>
+                              {canEditBC&&<button onClick={()=>setBrcModal({brc,bcId:parentBC?.id})}
+                                style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,
+                                        padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
+                              {canDelete&&<button onClick={async()=>{
+                                if(!window.confirm("Delete BRC "+brc.brc_no+"?"))return;
+                                try{await sb(`brc_entries?id=eq.${brc.id}`,{method:"DELETE"});await loadAll();}
+                                catch(e){alert("Error: "+e.message);}
+                              }} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ════════════ BC SUB-TAB ════════════ */}
+            {bcSubTab==="bc"&&(
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div>
+                    <h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:16}}>Bill Collections</h2>
+                    <p style={{margin:0,fontSize:11,color:"#64748b"}}>{bcs.length} records</p>
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>setExportModal("bc")} style={{background:"#15803d",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:11}}>📤 Export</button>
+                    {canEditBC&&<button onClick={()=>{setEditBC(null);setShowBC(true);}}
+                      style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",
+                              borderRadius:8,padding:"7px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>
+                      + New BC
+                    </button>}
+                  </div>
+                </div>
+                {bcs.length===0&&<div style={{background:"#fff",borderRadius:12,padding:30,textAlign:"center",color:"#94a3b8",fontSize:13}}>No bill collections yet. Create IRM and BRC entries first.</div>}
+                <div style={{display:"grid",gap:10}}>
+                  {bcs.map(bc=>(
+                    <div key={bc.id} style={{background:"#fff",borderRadius:12,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:10}}>
+                        <div>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                            <span style={{fontWeight:700,color:"#1e3a5f",fontSize:14}}>{bc.bc_no}</span>
+                            <Badge val={bc.bank_name} map={{SBI:{bg:"#dcfce7",color:"#16a34a"},INDUSIND:{bg:"#dbeafe",color:"#1d4ed8"}}}/>
+                          </div>
+                          <div style={{fontSize:11,color:"#64748b"}}>Date: {bc.bc_date}{bc.bc_amount_usd?" · Amount: "+fU(bc.bc_amount_usd):""}</div>
+                          {(bc.linked_invoices||[]).length>0&&<div style={{fontSize:11,color:"#0369a1",marginTop:2}}>Invoices: {bc.linked_invoices.join(", ")}</div>}
+                          {(bc.linked_brcs||[]).length>0&&<div style={{fontSize:11,color:"#15803d",marginTop:1}}>BRCs: {bc.linked_brcs.join(", ")}</div>}
+                        </div>
+                        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                          <button onClick={()=>exportBCPDF(bc)} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📄 PDF</button>
+                          <button onClick={()=>setBCDocsId(bc.id)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📁 Docs</button>
+                          {canEdit&&<button onClick={()=>{setEditBC(bc);setShowBC(true);}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
+                          {canDelete&&<button onClick={async()=>{
+                            if(!window.confirm(`Delete BC ${bc.bc_no}?`))return;
+                            try{
+                              await sb(`brc_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});
+                              await sb(`irm_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});
+                              await sb(`bill_collections?id=eq.${bc.id}`,{method:"DELETE"});
+                              await loadAll();
+                            }catch(e){alert("Error: "+e.message);}
+                          }} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
+                        </div>
+                      </div>
+                      {/* IRM + BRC summary inside BC card */}
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,borderTop:"1px solid #f1f5f9",paddingTop:8}}>
+                        <div>
+                          <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>IRM ENTRIES ({(bc.irm_entries||[]).length})</div>
+                          {(bc.irm_entries||[]).map(irm=>(
+                            <div key={irm.id} style={{fontSize:11,color:"#374151",marginBottom:2}}>
+                              <strong>{irm.irm_no}</strong> · {fU(irm.irm_total_usd||irm.irm_amt_usd)} · {irm.irm_date}
+                            </div>
+                          ))}
+                          {!(bc.irm_entries||[]).length&&<div style={{fontSize:11,color:"#94a3b8"}}>None</div>}
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>BRC ENTRIES ({(bc.brc_entries||[]).length})</div>
+                          {(bc.brc_entries||[]).map(brc=>(
+                            <div key={brc.id} style={{fontSize:11,color:"#374151",marginBottom:2}}>
+                              <strong>{brc.brc_no||"—"}</strong> · {fU(brc.brc_amt_usd)}{brc.linked_invoice_no?" · "+brc.linked_invoice_no:""}
+                            </div>
+                          ))}
+                          {!(bc.brc_entries||[]).length&&<div style={{fontSize:11,color:"#94a3b8"}}>None</div>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -4712,15 +4878,13 @@ export default function App(){
 
       {showProfit&&<ProfitFormModal fy={fy} editId={editProfitId} form={profitForm} calc={profitCalc} fyShips={fyShips} setF={setPF} onSelectInvoice={selectProfitInv} onSave={saveProfit} onClose={()=>setShowProfit(false)} saving={saving}/>}
       {showBC&&<BCModal bc={editBC} allShips={ships} allBCs={bcs} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} allBRCs={bcs.flatMap(b=>b.brc_entries||[])} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
-      {irmModal&&<IRMModal irm={irmModal.irm} bcId={irmModal.bcId} bcList={bcs} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} onSave={async(f, resolvedBcId)=>{
+      {irmModal&&<IRMModal irm={irmModal.irm} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} onSave={async(f)=>{
         setSaving(true);
         try{
-          const bcId = resolvedBcId || irmModal.bcId;
-          if(!bcId){ alert("Please select a BC to link this IRM to."); setSaving(false); return; }
           if(f.id){
             await sb(`irm_entries?id=eq.${f.id}`,{method:"PATCH",body:JSON.stringify({irm_no:f.irm_no,irm_date:f.irm_date||null,irm_total_usd:n(f.irm_total_usd),irm_amt_usd:n(f.irm_total_usd),exchange_rate:n(f.exchange_rate),irm_amt_inr:n(f.irm_amt_inr),intermediary_charges_usd:n(f.intermediary_charges_usd||0)})});
           } else {
-            await sb("irm_entries",{method:"POST",body:JSON.stringify({bc_id:bcId,irm_no:f.irm_no,irm_date:f.irm_date||null,irm_total_usd:n(f.irm_total_usd),irm_amt_usd:n(f.irm_total_usd),exchange_rate:n(f.exchange_rate),irm_amt_inr:n(f.irm_amt_inr),intermediary_charges_usd:n(f.intermediary_charges_usd||0),allocations:[]})});
+            await sb("irm_entries",{method:"POST",body:JSON.stringify({bc_id:null,irm_no:f.irm_no,irm_date:f.irm_date||null,irm_total_usd:n(f.irm_total_usd),irm_amt_usd:n(f.irm_total_usd),exchange_rate:n(f.exchange_rate),irm_amt_inr:n(f.irm_amt_inr),intermediary_charges_usd:n(f.intermediary_charges_usd||0),allocations:[]})});
           }
           await loadAll(); setIrmModal(null);
         }catch(e){alert("Error saving IRM: "+e.message);}
