@@ -4438,7 +4438,15 @@ export default function App(){
                     {canEdit&&<th style={{padding:"9px 10px",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",background:"#f8fafc",whiteSpace:"nowrap"}}>Actions</th>}
                   </tr></thead>
                   <tbody>
-                    {filtered.map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0),brcNos=bc?bc.brc_entries?.map(b=>b.brc_no).filter(Boolean).join(", "):"—",brcDts=bc?bc.brc_entries?.map(b=>b.brc_date).filter(Boolean).join(", "):"—";return(
+                    {filtered.map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);
+                      const allBRCsReg=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
+                      const allIRMsReg=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
+                      const sBRCs=allBRCsReg.filter(b=>b.linked_invoice_no===s.invoice_no);
+                      const brcNos=sBRCs.map(b=>b.brc_no).filter(Boolean).join(", ")||"—";
+                      const brcDts=sBRCs.map(b=>b.brc_date).filter(Boolean).join(", ")||"—";
+                      const paidUSD=sBRCs.reduce((ss,b)=>(b.irm_allocations||[]).reduce((sss,a)=>sss+n(a.irmUtilAmt),ss),0);
+                      const paidINR=sBRCs.reduce((ss,b)=>(b.irm_allocations||[]).reduce((sss,a)=>{const irm=allIRMsReg.find(i=>String(i.id)===String(a.irmId));return sss+(irm?n(a.irmUtilAmt)*n(irm.exchange_rate):0);},ss),0);
+                      return(
                       <tr key={s.id} style={{borderBottom:"1px solid #f1f5f9"}} onDoubleClick={()=>setViewShipId(s.id)}>
                         <td style={{padding:"7px 10px",fontWeight:600,color:"#1e3a5f",whiteSpace:"nowrap",position:"sticky",left:0,background:"#f8fafc",zIndex:5,boxShadow:"2px 0 4px rgba(0,0,0,0.06)",minWidth:130}}>{s.invoice_no}</td>
                         <td style={{padding:"7px 10px",color:"#64748b",whiteSpace:"nowrap"}}>{s.invoice_date}</td>
@@ -4470,9 +4478,9 @@ export default function App(){
                         <td style={{padding:"7px 10px",color:"#64748b",whiteSpace:"nowrap"}}>{bc?bc.bc_date:"—"}</td>
                         <td style={{padding:"7px 10px",color:"#16a34a",fontWeight:600,whiteSpace:"nowrap"}}>{brcNos}</td>
                         <td style={{padding:"7px 10px",color:"#64748b",whiteSpace:"nowrap"}}>{brcDts}</td>
-                        <td style={{padding:"7px 10px",textAlign:"right",color:"#16a34a",fontWeight:600}}>{bc?fU(bc.total_amt_usd):"—"}</td>
-                        <td style={{padding:"7px 10px",textAlign:"right",color:"#15803d",fontWeight:600}}>{bc?fR(bc.total_amt_inr):"—"}</td>
-                        <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:bal>0?"#dc2626":"#16a34a"}}>{fU(bal)}</td>
+                        <td style={{padding:"7px 10px",textAlign:"right",color:"#16a34a",fontWeight:600}}>{paidUSD>0?fU(paidUSD):"—"}</td>
+                        <td style={{padding:"7px 10px",textAlign:"right",color:"#15803d",fontWeight:600}}>{paidINR>0?fR(paidINR):"—"}</td>
+                        <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:(c.invoiceAmtUSD-paidUSD)>0.01?"#dc2626":"#16a34a"}}>{fU(c.invoiceAmtUSD-paidUSD)}</td>
                         {(canAddShipment)&&<td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
                           {canEditShipment&&<button onClick={()=>openEditShip(s)} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>Edit</button>}
                           <button onClick={()=>exportShipmentPDF(s,getBC(s))} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📄</button>
@@ -4589,7 +4597,8 @@ export default function App(){
                   <div style={{display:"grid",gap:8}}>
                     {allIRMs.map(irm=>{
                       const parentBC=bcs.find(b=>(b.irm_entries||[]).some(i=>i.id===irm.id));
-                      const utilised=bcs.flatMap(b=>b.brc_entries||[])
+                      const allBRCsForUtil=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
+                      const utilised=allBRCsForUtil
                         .flatMap(b=>(b.irm_allocations||[]))
                         .filter(a=>String(a.irmId)===String(irm.id))
                         .reduce((s,a)=>s+n(a.irmUtilAmt),0);
@@ -4653,7 +4662,7 @@ export default function App(){
                   <div style={{display:"grid",gap:8}}>
                     {allBRCs.map(brc=>{
                       const parentBC=bcs.find(b=>(b.brc_entries||[]).some(x=>x.id===brc.id));
-                      const allIRMs=bcs.flatMap(b=>b.irm_entries||[]);
+                      const allIRMs=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
                       return(
                         <div key={brc.id} style={{background:"#fff",borderRadius:10,padding:14,
                                                    boxShadow:"0 1px 4px rgba(0,0,0,0.06)",
@@ -4739,27 +4748,56 @@ export default function App(){
                           }} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
                         </div>
                       </div>
-                      {/* IRM + BRC summary inside BC card */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,borderTop:"1px solid #f1f5f9",paddingTop:8}}>
-                        <div>
-                          <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>IRM ENTRIES ({(bc.irm_entries||[]).length})</div>
-                          {(bc.irm_entries||[]).map(irm=>(
-                            <div key={irm.id} style={{fontSize:11,color:"#374151",marginBottom:2}}>
-                              <strong>{irm.irm_no}</strong> · {fU(irm.irm_total_usd||irm.irm_amt_usd)} · {irm.irm_date}
+                      {/* IRM + BRC summary inside BC card — derive from linked_brcs */}
+                      {(()=>{
+                        const allBRCsAll=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
+                        const allIRMsAll=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
+                        // BRCs linked to this BC
+                        const bcBRCs=allBRCsAll.filter(b=>(bc.linked_brcs||[]).includes(b.brc_no));
+                        // IRMs linked via those BRCs
+                        const bcIRMIds=new Set(bcBRCs.flatMap(b=>(b.irm_allocations||[]).map(a=>String(a.irmId))));
+                        const bcIRMs=allIRMsAll.filter(i=>bcIRMIds.has(String(i.id)));
+                        // Payment totals: sum of IRM amounts allocated in linked BRCs
+                        const totPmtUSD=bcBRCs.reduce((s,b)=>{
+                          return s+(b.irm_allocations||[]).reduce((ss,a)=>ss+n(a.irmUtilAmt),0);
+                        },0);
+                        const totPmtINR=bcBRCs.reduce((s,b)=>{
+                          return s+(b.irm_allocations||[]).reduce((ss,a)=>{
+                            const irm=allIRMsAll.find(i=>String(i.id)===String(a.irmId));
+                            return ss+(irm?n(a.irmUtilAmt)*n(irm.exchange_rate):0);
+                          },0);
+                        },0);
+                        return(
+                          <>
+                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,borderTop:"1px solid #f1f5f9",paddingTop:8}}>
+                              <div>
+                                <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>IRM ENTRIES ({bcIRMs.length})</div>
+                                {bcIRMs.map(irm=>(
+                                  <div key={irm.id} style={{fontSize:11,color:"#374151",marginBottom:2}}>
+                                    <strong>{irm.irm_no}</strong> · {fU(irm.irm_total_usd||irm.irm_amt_usd)} · {irm.irm_date}
+                                  </div>
+                                ))}
+                                {!bcIRMs.length&&<div style={{fontSize:11,color:"#94a3b8"}}>None</div>}
+                              </div>
+                              <div>
+                                <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>BRC ENTRIES ({bcBRCs.length})</div>
+                                {bcBRCs.map(brc=>(
+                                  <div key={brc.id} style={{fontSize:11,color:"#374151",marginBottom:2}}>
+                                    <strong>{brc.brc_no||"—"}</strong> · {fU(brc.brc_amt_usd)}{brc.linked_invoice_no?" · "+brc.linked_invoice_no:""}
+                                  </div>
+                                ))}
+                                {!bcBRCs.length&&<div style={{fontSize:11,color:"#94a3b8"}}>None</div>}
+                              </div>
                             </div>
-                          ))}
-                          {!(bc.irm_entries||[]).length&&<div style={{fontSize:11,color:"#94a3b8"}}>None</div>}
-                        </div>
-                        <div>
-                          <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>BRC ENTRIES ({(bc.brc_entries||[]).length})</div>
-                          {(bc.brc_entries||[]).map(brc=>(
-                            <div key={brc.id} style={{fontSize:11,color:"#374151",marginBottom:2}}>
-                              <strong>{brc.brc_no||"—"}</strong> · {fU(brc.brc_amt_usd)}{brc.linked_invoice_no?" · "+brc.linked_invoice_no:""}
-                            </div>
-                          ))}
-                          {!(bc.brc_entries||[]).length&&<div style={{fontSize:11,color:"#94a3b8"}}>None</div>}
-                        </div>
-                      </div>
+                            {(totPmtUSD>0||totPmtINR>0)&&(
+                              <div style={{display:"flex",gap:20,background:"#f0fdf4",borderRadius:6,padding:"6px 10px",marginTop:6,fontSize:12}}>
+                                <span>💰 Payment Rcvd: <strong style={{color:"#15803d"}}>{fU(totPmtUSD)}</strong></span>
+                                <span><strong style={{color:"#166534"}}>{fR(totPmtINR)}</strong></span>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
