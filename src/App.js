@@ -3200,7 +3200,7 @@ function exportContractPDF(contract, buyer, consignee) {
           [{ content: "Price",         styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: "USD "+(items[0].price_usd||"")+" Per "+(items[0].price_per||"MTs")+" "+(contract.delivery_terms||"CIF"), styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
         ]
       : [
-          [{ content: "Items\n("+items.length+" lines)", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: itemsDisplay }],
+          [{ content: "Items ("+items.length+" lines)", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: itemsDisplay }],
           [{ content: "Total Qty",     styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: totQty+" MTS "+( contract.quantity_tolerance||""), styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
           [{ content: "Total Value",   styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: "USD "+totVal.toLocaleString("en-IN",{minimumFractionDigits:0,maximumFractionDigits:0})+" "+baseTerms, styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
         ]
@@ -3210,7 +3210,7 @@ function exportContractPDF(contract, buyer, consignee) {
     [{ content: "Specification",   styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.specification || "" }],
     [{ content: "Shipment",        styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.shipment_period || "" }],
     [{ content: "Payment Terms",   styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.payment_condition || "", styles: { fontStyle: "bold" } }],
-    [{ content: "Documents\nRequired", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: docsText }],
+    [{ content: "Documents Required", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: docsText }],
   ];
 
   doc.autoTable({
@@ -4525,6 +4525,8 @@ export default function App(){
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 <button onClick={()=>setExportModal("bc")} style={{background:"#15803d",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:11}}>📤 Export</button>
                 {canEditBC&&<button onClick={()=>{setEditBC(null);setShowBC(true);}} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New BC</button>}
+                {canEditBC&&<button onClick={()=>setIrmModal({irm:null,bcId:null})} style={{background:"linear-gradient(135deg,#0369a1,#0284c7)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New IRM</button>}
+                {canEditBC&&<button onClick={()=>setBrcModal({brc:null,bcId:null})} style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ New BRC</button>}
               </div>
             </div>
             {bcs.length===0&&<div style={{background:"#fff",borderRadius:12,padding:30,textAlign:"center",color:"#94a3b8",fontSize:13}}>No bill collections yet.</div>}
@@ -4542,8 +4544,42 @@ export default function App(){
                     </div>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <div><div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>IRM ENTRIES</div>{bc.irm_entries?.map((irm,i)=><div key={irm.id} style={{background:"#f8fafc",borderRadius:6,padding:"6px 8px",marginBottom:3,fontSize:11}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600}}>#{i+1} {irm.irm_no}</span><span style={{color:"#16a34a",fontWeight:600}}>{fU(irm.irm_amt_usd)}</span></div><div style={{color:"#64748b"}}>{irm.irm_date} · {fR(irm.irm_amt_inr)}</div></div>)}</div>
-                    <div><div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:4}}>BRC ENTRIES</div>{bc.brc_entries?.map((brc,i)=><div key={brc.id} style={{background:"#f8fafc",borderRadius:6,padding:"6px 8px",marginBottom:3,fontSize:11}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600}}>#{i+1} {brc.brc_no||"—"}</span><span style={{color:"#0369a1",fontWeight:600}}>{fU(brc.brc_amt_usd)}</span></div><div style={{color:"#64748b"}}>Date: {brc.brc_date||"—"}</div></div>)}</div>
+                    <div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                        <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>IRM ENTRIES</span>
+                        {canEditBC&&<button onClick={()=>setIrmModal({irm:null,bcId:bc.id})} style={{background:"#eff6ff",color:"#1d4ed8",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:10,fontWeight:600}}>+ Add</button>}
+                      </div>
+                      {bc.irm_entries?.map((irm,i)=>(
+                        <div key={irm.id} style={{background:"#f8fafc",borderRadius:6,padding:"6px 8px",marginBottom:3,fontSize:11}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <span style={{fontWeight:600}}>{irm.irm_no}</span>
+                            <div style={{display:"flex",alignItems:"center",gap:4}}>
+                              <span style={{color:"#16a34a",fontWeight:600}}>{fU(irm.irm_total_usd||irm.irm_amt_usd)}</span>
+                              {canEditBC&&<button onClick={()=>setIrmModal({irm,bcId:bc.id})} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:10}}>Edit</button>}
+                            </div>
+                          </div>
+                          <div style={{color:"#64748b"}}>{irm.irm_date} · {fR(irm.irm_amt_inr)}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                        <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>BRC ENTRIES</span>
+                        {canEditBC&&<button onClick={()=>setBrcModal({brc:null,bcId:bc.id})} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:10,fontWeight:600}}>+ Add</button>}
+                      </div>
+                      {bc.brc_entries?.map((brc,i)=>(
+                        <div key={brc.id} style={{background:"#f8fafc",borderRadius:6,padding:"6px 8px",marginBottom:3,fontSize:11}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <span style={{fontWeight:600}}>{brc.brc_no||"—"}</span>
+                            <div style={{display:"flex",alignItems:"center",gap:4}}>
+                              <span style={{color:"#0369a1",fontWeight:600}}>{fU(brc.brc_amt_usd)}</span>
+                              {canEditBC&&<button onClick={()=>setBrcModal({brc,bcId:bc.id})} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:10}}>Edit</button>}
+                            </div>
+                          </div>
+                          <div style={{color:"#64748b"}}>{brc.linked_invoice_no?"Invoice: "+brc.linked_invoice_no+" · ":""}{brc.brc_date||"—"}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -4639,17 +4675,13 @@ export default function App(){
                 </div>
               </div>
             ))}
-            <SH t="Bill Collection"/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,alignItems:"end",marginBottom:8}}>
-              
-              {canEditBC&&<button onClick={()=>setShowBC(true)} style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>+ New</button>}
-            </div>
-            {selectedBC&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:7,padding:8,fontSize:11,marginBottom:10}}><b style={{color:"#15803d"}}>{selectedBC.bc_no}</b> · {fU(selectedBC.total_amt_usd)}</div>}
+
             {shipForm.invoice_date&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"6px 10px",marginBottom:10,fontSize:11,color:"#1d4ed8"}}>FY: {getFY(shipForm.invoice_date)}</div>}
             <SH t="Auto-Calculated" color="#0369a1" bg="#e0f2fe"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
               {[["Invoice Amount (USD)",fU(shipCalc.invoiceAmtUSD)],["Invoice Amount (INR)",fR(shipCalc.invoiceAmtINR)],["Gross Total (INR)",fR(shipCalc.grossTotal)],["FOB Value (INR)",fR(shipCalc.fobValueINR)]].map(([l,v])=><div key={l}><label style={{fontSize:11,fontWeight:600,color:"#0369a1",display:"block",marginBottom:2}}>{l}</label><input readOnly value={v} style={cS}/></div>)}
             </div>
+
             <div style={{marginBottom:10}}><label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:2}}>Remarks</label><textarea value={shipForm.remarks||""} onChange={e=>setSF("remarks",e.target.value)} rows={2} style={{...iS,resize:"vertical"}}/></div>
             <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
               <button onClick={()=>setShowShipForm(false)} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600,fontSize:13}}>Cancel</button>
