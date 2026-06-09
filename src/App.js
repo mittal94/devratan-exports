@@ -2977,6 +2977,38 @@ function exportContractPDF(contract, buyer, consignee) {
 
 
 // ─── Proforma Invoice PDF Export ──────────────────────────────────────────────
+// ─── Number to Words (USD amounts) ────────────────────────────────────────────
+function numberToWords(amount) {
+  if (!amount || isNaN(amount)) return "ZERO US DOLLARS ONLY";
+  const ones = ["","ONE","TWO","THREE","FOUR","FIVE","SIX","SEVEN","EIGHT","NINE",
+    "TEN","ELEVEN","TWELVE","THIRTEEN","FOURTEEN","FIFTEEN","SIXTEEN","SEVENTEEN","EIGHTEEN","NINETEEN"];
+  const tens = ["","","TWENTY","THIRTY","FORTY","FIFTY","SIXTY","SEVENTY","EIGHTY","NINETY"];
+  const scales = ["","THOUSAND","MILLION","BILLION"];
+  const toWords = (n) => {
+    if (n === 0) return "";
+    if (n < 20) return ones[n] + " ";
+    if (n < 100) return tens[Math.floor(n/10)] + (n%10 ? " "+ones[n%10] : "") + " ";
+    return ones[Math.floor(n/100)] + " HUNDRED " + toWords(n%100);
+  };
+  const dollars = Math.floor(amount);
+  const cents   = Math.round((amount - dollars) * 100);
+  let result = "";
+  let num = dollars, scaleIdx = 0;
+  while (num > 0) {
+    const chunk = num % 1000;
+    if (chunk !== 0) {
+      result = toWords(chunk) + (scales[scaleIdx] ? scales[scaleIdx]+" " : "") + result;
+    }
+    num = Math.floor(num / 1000);
+    scaleIdx++;
+  }
+  result = result.trim();
+  if (!result) result = "ZERO";
+  result += " US DOLLAR" + (dollars !== 1 ? "S" : "");
+  if (cents > 0) result += " AND " + toWords(cents).trim() + " CENT" + (cents !== 1 ? "S" : "");
+  return result + " ONLY";
+}
+
 function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePct) {
   const JPDF = getPDF();
   if (!JPDF) { alert("PDF library not loaded. Please refresh and try again."); return; }
@@ -3097,90 +3129,84 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
   y += 7;
 
   // ── ITEMS TABLE ─────────────────────────────────────────────────────────
-  // pw=182 | 7+50+32+20+24+22+27=182
-  const C = { no:7, desc:50, pack:32, qty:20, cont:24, price:22, amt:27 };
+  // pw=182 | cols: 8+52+34+20+24+20+24 = 182
+  const C = { no:8, desc:52, pack:34, qty:20, cont:24, price:20, amt:24 };
 
-  const borderNone = { style:"solid", color:[255,255,255], width:0 };
-  const borderLight = { style:"solid", color:[220,228,240], width:0.2 };
-  const borderHdr   = { style:"solid", color:[18,52,96],   width:0.3 };
-
-  // Helper — header cell
+  // Cell builders
   const IH = (txt, w, al) => ({
     content: txt,
     styles: {
-      fillColor: navy, textColor: white, fontStyle: "bold",
-      fontSize: 8, cellPadding: {top:5,bottom:5,left:5,right:5},
-      halign: al||"left", valign:"middle", cellWidth: w,
-      lineWidth:0,
+      fillColor:navy, textColor:white, fontStyle:"bold",
+      fontSize:8.5, cellPadding:{top:6,bottom:6,left:5,right:5},
+      halign:al||"left", valign:"middle", cellWidth:w, lineWidth:0,
     }
   });
 
-  // Helper — data cell
-  const ID = (txt, w, al, opts) => ({
+  const ID = (txt, w, al, bold, tc, bg) => ({
     content: String(txt||""),
     styles: {
-      fillColor: opts&&opts.bg ? opts.bg : white,
-      textColor: opts&&opts.tc ? opts.tc : [30,30,30],
-      fontStyle: opts&&opts.bold ? "bold" : "normal",
-      fontSize: opts&&opts.fs ? opts.fs : 8.5,
-      cellPadding: {top:5,bottom:5,left:5,right:5},
-      halign: al||"left", valign:"middle",
-      cellWidth: w, overflow:"linebreak",
-      lineWidth: 0.2, lineColor: [220,228,240],
+      fillColor: bg || white,
+      textColor: tc || [40,40,40],
+      fontStyle: bold ? "bold" : "normal",
+      fontSize: 8.5,
+      cellPadding:{top:5,bottom:5,left:5,right:5},
+      halign:al||"left", valign:"middle", cellWidth:w,
+      overflow:"linebreak", lineWidth:0.25, lineColor:[215,225,240],
     }
   });
 
   const itemHead = [[
-    IH("#",              C.no,    "center"),
-    IH("Description",    C.desc,  "left"),
-    IH("Packing",        C.pack,  "left"),
-    IH("Qty (MTS)",      C.qty,   "right"),
-    IH("Containers",     C.cont,  "center"),
-    IH("Unit Price",     C.price, "right"),
-    IH("Amount (USD)",   C.amt,   "right"),
+    IH("#",             C.no,    "center"),
+    IH("Description",   C.desc,  "left"),
+    IH("Packing",       C.pack,  "left"),
+    IH("Qty (MTS)",     C.qty,   "right"),
+    IH("Containers",    C.cont,  "center"),
+    IH("Unit Price",    C.price, "right"),
+    IH("Amount (USD)",  C.amt,   "right"),
   ]];
 
   const itemBody = items.map((it, idx) => {
     const qty   = n(it.quantity_mt);
     const price = n(it.price_usd);
     const amt   = qty * price;
-    const stripe = idx % 2 === 1 ? [247,250,255] : white;
+    const bg    = idx % 2 === 0 ? white : [246,249,255];
     return [
-      ID(idx+1,                                                                             C.no,    "center", {bg:stripe, tc:[130,145,175]}),
-      ID(contract.commodity||"",                                                            C.desc,  "left",   {bg:stripe, bold:true, tc:navy}),
-      ID(it.packing||"",                                                                    C.pack,  "left",   {bg:stripe, tc:[55,75,110]}),
-      ID(qty   ? fmt2(qty) : "",                                                           C.qty,   "right",  {bg:stripe, bold:true}),
-      ID(it.container_qty&&it.container_type ? it.container_qty+" x "+it.container_type : "", C.cont,"center", {bg:stripe, tc:[70,90,130]}),
-      ID(price ? fmt2(price) : "",                                                         C.price, "right",  {bg:stripe}),
-      ID(amt   ? fmt2(amt)   : "",                                                         C.amt,   "right",  {bg:stripe, bold:true, tc:green}),
+      ID(idx+1,                                   C.no,    "center", false, [150,160,185], bg),
+      ID(contract.commodity||"",                  C.desc,  "left",   true,  navy,          bg),
+      ID(it.packing||"",                          C.pack,  "left",   false, [60,80,115],   bg),
+      ID(qty   ? fmt2(qty)   : "",               C.qty,   "right",  true,  [30,30,30],    bg),
+      ID(it.container_qty&&it.container_type
+          ? it.container_qty+" x "+it.container_type : "",
+                                                  C.cont,  "center", false, [70,90,130],   bg),
+      ID(price ? fmt2(price) : "",               C.price, "right",  false, [30,30,30],    bg),
+      ID(amt   ? fmt2(amt)   : "",               C.amt,   "right",  true,  green,         bg),
     ];
   });
 
-  // Subtotal divider — thin navy top border drawn via didDrawCell
   // TOTAL row
   itemBody.push([
-    ID("",        C.no,    "center", {bg:lgray}),
-    ID("TOTAL",   C.desc,  "left",   {bg:lgray, bold:true, tc:navy, fs:9}),
-    ID(contract.quantity_tolerance||"+/- 5% at seller's option", C.pack, "left", {bg:lgray, tc:[120,140,170], fs:7.5}),
-    ID(fmt2(totQty), C.qty,"right",  {bg:lgray, bold:true, tc:navy, fs:9}),
-    ID("",        C.cont,  "center", {bg:lgray}),
-    ID("",        C.price, "right",  {bg:lgray}),
-    ID(usd(totVal), C.amt, "right",  {bg:gold,  bold:true, tc:white, fs:9}),
+    ID("",                C.no,    "center", false, navy,  lgray),
+    ID("TOTAL",           C.desc,  "left",   true,  navy,  lgray),
+    ID(contract.quantity_tolerance||"+/- 5% at seller's option",
+                          C.pack,  "left",   false, [110,130,160], lgray),
+    ID(fmt2(totQty),      C.qty,   "right",  true,  navy,  lgray),
+    ID("",                C.cont,  "center", false, navy,  lgray),
+    ID("",                C.price, "right",  false, navy,  lgray),
+    ID(usd(totVal),       C.amt,   "right",  true,  white, gold),
   ]);
 
+  // ADVANCE row
   if (advancePct) {
     itemBody.push([
-      ID("",      C.no,    "center", {bg:[255,251,240]}),
-      ID("Advance ("+advancePct+"%) Due", C.desc, "left", {bg:[255,251,240], bold:true, tc:amber}),
-      ID("",      C.pack,  "left",   {bg:[255,251,240]}),
-      ID("",      C.qty,   "right",  {bg:[255,251,240]}),
-      ID("",      C.cont,  "center", {bg:[255,251,240]}),
-      ID("",      C.price, "right",  {bg:[255,251,240]}),
-      ID(usd(advAmt), C.amt,"right", {bg:[255,243,205], bold:true, tc:amber}),
+      ID("",              C.no,    "center", false, amber, [255,249,235]),
+      ID("Advance ("+advancePct+"%) Due", C.desc, "left", true, amber, [255,249,235]),
+      ID("",              C.pack,  "left",   false, amber, [255,249,235]),
+      ID("",              C.qty,   "right",  false, amber, [255,249,235]),
+      ID("",              C.cont,  "center", false, amber, [255,249,235]),
+      ID("",              C.price, "right",  false, amber, [255,249,235]),
+      ID(usd(advAmt),     C.amt,   "right",  true,  amber, [255,243,205]),
     ]);
   }
-
-  const totalBodyRows = items.length + (advancePct ? 2 : 1);
 
   doc.autoTable({
     startY: y,
@@ -3189,37 +3215,47 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
     styles: {
       fontSize:8.5, cellPadding:{top:5,bottom:5,left:5,right:5},
       valign:"middle", overflow:"linebreak",
-      lineColor:[220,228,240], lineWidth:0.2,
+      lineColor:[215,225,240], lineWidth:0.25,
     },
     headStyles: {
-      fontSize:8, cellPadding:{top:5,bottom:5,left:5,right:5},
+      fontSize:8.5, cellPadding:{top:6,bottom:6,left:5,right:5},
       valign:"middle", lineWidth:0,
-      fillColor:navy, textColor:white,
     },
     columnStyles: {
-      0:{cellWidth:C.no},  1:{cellWidth:C.desc}, 2:{cellWidth:C.pack},
-      3:{cellWidth:C.qty}, 4:{cellWidth:C.cont}, 5:{cellWidth:C.price},
+      0:{cellWidth:C.no},   1:{cellWidth:C.desc},
+      2:{cellWidth:C.pack}, 3:{cellWidth:C.qty},
+      4:{cellWidth:C.cont}, 5:{cellWidth:C.price},
       6:{cellWidth:C.amt},
     },
-    tableLineColor: [180,195,215], tableLineWidth: 0.4,
+    tableLineColor: [170,190,215], tableLineWidth: 0.5,
     margin:{left:M, right:M}, tableWidth:pw,
     didDrawCell: (data) => {
-      // 1. Gold bottom border under entire header row
       if (data.section === "head") {
-        doc.setDrawColor(...gold);
-        doc.setLineWidth(0.8);
-        doc.line(data.cell.x, data.cell.y + data.cell.height,
-                 data.cell.x + data.cell.width, data.cell.y + data.cell.height);
+        // Gold underline on header
+        doc.setDrawColor(...gold); doc.setLineWidth(1.0);
+        doc.line(data.cell.x, data.cell.y+data.cell.height,
+                 data.cell.x+data.cell.width, data.cell.y+data.cell.height);
       }
-      // 2. Navy top border above TOTAL row (first subtotal row after data rows)
       if (data.section === "body" && data.row.index === items.length) {
-        doc.setDrawColor(...navy);
-        doc.setLineWidth(0.6);
-        doc.line(data.cell.x, data.cell.y, data.cell.x + data.cell.width, data.cell.y);
+        // Navy top line above TOTAL row
+        doc.setDrawColor(...navy); doc.setLineWidth(0.7);
+        doc.line(data.cell.x, data.cell.y,
+                 data.cell.x+data.cell.width, data.cell.y);
       }
     },
   });
-  y = doc.lastAutoTable.finalY + 6;
+  y = doc.lastAutoTable.finalY + 3;
+
+  // ── Amount in Words ───────────────────────────────────────────────────
+  const amtWords = numberToWords(totVal);
+  doc.setFillColor(...lgray); doc.setDrawColor(...steel); doc.setLineWidth(0.4);
+  doc.roundedRect(M, y, pw, 8, 1.5, 1.5, "FD");
+  doc.setFontSize(7.5); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
+  doc.text("Amount in Words:", M+5, y+5.2);
+  const lblW = doc.getTextWidth("Amount in Words: ");
+  doc.setFont(undefined,"italic"); doc.setTextColor(30,30,30);
+  doc.text(amtWords, M+5+lblW, y+5.2, {maxWidth: pw-10-lblW});
+  y += 11;
 
   // ── TERMS TABLE ──────────────────────────────────────────────────────────
   const lSt = { fontStyle:"bold", fillColor:lgray, textColor:navy, fontSize:8.5,
