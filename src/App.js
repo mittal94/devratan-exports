@@ -1377,6 +1377,151 @@ function BRCModal({brc, allBRCs, allIRMs, allShips, allBCs, onSave, onClose, sav
 }
 
 
+// ─── IRM Docs Modal ─────────────────────────────────────────────────────────
+function IRMDocsModal({irm, canUpload, canDelete, onClose}){
+  const [files,setFiles]=useState({});
+  const [loading,setLoading]=useState(true);
+  const [uploading,setUploading]=useState({});
+  const [deleting,setDeleting]=useState({});
+  const fileRefs=useRef({});
+  const folder=`irm/${irm.irm_no||irm.id}`;
+  const docs=[
+    {key:"irm_swift",  label:"SWIFT / Bank Advice", accept:".pdf", maxMB:3},
+    {key:"irm_copy",   label:"IRM Copy",             accept:".pdf", maxMB:3},
+    {key:"irm_bank_stmt", label:"Bank Statement",    accept:".pdf", maxMB:5},
+    {key:"irm_other",  label:"Other",                accept:".pdf", maxMB:5},
+  ];
+  const loadFiles=async()=>{setLoading(true);try{const list=await r2List(folder);const m={};list.forEach(f=>{m[f.docType]=f;});setFiles(m);}catch(e){console.error(e);}setLoading(false);};
+  useEffect(()=>{loadFiles();},[]);
+  const handleUpload=async(key,file,maxMB)=>{
+    if(file.size>maxMB*1024*1024){alert(`Max ${maxMB}MB`);return;}
+    if(!file.name.match(/\.pdf$/i)){alert("PDF only");return;}
+    setUploading(u=>({...u,[key]:true}));
+    try{if(files[key])await r2Delete(files[key].key);await r2Upload(folder,key,file);await loadFiles();}
+    catch(e){alert("Upload failed: "+e.message);}
+    setUploading(u=>({...u,[key]:false}));
+  };
+  const handleDelete=async(key)=>{
+    if(!window.confirm("Delete this document?"))return;
+    setDeleting(d=>({...d,[key]:true}));
+    try{await r2Delete(files[key].key);await loadFiles();}catch(e){alert("Delete failed: "+e.message);}
+    setDeleting(d=>({...d,[key]:false}));
+  };
+  const fmtSize=b=>b<1024*1024?(b/1024).toFixed(0)+"KB":(b/1024/1024).toFixed(1)+"MB";
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:10}}>
+      <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:520,maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{background:"linear-gradient(135deg,#0369a1,#0284c7)",borderRadius:"14px 14px 0 0",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontWeight:700,color:"#fff",fontSize:15}}>📥 IRM Documents — {irm.irm_no}</div>
+               <div style={{fontSize:11,color:"#bae6fd",marginTop:2}}>Date: {irm.irm_date||"—"} · Amount: {fU(irm.irm_total_usd||irm.irm_amt_usd||0)}</div></div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>✕</button>
+        </div>
+        <div style={{padding:14}}>
+          {loading?<div style={{textAlign:"center",padding:20,color:"#94a3b8"}}>Loading...</div>:(
+            <div style={{display:"grid",gap:8}}>
+              {docs.map(doc=>{
+                const up=files[doc.key],isUp=uploading[doc.key],isDel=deleting[doc.key];
+                return(
+                  <div key={doc.key} style={{background:up?"#f0fdf4":"#f8fafc",border:`1px solid ${up?"#86efac":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{doc.label}</div>
+                      <div style={{fontSize:10,color:"#94a3b8"}}>PDF only · Max {doc.maxMB}MB</div>
+                      {up&&<div style={{fontSize:10,color:"#16a34a",marginTop:2}}>✅ {fmtSize(up.size)} · {new Date(up.uploaded).toLocaleDateString("en-IN")}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                      {up&&<a href={r2ViewUrl(up.key)} target="_blank" rel="noreferrer" style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none"}}>👁 View</a>}
+                      {canUpload&&<><input type="file" accept=".pdf" ref={el=>fileRefs.current[doc.key]=el} onChange={e=>{const f=e.target.files[0];if(f)handleUpload(doc.key,f,doc.maxMB);e.target.value="";}} style={{display:"none"}}/>
+                        <button onClick={()=>fileRefs.current[doc.key]?.click()} disabled={isUp} style={{background:up?"#fef3c7":"#dcfce7",color:up?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+                          {isUp?"⏳":up?"🔄 Replace":"⬆ Upload"}
+                        </button></>}
+                      {canDelete&&up&&<button onClick={()=>handleDelete(doc.key)} disabled={isDel} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>{isDel?"⏳":"🗑"}</button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div style={{marginTop:10,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
+            📌 {Object.keys(files).length} of {docs.length} documents uploaded
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BRC Docs Modal ─────────────────────────────────────────────────────────
+function BRCDocsModal({brc, canUpload, canDelete, onClose}){
+  const [files,setFiles]=useState({});
+  const [loading,setLoading]=useState(true);
+  const [uploading,setUploading]=useState({});
+  const [deleting,setDeleting]=useState({});
+  const fileRefs=useRef({});
+  const folder=`brc/${brc.brc_no||brc.id}`;
+  const docs=[
+    {key:"brc_copy",   label:"BRC Copy",             accept:".pdf", maxMB:3},
+    {key:"brc_other",  label:"Other",                accept:".pdf", maxMB:5},
+  ];
+  const loadFiles=async()=>{setLoading(true);try{const list=await r2List(folder);const m={};list.forEach(f=>{m[f.docType]=f;});setFiles(m);}catch(e){console.error(e);}setLoading(false);};
+  useEffect(()=>{loadFiles();},[]);
+  const handleUpload=async(key,file,maxMB)=>{
+    if(file.size>maxMB*1024*1024){alert(`Max ${maxMB}MB`);return;}
+    if(!file.name.match(/\.pdf$/i)){alert("PDF only");return;}
+    setUploading(u=>({...u,[key]:true}));
+    try{if(files[key])await r2Delete(files[key].key);await r2Upload(folder,key,file);await loadFiles();}
+    catch(e){alert("Upload failed: "+e.message);}
+    setUploading(u=>({...u,[key]:false}));
+  };
+  const handleDelete=async(key)=>{
+    if(!window.confirm("Delete this document?"))return;
+    setDeleting(d=>({...d,[key]:true}));
+    try{await r2Delete(files[key].key);await loadFiles();}catch(e){alert("Delete failed: "+e.message);}
+    setDeleting(d=>({...d,[key]:false}));
+  };
+  const fmtSize=b=>b<1024*1024?(b/1024).toFixed(0)+"KB":(b/1024/1024).toFixed(1)+"MB";
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:10}}>
+      <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:480,maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{background:"linear-gradient(135deg,#15803d,#16a34a)",borderRadius:"14px 14px 0 0",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontWeight:700,color:"#fff",fontSize:15}}>✅ BRC Documents — {brc.brc_no||"—"}</div>
+               <div style={{fontSize:11,color:"#bbf7d0",marginTop:2}}>Date: {brc.brc_date||"—"} · Amount: {fU(brc.brc_amt_usd||0)}{brc.linked_invoice_no?" · Invoice: "+brc.linked_invoice_no:""}</div></div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>✕</button>
+        </div>
+        <div style={{padding:14}}>
+          {loading?<div style={{textAlign:"center",padding:20,color:"#94a3b8"}}>Loading...</div>:(
+            <div style={{display:"grid",gap:8}}>
+              {docs.map(doc=>{
+                const up=files[doc.key],isUp=uploading[doc.key],isDel=deleting[doc.key];
+                return(
+                  <div key={doc.key} style={{background:up?"#f0fdf4":"#f8fafc",border:`1px solid ${up?"#86efac":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{doc.label}</div>
+                      <div style={{fontSize:10,color:"#94a3b8"}}>PDF only · Max {doc.maxMB}MB</div>
+                      {up&&<div style={{fontSize:10,color:"#16a34a",marginTop:2}}>✅ {fmtSize(up.size)} · {new Date(up.uploaded).toLocaleDateString("en-IN")}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                      {up&&<a href={r2ViewUrl(up.key)} target="_blank" rel="noreferrer" style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none"}}>👁 View</a>}
+                      {canUpload&&<><input type="file" accept=".pdf" ref={el=>fileRefs.current[doc.key]=el} onChange={e=>{const f=e.target.files[0];if(f)handleUpload(doc.key,f,doc.maxMB);e.target.value="";}} style={{display:"none"}}/>
+                        <button onClick={()=>fileRefs.current[doc.key]?.click()} disabled={isUp} style={{background:up?"#fef3c7":"#dcfce7",color:up?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+                          {isUp?"⏳":up?"🔄 Replace":"⬆ Upload"}
+                        </button></>}
+                      {canDelete&&up&&<button onClick={()=>handleDelete(doc.key)} disabled={isDel} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>{isDel?"⏳":"🗑"}</button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div style={{marginTop:10,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
+            📌 {Object.keys(files).length} of {docs.length} documents uploaded
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function BCDocsModal({bc, canUpload, canDelete, onClose}){
   const [files, setFiles] = useState({});
   const [loading, setLoading] = useState(true);
@@ -3851,6 +3996,8 @@ export default function App(){
   const [showContractForm,setShowContractForm]=useState(false);
   const [piModal,setPiModal]=useState(null); // {contract, buyer} when open
   const [bcSubTab,setBcSubTab]=useState("irm"); // "irm" | "brc" | "bc"
+  const [irmDocsModal,setIrmDocsModal]=useState(null);  // irm object
+  const [brcDocsModal,setBrcDocsModal]=useState(null);  // brc object
   const [irmModal,setIrmModal]=useState(null);  // null | {irm|null}
   const [brcModal,setBrcModal]=useState(null);  // null | {brc|null}
   const [editContract,setEditContract]=useState(null);
@@ -3877,6 +4024,8 @@ export default function App(){
   const [search,setSearch]=useState("");
   const [sortCol,setSortCol]=useState("invoice_date");
   const [sortDir,setSortDir]=useState("desc");
+  const [colFilters,setColFilters]=useState({});  // {colKey: filterString}
+  const [activeFilterCol,setActiveFilterCol]=useState(null); // col showing filter input
   const [saving,setSaving]=useState(false);
   const [exportModal,setExportModal]=useState(null);
   const [showUpdateBanner,setShowUpdateBanner]=useState(false); // "shipments"|"profitability"|"bc"|"dashboard"
@@ -4036,14 +4185,27 @@ export default function App(){
 
   const filtered=useMemo(()=>{
     let s=[...fyShips];
-    // Dashboard quick filters
-    if(dashFilter==="brc") s=s.filter(x=>{const bc=getBC(x);return !bc||bc.brc_entries?.every(b=>!b.brc_no);});
+    if(dashFilter==="brc") s=s.filter(x=>{const _b=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];return _b.filter(b=>b.linked_invoice_no===x.invoice_no).length===0;});
     if(dashFilter==="rodtep") s=s.filter(x=>x.rodtep_status==="Pending");
     if(dashFilter==="gst") s=s.filter(x=>x.gst_status==="Pending");
     if(search) s=s.filter(x=>Object.values(x).join(" ").toLowerCase().includes(search.toLowerCase()));
+    // Column filters
+    Object.entries(colFilters).forEach(([col,val])=>{
+      if(!val) return;
+      const v=val.toLowerCase();
+      s=s.filter(x=>{
+        // computed cols
+        if(col==="bc_no"){ const bc=getBC(x); return (bc?.bc_no||"").toLowerCase().includes(v); }
+        if(col==="buyer_country") return (x.buyer_country||"").toLowerCase().includes(v);
+        if(col==="rodtep_status") return (x.rodtep_status||"").toLowerCase().includes(v);
+        if(col==="gst_status") return (x.gst_status||"").toLowerCase().includes(v);
+        if(col==="delivery_terms") return (x.delivery_terms||"").toLowerCase().includes(v);
+        return String(x[col]||"").toLowerCase().includes(v);
+      });
+    });
     s.sort((a,b)=>{let av=a[sortCol],bv=b[sortCol];if(!isNaN(Number(av))){av=Number(av);bv=Number(bv);}return av<bv?(sortDir==="asc"?-1:1):av>bv?(sortDir==="asc"?1:-1):0;});
     return s;
-  },[fyShips,search,sortCol,sortDir,dashFilter,bcs]);
+  },[fyShips,search,sortCol,sortDir,dashFilter,bcs,colFilters,standaloneBRCs]);
 
   const EMPTY_SHIP={invoice_no:"",invoice_date:"",buyer_name:"",buyer_country:"",product:"",port_of_loading:"",port_of_discharge:"",shipping_bill_no:"",shipping_bill_date:"",port_code:"",bl_no:"",bl_date:"",qty:"",rate_per_mt:"",delivery_terms:"CIF",exchange_rate:"",igst:0,fob_value_usd:"",rodtep_amount:"",rodtep_status:"Pending",gst_status:"Pending",bc_id:null,remarks:""};
   const EMPTY_PROFIT={invoice_no:"",invoice_date:"",buyer_name:"",port_of_discharge:"",invoice_amt_inr:0,payment_received_inr:0,rice_purchase_val:"",pp_bags_purchase_val:"",local_transport:"",ocean_freight:"",cha_clearing:"",shipping_line_charges:"",inspect_agency:"",coc_ectn:"",other_exp:""};
@@ -4264,7 +4426,45 @@ export default function App(){
   };
 
   const doSort=col=>{if(sortCol===col)setSortDir(d=>d==="asc"?"desc":"asc");else{setSortCol(col);setSortDir("asc");}};
-  function Th({col,label,right}){return<th onClick={()=>doSort(col)} style={{padding:"9px 10px",textAlign:right?"right":"left",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"2px solid #e2e8f0",cursor:"pointer",whiteSpace:"nowrap",userSelect:"none",background:"#f8fafc",overflow:"hidden",textOverflow:"ellipsis"}}>{label}{sortCol===col?(sortDir==="asc"?" ↑":" ↓"):""}</th>;}
+  function Th({col,label,right,filterable}){
+    const hasFilter=colFilters[col]&&colFilters[col].length>0;
+    return(
+      <th style={{padding:"2px 4px",textAlign:right?"right":"left",color:"#64748b",fontWeight:600,
+                  fontSize:11.5,borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap",
+                  userSelect:"none",background:hasFilter?"#eff6ff":"#f8fafc",
+                  position:"relative",minWidth:80}}>
+        <div style={{display:"flex",alignItems:"center",gap:2,cursor:"pointer"}}
+             onClick={()=>doSort(col)}>
+          <span style={{overflow:"hidden",textOverflow:"ellipsis",padding:"7px 4px"}}>{label}</span>
+          <span style={{fontSize:10}}>{sortCol===col?(sortDir==="asc"?"↑":"↓"):""}</span>
+          {filterable&&<span onClick={e=>{e.stopPropagation();setActiveFilterCol(c=>c===col?null:col);}}
+            style={{marginLeft:2,padding:"1px 4px",borderRadius:3,fontSize:10,cursor:"pointer",
+                    background:hasFilter?"#1d4ed8":"#e2e8f0",color:hasFilter?"#fff":"#64748b"}}>
+            ▼
+          </span>}
+        </div>
+        {filterable&&activeFilterCol===col&&(
+          <div style={{position:"absolute",top:"100%",left:0,zIndex:50,background:"#fff",
+                       border:"1px solid #e2e8f0",borderRadius:6,boxShadow:"0 4px 12px rgba(0,0,0,0.15)",
+                       padding:6,minWidth:140}} onClick={e=>e.stopPropagation()}>
+            <input autoFocus value={colFilters[col]||""} placeholder={"Filter "+label+"..."}
+                   onChange={e=>setColFilters(f=>({...f,[col]:e.target.value}))}
+                   style={{...iS,fontSize:11,padding:"4px 6px",marginBottom:4}}/>
+            <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
+              <button onClick={()=>{setColFilters(f=>{const n={...f};delete n[col];return n;});setActiveFilterCol(null);}}
+                style={{fontSize:10,padding:"2px 6px",background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,cursor:"pointer"}}>
+                Clear
+              </button>
+              <button onClick={()=>setActiveFilterCol(null)}
+                style={{fontSize:10,padding:"2px 6px",background:"#eff6ff",color:"#1d4ed8",border:"none",borderRadius:4,cursor:"pointer"}}>
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+      </th>
+    );
+  }
 
   const SHIP_SECTIONS=[
     {title:"Invoice & Buyer",fields:[["invoice_no","Invoice No *","text"],["invoice_date","Invoice Date","date"],["buyer_name","Buyer Name *","text"],["buyer_country","Buyer Country","select",COUNTRIES]]},
@@ -4434,7 +4634,16 @@ export default function App(){
               </span>
               <button onClick={()=>setDashFilter(null)} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:5,padding:"3px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>✕ Clear Filter</button>
             </div>}
-            <div style={{marginBottom:10}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{...iS,fontSize:13}}/></div>
+            <div style={{marginBottom:10,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{...iS,fontSize:13,flex:1,minWidth:160}}/>
+              {Object.values(colFilters).some(v=>v)&&(
+                <button onClick={()=>setColFilters({})}
+                  style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,
+                          padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>
+                  ✕ Clear {Object.values(colFilters).filter(v=>v).length} filter{Object.values(colFilters).filter(v=>v).length>1?"s":""}
+                </button>
+              )}
+            </div>
             {fyShips.length===0?<div style={{background:"#fff",borderRadius:12,padding:40,textAlign:"center",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📭</div><div style={{fontSize:14,fontWeight:600}}>No shipments for FY {fy}</div>{canAddShipment&&<button onClick={openAddShip} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600,marginTop:10,fontSize:13}}>+ Add First Shipment</button>}</div>:
             <>
               <div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",overflow:"auto",maxHeight:"calc(100vh - 240px)",WebkitOverflowScrolling:"touch",position:"relative"}}>
@@ -4476,7 +4685,7 @@ export default function App(){
                     <col style={{width:130}}/>{/* Actions */}
                   </colgroup>
                   <thead style={{position:"sticky",top:0,zIndex:10}}><tr>
-                    <th onClick={()=>doSort("invoice_no")} style={{padding:"9px 10px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",cursor:"pointer",whiteSpace:"nowrap",userSelect:"none",background:"#f0f4ff",position:"sticky",left:0,zIndex:11,minWidth:130,boxShadow:"2px 0 4px rgba(0,0,0,0.08)"}}>Invoice No{sortCol==="invoice_no"?(sortDir==="asc"?" ↑":" ↓"):""}</th><Th col="invoice_date" label="Date"/><Th col="buyer_name" label="Buyer"/><Th col="buyer_country" label="Country"/><Th col="product" label="Product"/><Th col="port_of_loading" label="Port Load"/><Th col="port_of_discharge" label="Port Disch"/><Th col="shipping_bill_no" label="SB No"/><Th col="shipping_bill_date" label="SB Date"/><Th col="port_code" label="Port Code"/><Th col="bl_no" label="BL No"/><Th col="bl_date" label="BL Date"/><Th col="qty" label="Qty(MT)" right/><Th col="rate_per_mt" label="Rate/MT" right/><Th col="delivery_terms" label="Terms"/><Th col="i1" label="Inv(USD)" right/><Th col="exchange_rate" label="ExRate" right/><Th col="i2" label="Inv(INR)" right/><Th col="igst" label="IGST" right/><Th col="i3" label="Gross(INR)" right/><Th col="fob_value_usd" label="FOB(USD)" right/><Th col="i4" label="FOB(INR)" right/><Th col="rodtep_amount" label="RODTEP(INR)" right/><Th col="rodtep_status" label="RODTEP"/><Th col="gst_status" label="GST"/><Th col="bc_no" label="BC No"/><Th col="bc_bank" label="BC Bank"/><Th col="bc_date" label="BC Date"/><Th col="brc_nos" label="BRC No(s)"/><Th col="brc_dates" label="BRC Dates"/><Th col="paid_usd" label="Pmt(USD)" right/><Th col="paid_inr" label="Pmt(INR)" right/><Th col="bal" label="Balance(USD)" right/>
+                    <th onClick={()=>doSort("invoice_no")} style={{padding:"9px 10px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",cursor:"pointer",whiteSpace:"nowrap",userSelect:"none",background:"#f0f4ff",position:"sticky",left:0,zIndex:11,minWidth:130,boxShadow:"2px 0 4px rgba(0,0,0,0.08)"}}>Invoice No{sortCol==="invoice_no"?(sortDir==="asc"?" ↑":" ↓"):""}</th><Th col="invoice_date" label="Date" filterable/><Th col="buyer_name" label="Buyer" filterable/><Th col="buyer_country" label="Country" filterable/><Th col="product" label="Product" filterable/><Th col="port_of_loading" label="Port Load" filterable/><Th col="port_of_discharge" label="Port Disch" filterable/><Th col="shipping_bill_no" label="SB No" filterable/><Th col="shipping_bill_date" label="SB Date" filterable/><Th col="port_code" label="Port Code"/><Th col="bl_no" label="BL No"/><Th col="bl_date" label="BL Date"/><Th col="qty" label="Qty(MT)" right/><Th col="rate_per_mt" label="Rate/MT" right/><Th col="delivery_terms" label="Terms" filterable/><Th col="i1" label="Inv(USD)" right/><Th col="exchange_rate" label="ExRate" right/><Th col="i2" label="Inv(INR)" right/><Th col="igst" label="IGST" right/><Th col="i3" label="Gross(INR)" right/><Th col="fob_value_usd" label="FOB(USD)" right/><Th col="i4" label="FOB(INR)" right/><Th col="rodtep_amount" label="RODTEP(INR)" right/><Th col="rodtep_status" label="RODTEP" filterable/><Th col="gst_status" label="GST" filterable/><Th col="bc_no" label="BC No" filterable/><Th col="bc_bank" label="BC Bank" filterable/><Th col="bc_date" label="BC Date" filterable/><Th col="brc_nos" label="BRC No(s)" filterable/><Th col="brc_dates" label="BRC Dates"/><Th col="paid_usd" label="Pmt(USD)" right/><Th col="paid_inr" label="Pmt(INR)" right/><Th col="bal" label="Balance(USD)" right filterable/>
                     {canEdit&&<th style={{padding:"9px 10px",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",background:"#f8fafc",whiteSpace:"nowrap"}}>Actions</th>}
                   </tr></thead>
                   <tbody>
@@ -4663,6 +4872,9 @@ export default function App(){
                               </div>
                             </div>
                             <div style={{display:"flex",gap:6}}>
+                              <button onClick={()=>setIrmDocsModal(irm)}
+                                style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:6,
+                                        padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📁 Docs</button>
                               {canEditBC&&<button onClick={()=>setIrmModal({irm,bcId:parentBC?.id})}
                                 style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,
                                         padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
@@ -4724,6 +4936,9 @@ export default function App(){
                               </div>
                             </div>
                             <div style={{display:"flex",gap:6}}>
+                              <button onClick={()=>setBrcDocsModal(brc)}
+                                style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:6,
+                                        padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📁 Docs</button>
                               {canEditBC&&<button onClick={()=>setBrcModal({brc,bcId:parentBC?.id})}
                                 style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,
                                         padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
@@ -4989,6 +5204,8 @@ export default function App(){
 
       {shipDocsId&&ships.find(x=>x.id===shipDocsId)&&<ShipDocsModal shipment={ships.find(x=>x.id===shipDocsId)} canUpload={canEdit} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setShipDocsId(null)}/>}
       {bcDocsId&&bcs.find(x=>x.id===bcDocsId)&&<BCDocsModal bc={bcs.find(x=>x.id===bcDocsId)} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBCDocsId(null)}/>}
+      {irmDocsModal&&<IRMDocsModal irm={irmDocsModal} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setIrmDocsModal(null)}/>}
+      {brcDocsModal&&<BRCDocsModal brc={brcDocsModal} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBrcDocsModal(null)}/>}
       {showApprovals&&<ApprovalsModal
           pendings={pendings} userInfo={userInfo}
           onClose={()=>setShowApprovals(false)} onRefresh={loadAll} ships={ships}
