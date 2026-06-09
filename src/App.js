@@ -787,363 +787,242 @@ function ChangePwdModal({onClose}){
   );
 }
 
-function BCModal({bc,allShips,onSave,onClose,saving}){
-  // ── Data model ──────────────────────────────────────────────────────────────
-  // IRM: { id, irmNo, irmDate, irmTotalUSD, exchangeRate, irmAmtINR,
-  //         intermediaryChargesUSD,
-  //         allocations: [{ invoiceNo, allocAmt }] }
-  // BRC: { id, brcNo, brcDate, brcAmtUSD, linkedIrmId, linkedInvoiceNo }
+function BCModal({bc, allShips, allBCs, allIRMs, allBRCs, onSave, onClose, saving}){
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  const mkInvAlloc = () => ({ id:Date.now()+Math.random(), invoiceNo:"", invoiceAmt:0 });
+  const mkBrcAlloc = () => ({ id:Date.now()+Math.random(), brcNo:"",     brcAmt:0   });
 
-  const mkAlloc  = (inv="") => ({ invoiceNo:inv, allocAmt:"" });
-  const mkIRM    = ()        => ({ id:Date.now()+Math.random(), irmNo:"", irmDate:"",
-                                   irmTotalUSD:"", exchangeRate:"", irmAmtINR:0,
-                                   intermediaryChargesUSD:"",
-                                   allocations:[mkAlloc()] });
-  const mkBRC    = ()        => ({ id:Date.now()+Math.random(), brcNo:"", brcDate:"",
-                                   brcAmtUSD:"", linkedIrmId:"", linkedInvoiceNo:"" });
+  // Pre-compute which invoices / BRCs are already taken by OTHER BCs
+  const takenInvoices = new Set(
+    allBCs.filter(b=>b.id!==bc?.id)
+          .flatMap(b=>b.linked_invoices||[])
+  );
+  const takenBRCs = new Set(
+    allBCs.filter(b=>b.id!==bc?.id)
+          .flatMap(b=>b.linked_brcs||[])
+  );
 
-  const [form,setForm]=useState(()=>{
-    if(bc){
-      return{
-        ...bc,
-        bc_amount_usd: bc.bc_amount_usd||"",
-        irm_entries: (bc.irm_entries||[]).map(i=>({
-          id: i.id, irmNo:i.irm_no||"", irmDate:i.irm_date||"",
-          irmTotalUSD: i.irm_total_usd||i.irm_amt_usd||"",
-          exchangeRate: i.exchange_rate||"", irmAmtINR: i.irm_amt_inr||0,
-          intermediaryChargesUSD: i.intermediary_charges_usd||"",
-          allocations: (i.allocations||[]).length
-            ? i.allocations
-            : [{invoiceNo:(bc.linked_invoices||[])[0]||"", allocAmt:i.irm_amt_usd||""}],
-        }))||[mkIRM()],
-        brc_entries: (bc.brc_entries||[]).map(b=>({
-          id:b.id, brcNo:b.brc_no||"", brcDate:b.brc_date||"",
-          brcAmtUSD:b.brc_amt_usd||"",
-          linkedIrmId:b.linked_irm_id||"",
-          linkedInvoiceNo:b.linked_invoice_no||"",
-        }))||[mkBRC()],
-      };
-    }
-    return{id:null,bank_name:"SBI",bc_no:"",bc_date:"",bc_amount_usd:"",
-           linked_invoices:[],irm_entries:[mkIRM()],brc_entries:[mkBRC()],
-           total_amt_usd:0,total_amt_inr:0};
+  const initInvAllocs = bc?.linked_invoices?.length
+    ? bc.linked_invoices.map(inv=>{
+        const s=allShips.find(x=>x.invoice_no===inv);
+        return { id:Date.now()+Math.random(), invoiceNo:inv, invoiceAmt:s?n(s.qty)*n(s.rate_per_mt):0 };
+      })
+    : [mkInvAlloc()];
+
+  const initBrcAllocs = bc?.linked_brcs?.length
+    ? bc.linked_brcs.map(bno=>{
+        const b=allBRCs.find(x=>x.brc_no===bno);
+        return { id:Date.now()+Math.random(), brcNo:bno, brcAmt:b?n(b.brc_amt_usd):0 };
+      })
+    : [mkBrcAlloc()];
+
+  const [form,setForm]=useState({
+    id:         bc?.id||null,
+    bank_name:  bc?.bank_name||"SBI",
+    bc_no:      bc?.bc_no||"",
+    bc_date:    bc?.bc_date||"",
+    bc_amount_usd: bc?.bc_amount_usd||"",
+    invAllocs:  initInvAllocs,
+    brcAllocs:  initBrcAllocs,
   });
-
   const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const togInv=inv=>sf("linked_invoices",
-    form.linked_invoices?.includes(inv)
-      ? form.linked_invoices.filter(x=>x!==inv)
-      : [...(form.linked_invoices||[]),inv]);
 
-  // IRM helpers
-  const updIRM=(id,k,v)=>setForm(f=>({...f,irm_entries:f.irm_entries.map(irm=>{
-    if(irm.id!==id) return irm;
-    const u={...irm,[k]:v};
-    if(k==="irmTotalUSD"||k==="exchangeRate")
-      u.irmAmtINR=n(k==="irmTotalUSD"?v:u.irmTotalUSD)*n(k==="exchangeRate"?v:u.exchangeRate);
+  // Invoice alloc helpers
+  const updInv=(id,k,v)=>setForm(f=>({...f,invAllocs:f.invAllocs.map(a=>{
+    if(a.id!==id) return a;
+    const u={...a,[k]:v};
+    if(k==="invoiceNo"){
+      const s=allShips.find(x=>x.invoice_no===v);
+      u.invoiceAmt=s?n(s.qty)*n(s.rate_per_mt):0;
+    }
     return u;
   })}));
-  const updAlloc=(irmId,aIdx,k,v)=>setForm(f=>({...f,irm_entries:f.irm_entries.map(irm=>{
-    if(irm.id!==irmId) return irm;
-    const allocs=[...irm.allocations];
-    allocs[aIdx]={...allocs[aIdx],[k]:v};
-    return {...irm,allocations:allocs};
-  })}));
-  const addAlloc=(irmId)=>setForm(f=>({...f,irm_entries:f.irm_entries.map(irm=>
-    irm.id!==irmId ? irm : {...irm,allocations:[...irm.allocations,mkAlloc()]})}));
-  const remAlloc=(irmId,aIdx)=>setForm(f=>({...f,irm_entries:f.irm_entries.map(irm=>
-    irm.id!==irmId ? irm : {...irm,allocations:irm.allocations.filter((_,i)=>i!==aIdx)})}));
+  const addInv=()=>setForm(f=>({...f,invAllocs:[...f.invAllocs,mkInvAlloc()]}));
+  const remInv=(id)=>setForm(f=>({...f,invAllocs:f.invAllocs.filter(a=>a.id!==id)}));
 
-  // BRC helpers
-  const updBRC=(id,k,v)=>setForm(f=>({...f,brc_entries:f.brc_entries.map(b=>
-    b.id!==id?b:{...b,[k]:v})}));
+  // BRC alloc helpers
+  const updBrc=(id,k,v)=>setForm(f=>({...f,brcAllocs:f.brcAllocs.map(a=>{
+    if(a.id!==id) return a;
+    const u={...a,[k]:v};
+    if(k==="brcNo"){
+      const b=allBRCs.find(x=>x.brc_no===v);
+      u.brcAmt=b?n(b.brc_amt_usd):0;
+    }
+    return u;
+  })}));
+  const addBrc=()=>setForm(f=>({...f,brcAllocs:[...f.brcAllocs,mkBrcAlloc()]}));
+  const remBrc=(id)=>setForm(f=>({...f,brcAllocs:f.brcAllocs.filter(a=>a.id!==id)}));
 
   // Computed totals
-  const totIRMusd = form.irm_entries?.reduce((s,i)=>s+n(i.irmTotalUSD),0)||0;
-  const totIRMinr = form.irm_entries?.reduce((s,i)=>s+n(i.irmAmtINR),0)||0;
-  const totBRCusd = form.brc_entries?.reduce((s,b)=>s+n(b.brcAmtUSD),0)||0;
-  const bcAmt     = n(form.bc_amount_usd)||0;
-
-  // IRM utilisation per IRM
-  const irmUtilised = (irm) => (irm.allocations||[]).reduce((s,a)=>s+n(a.allocAmt),0);
-  const irmBalance  = (irm) => n(irm.irmTotalUSD) - irmUtilised(irm);
-
-  // Linked invoice options (only invoices selected in linked_invoices)
-  const linkedInvShips = allShips.filter(s=>(form.linked_invoices||[]).includes(s.invoice_no));
+  const bcAmt    = n(form.bc_amount_usd)||0;
+  const totInv   = form.invAllocs.reduce((s,a)=>s+n(a.invoiceAmt),0);
+  const totBrc   = form.brcAllocs.reduce((s,a)=>s+n(a.brcAmt),0);
+  const invBal   = bcAmt - totInv;
+  const brcBal   = bcAmt - totBrc;
 
   const save=()=>{
-    if(!form.bc_no){alert("BC No required.");return;}
-    onSave({...form, total_amt_usd:totIRMusd, total_amt_inr:totIRMinr});
+    if(!form.bc_no.trim()){alert("BC No is required.");return;}
+    // Duplicate BC No check
+    if(allBCs.some(b=>b.id!==form.id && b.bc_no===form.bc_no.trim())){
+      alert("BC No "+form.bc_no+" already exists. BC No must be unique.");return;
+    }
+    if(!form.bc_date){alert("BC Date is required.");return;}
+    if(!form.bc_amount_usd){alert("BC Amount (USD) is required.");return;}
+    const validInvs=form.invAllocs.filter(a=>a.invoiceNo);
+    const validBrcs=form.brcAllocs.filter(a=>a.brcNo);
+    onSave({
+      ...form,
+      linked_invoices: validInvs.map(a=>a.invoiceNo),
+      linked_brcs:     validBrcs.map(a=>a.brcNo),
+      total_inv_usd:   totInv,
+      total_brc_usd:   totBrc,
+    });
   };
 
-  const labelStyle={fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3};
-  const sectionBg={background:"#1e3a5f",borderRadius:8,padding:"8px 14px",
-                   color:"#fff",fontWeight:700,fontSize:13,marginBottom:10,marginTop:14,
-                   display:"flex",justifyContent:"space-between",alignItems:"center"};
+  const lbl={fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3};
+  const secHdr=(icon,title,right)=>(
+    <div style={{background:"#1e3a5f",borderRadius:8,padding:"8px 14px",color:"#fff",
+                 fontWeight:700,fontSize:13,marginBottom:10,marginTop:14,
+                 display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <span>{icon} {title}</span>
+      {right&&<span style={{fontSize:11,color:"#93c5fd"}}>{right}</span>}
+    </div>
+  );
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",
                  alignItems:"center",justifyContent:"center",zIndex:200,padding:12}}>
-      <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:860,
+      <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:820,
                    maxHeight:"95vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <h3 style={{margin:0,color:"#1e3a5f",fontSize:17}}>{bc?"Edit":"Create"} Bill Collection</h3>
-          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,
-                                           padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
         </div>
 
         {/* ── BC Details ── */}
-        <div style={sectionBg}>
-          <span>📋 BC Details</span>
-          {bcAmt>0&&<span style={{fontSize:11,color:"#93c5fd"}}>BC Amount: USD {fU(bcAmt)}</span>}
-        </div>
+        {secHdr("📋","BC Details", bcAmt>0?"Total: USD "+fU(bcAmt):"")}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,marginBottom:4}}>
-          <div><label style={labelStyle}>Bank</label>
-            <select value={form.bank_name||"SBI"} onChange={e=>sf("bank_name",e.target.value)} style={iS}>
+          <div><label style={lbl}>Bank *</label>
+            <select value={form.bank_name} onChange={e=>sf("bank_name",e.target.value)} style={iS}>
               {BANKS.map(b=><option key={b}>{b}</option>)}
             </select>
           </div>
-          <div><label style={labelStyle}>BC No *</label>
-            <input value={form.bc_no||""} onChange={e=>sf("bc_no",e.target.value)} style={iS}/>
+          <div><label style={lbl}>BC No *</label>
+            <input value={form.bc_no} onChange={e=>sf("bc_no",e.target.value)} style={iS} placeholder="e.g. BC-2627-001"/>
           </div>
-          <div><label style={labelStyle}>BC Date</label>
-            <input type="date" value={form.bc_date||""} onChange={e=>sf("bc_date",e.target.value)} style={iS}/>
+          <div><label style={lbl}>BC Date *</label>
+            <input type="date" value={form.bc_date} onChange={e=>sf("bc_date",e.target.value)} style={iS}/>
           </div>
-          <div><label style={labelStyle}>BC Amount (USD)</label>
-            <input type="number" step="any" value={form.bc_amount_usd||""}
-                   onChange={e=>sf("bc_amount_usd",e.target.value)} style={iS}
-                   placeholder="Total lodged amount"/>
+          <div><label style={lbl}>Total BC Amount (USD) *</label>
+            <input type="number" step="any" value={form.bc_amount_usd}
+                   onChange={e=>sf("bc_amount_usd",e.target.value)} style={iS} placeholder="0.00"/>
           </div>
         </div>
 
-        {/* ── Linked Invoices ── */}
-        <div style={sectionBg}>
-          <span>🔗 Linked Invoices (Shipments)</span>
-          <span style={{fontSize:11,color:"#93c5fd"}}>{(form.linked_invoices||[]).length} selected</span>
-        </div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:4}}>
-          {allShips.map(s=>{
-            const lk=form.linked_invoices?.includes(s.invoice_no);
-            const invAmt = s.qty && s.rate_per_mt ? n(s.qty)*n(s.rate_per_mt) : 0;
-            return(
-              <button key={s.id} onClick={()=>togInv(s.invoice_no)}
-                style={{background:lk?"#1e3a5f":"#f1f5f9",color:lk?"#fff":"#64748b",
-                        border:lk?"2px solid #3b82f6":"1px solid #e2e8f0",
-                        borderRadius:8,padding:"5px 12px",cursor:"pointer",
-                        fontSize:12,fontWeight:lk?700:400,textAlign:"left"}}>
-                <div style={{fontWeight:700}}>{s.invoice_no}</div>
-                {invAmt>0&&<div style={{fontSize:10,opacity:0.8}}>USD {invAmt.toLocaleString("en-IN",{maximumFractionDigits:0})}</div>}
-              </button>
-            );
-          })}
-        </div>
-        {/* Total of linked invoices */}
-        {(form.linked_invoices||[]).length>0&&(()=>{
-          const total=allShips
-            .filter(s=>form.linked_invoices.includes(s.invoice_no))
-            .reduce((sum,s)=>sum+n(s.qty)*n(s.rate_per_mt),0);
-          return total>0&&(
-            <div style={{background:"#eff6ff",borderRadius:6,padding:"6px 12px",
-                         marginBottom:4,fontSize:12,color:"#1d4ed8"}}>
-              Combined Invoice Value: <strong>USD {fU(total)}</strong>
+        {/* ── Invoice Allocation ── */}
+        {secHdr("🔗","Invoice Allocation",
+          bcAmt>0 ? (invBal<-0.01?"⚠️ Over by USD "+fU(Math.abs(invBal))
+                    :invBal<0.01?"✅ Fully Allocated"
+                    :"Balance: USD "+fU(invBal)) : ""
+        )}
+        {form.invAllocs.map((a,idx)=>{
+          const usedByOtherAlloc = form.invAllocs.filter((_,i)=>i!==idx).map(x=>x.invoiceNo);
+          const availShips = allShips.filter(s=>
+            !takenInvoices.has(s.invoice_no) &&
+            !usedByOtherAlloc.includes(s.invoice_no)
+          );
+          return(
+            <div key={a.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",
+                                    gap:10,marginBottom:8,alignItems:"flex-end"}}>
+              <div>
+                <label style={lbl}>Invoice No {idx===0?"*":""}</label>
+                <select value={a.invoiceNo} onChange={e=>updInv(a.id,"invoiceNo",e.target.value)} style={iS}>
+                  <option value="">-- Select Invoice --</option>
+                  {availShips.map(s=>{
+                    const amt=n(s.qty)*n(s.rate_per_mt);
+                    return <option key={s.id} value={s.invoice_no}>{s.invoice_no} — USD {fU(amt)}</option>;
+                  })}
+                  {/* Always show current selection even if taken */}
+                  {a.invoiceNo&&!availShips.find(x=>x.invoice_no===a.invoiceNo)&&(
+                    <option value={a.invoiceNo}>{a.invoiceNo} (current)</option>
+                  )}
+                </select>
+              </div>
+              <div>
+                <label style={{...lbl,color:"#0369a1"}}>Invoice Amount (USD) — Auto</label>
+                <input readOnly value={a.invoiceAmt>0?fU(a.invoiceAmt):"—"} style={cS}/>
+              </div>
+              <div style={{paddingBottom:2}}>
+                {form.invAllocs.length>1
+                  ? <button onClick={()=>remInv(a.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"7px 10px",cursor:"pointer"}}>✕</button>
+                  : <div style={{width:34}}/>}
+              </div>
             </div>
           );
-        })()}
+        })}
+        <button onClick={addInv}
+          style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
+                  borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600,marginBottom:4}}>
+          + Add Invoice
+        </button>
 
-        {/* ── IRM Entries ── */}
-        <div style={sectionBg}>
-          <span>📥 IRM Entries</span>
-          <span style={{fontSize:11,color:"#93c5fd"}}>Total Received: USD {fU(totIRMusd)}</span>
-        </div>
-
-        {form.irm_entries?.map((irm,idx)=>{
-          const util    = irmUtilised(irm);
-          const balance = irmBalance(irm);
-          const isOver  = balance < -0.01;
+        {/* ── BRC Allocation ── */}
+        {secHdr("✅","BRC Allocation",
+          bcAmt>0 ? (brcBal<-0.01?"⚠️ Over by USD "+fU(Math.abs(brcBal))
+                    :brcBal<0.01?"✅ Fully Allocated"
+                    :"Balance: USD "+fU(brcBal)) : ""
+        )}
+        {form.brcAllocs.map((a,idx)=>{
+          const usedByOtherAlloc = form.brcAllocs.filter((_,i)=>i!==idx).map(x=>x.brcNo);
+          const availBRCs = allBRCs.filter(b=>
+            b.brc_no &&
+            !takenBRCs.has(b.brc_no) &&
+            !usedByOtherAlloc.includes(b.brc_no)
+          );
+          // Find full BRC detail for summary
+          const brcDetail = allBRCs.find(b=>b.brc_no===a.brcNo);
           return(
-            <div key={irm.id} style={{background:"#f8fafc",borderRadius:10,padding:14,
-                                      marginBottom:12,border:`1px solid ${isOver?"#fca5a5":"#e2e8f0"}`}}>
-              {/* IRM header */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <span style={{fontWeight:700,color:"#1e3a5f",fontSize:13}}>IRM #{idx+1}</span>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  {n(irm.irmTotalUSD)>0&&(
-                    <span style={{fontSize:11,fontWeight:600,
-                                  color:isOver?"#dc2626":balance>0.01?"#0369a1":"#16a34a"}}>
-                      {isOver?"⚠️ Over-allocated":"Balance: USD "+fU(balance)}
-                    </span>
-                  )}
-                  {form.irm_entries.length>1&&(
-                    <button onClick={()=>setForm(f=>({...f,irm_entries:f.irm_entries.filter(i=>i.id!==irm.id)}))}
-                      style={{background:"#fee2e2",color:"#dc2626",border:"none",
-                              borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>Remove</button>
-                  )}
-                </div>
-              </div>
-
-              {/* IRM core fields */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:10,marginBottom:12}}>
-                {[["irmNo","IRM No","text"],["irmDate","IRM Date","date"],
-                  ["irmTotalUSD","Total IRM Amt (USD)","number"],
-                  ["exchangeRate","Exchange Rate","number"],
-                  ["intermediaryChargesUSD","Intermediary Charges","number"]
-                ].map(([k,l,t])=>(
-                  <div key={k}>
-                    <label style={labelStyle}>{l}</label>
-                    <input type={t} value={irm[k]||""} onChange={e=>updIRM(irm.id,k,e.target.value)}
-                           style={iS} step={t==="number"?"any":undefined}/>
-                  </div>
-                ))}
+            <div key={a.id} style={{marginBottom:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:10,alignItems:"flex-end"}}>
                 <div>
-                  <label style={{...labelStyle,color:"#0369a1"}}>IRM Amt (INR) — Auto</label>
-                  <input readOnly value={fR(irm.irmAmtINR||0)} style={cS}/>
+                  <label style={lbl}>BRC No {idx===0?"*":""}</label>
+                  <select value={a.brcNo} onChange={e=>updBrc(a.id,"brcNo",e.target.value)} style={iS}>
+                    <option value="">-- Select BRC --</option>
+                    {availBRCs.map(b=>(
+                      <option key={b.id} value={b.brc_no}>{b.brc_no} — USD {fU(n(b.brc_amt_usd))}</option>
+                    ))}
+                    {a.brcNo&&!availBRCs.find(x=>x.brc_no===a.brcNo)&&(
+                      <option value={a.brcNo}>{a.brcNo} (current)</option>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label style={{...lbl,color:"#0369a1"}}>BRC Amount (USD) — Auto</label>
+                  <input readOnly value={a.brcAmt>0?fU(a.brcAmt):"—"} style={cS}/>
+                </div>
+                <div style={{paddingBottom:2}}>
+                  {form.brcAllocs.length>1
+                    ? <button onClick={()=>remBrc(a.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"7px 10px",cursor:"pointer"}}>✕</button>
+                    : <div style={{width:34}}/>}
                 </div>
               </div>
-
-              {/* Allocations */}
-              {n(irm.irmTotalUSD)>0&&(
-                <>
-                  <div style={{fontSize:11.5,fontWeight:700,color:"#1e3a5f",
-                                marginBottom:6,borderTop:"1px solid #e2e8f0",paddingTop:8}}>
-                    Allocate IRM to Invoices
-                    <span style={{fontWeight:400,color:"#64748b",marginLeft:8,fontSize:11}}>
-                      Total IRM: USD {fU(n(irm.irmTotalUSD))} · Allocated: USD {fU(util)}
-                    </span>
-                  </div>
-                  {(irm.allocations||[]).map((alloc,aIdx)=>(
-                    <div key={aIdx} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",
-                                            gap:8,marginBottom:6,alignItems:"flex-end"}}>
-                      <div>
-                        <label style={labelStyle}>Invoice (Shipment)</label>
-                        <select value={alloc.invoiceNo||""} onChange={e=>updAlloc(irm.id,aIdx,"invoiceNo",e.target.value)} style={iS}>
-                          <option value="">-- Select Invoice --</option>
-                          {(linkedInvShips.length>0?linkedInvShips:allShips).map(s=>(
-                            <option key={s.id} value={s.invoice_no}>{s.invoice_no}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label style={labelStyle}>Amount to Allocate (USD)</label>
-                        <input type="number" step="any" value={alloc.allocAmt||""}
-                               onChange={e=>updAlloc(irm.id,aIdx,"allocAmt",e.target.value)}
-                               style={iS} placeholder="e.g. 100.00"/>
-                      </div>
-                      <div style={{paddingBottom:2}}>
-                        {aIdx===0
-                          ? <button onClick={()=>addAlloc(irm.id)}
-                              style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
-                                      borderRadius:6,padding:"7px 12px",cursor:"pointer",fontSize:12}}>
-                              + Add
-                            </button>
-                          : <button onClick={()=>remAlloc(irm.id,aIdx)}
-                              style={{background:"#fee2e2",color:"#dc2626",border:"none",
-                                      borderRadius:6,padding:"7px 10px",cursor:"pointer",fontSize:12}}>
-                              ✕
-                            </button>
-                        }
-                      </div>
-                    </div>
-                  ))}
-                  {/* Balance bar */}
-                  {n(irm.irmTotalUSD)>0&&(
-                    <div style={{background:isOver?"#fee2e2":balance<0.01?"#dcfce7":"#eff6ff",
-                                 borderRadius:6,padding:"5px 10px",fontSize:11,
-                                 color:isOver?"#dc2626":balance<0.01?"#16a34a":"#1d4ed8",fontWeight:600}}>
-                      {isOver
-                        ? "⚠️ Over-allocated by USD "+fU(Math.abs(balance))
-                        : balance<0.01
-                          ? "✅ Fully Allocated"
-                          : "Unutilised Balance: USD "+fU(balance)}
-                    </div>
-                  )}
-                </>
+              {/* BRC summary chip */}
+              {brcDetail&&(
+                <div style={{background:"#eff6ff",borderRadius:6,padding:"5px 10px",
+                             marginTop:4,fontSize:11,color:"#1d4ed8",display:"flex",gap:12,flexWrap:"wrap"}}>
+                  {brcDetail.linked_invoice_no&&<span>📄 Invoice: <strong>{brcDetail.linked_invoice_no}</strong></span>}
+                  {brcDetail.linked_irm_id&&<span>📥 IRM: <strong>{allIRMs.find(i=>String(i.id)===String(brcDetail.linked_irm_id))?.irm_no||brcDetail.linked_irm_id}</strong></span>}
+                  <span>💰 USD {fU(n(brcDetail.brc_amt_usd))}</span>
+                </div>
               )}
             </div>
           );
         })}
-        <button onClick={()=>setForm(f=>({...f,irm_entries:[...f.irm_entries,mkIRM()]}))}
+        <button onClick={addBrc}
           style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
-                  borderRadius:6,padding:"5px 12px",cursor:"pointer",
-                  fontSize:12,fontWeight:600,marginBottom:4}}>
-          + Add IRM
-        </button>
-
-        {/* ── BRC Entries ── */}
-        <div style={sectionBg}>
-          <span>✅ BRC Entries</span>
-          <span style={{fontSize:11,color:"#93c5fd"}}>Total BRC: USD {fU(totBRCusd)}</span>
-        </div>
-
-        {form.brc_entries?.map((brc,idx)=>{
-          // Find the linked IRM to show its allocations as invoice options
-          const linkedIRM = form.irm_entries.find(i=>String(i.id)===String(brc.linkedIrmId));
-          const invOptions = linkedIRM
-            ? (linkedIRM.allocations||[]).filter(a=>a.invoiceNo)
-            : [];
-          // Show allocated amount for chosen invoice in chosen IRM
-          const chosenAlloc = invOptions.find(a=>a.invoiceNo===brc.linkedInvoiceNo);
-          return(
-            <div key={brc.id} style={{background:"#f8fafc",borderRadius:10,padding:14,
-                                      marginBottom:10,border:"1px solid #e2e8f0"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <span style={{fontWeight:700,color:"#1e3a5f",fontSize:13}}>BRC #{idx+1}</span>
-                {chosenAlloc&&n(chosenAlloc.allocAmt)>0&&(
-                  <span style={{fontSize:11,color:"#0369a1",fontWeight:600}}>
-                    IRM allocation for this invoice: USD {fU(n(chosenAlloc.allocAmt))}
-                  </span>
-                )}
-                {form.brc_entries.length>1&&(
-                  <button onClick={()=>setForm(f=>({...f,brc_entries:f.brc_entries.filter(b=>b.id!==brc.id)}))}
-                    style={{background:"#fee2e2",color:"#dc2626",border:"none",
-                            borderRadius:5,padding:"3px 9px",cursor:"pointer",fontSize:11}}>Remove</button>
-                )}
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:10}}>
-                {/* Link to IRM */}
-                <div>
-                  <label style={labelStyle}>Linked IRM</label>
-                  <select value={String(brc.linkedIrmId||"")}
-                          onChange={e=>updBRC(brc.id,"linkedIrmId",e.target.value)} style={iS}>
-                    <option value="">-- Select IRM --</option>
-                    {form.irm_entries.map((irm,i)=>(
-                      <option key={irm.id} value={String(irm.id)}>
-                        {irm.irmNo||"IRM #"+(i+1)}{irm.irmTotalUSD?" (USD "+fU(n(irm.irmTotalUSD))+")":""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {/* Invoice from that IRM's allocations */}
-                <div>
-                  <label style={labelStyle}>Invoice</label>
-                  <select value={brc.linkedInvoiceNo||""}
-                          onChange={e=>updBRC(brc.id,"linkedInvoiceNo",e.target.value)} style={iS}>
-                    <option value="">-- Select Invoice --</option>
-                    {invOptions.map(a=>(
-                      <option key={a.invoiceNo} value={a.invoiceNo}>
-                        {a.invoiceNo} (USD {fU(n(a.allocAmt))})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div><label style={labelStyle}>BRC No</label>
-                  <input value={brc.brcNo||""} onChange={e=>updBRC(brc.id,"brcNo",e.target.value)} style={iS}/>
-                </div>
-                <div><label style={labelStyle}>BRC Date</label>
-                  <input type="date" value={brc.brcDate||""} onChange={e=>updBRC(brc.id,"brcDate",e.target.value)} style={iS}/>
-                </div>
-                <div><label style={labelStyle}>BRC Amt (USD)</label>
-                  <input type="number" step="any" value={brc.brcAmtUSD||""}
-                         onChange={e=>updBRC(brc.id,"brcAmtUSD",e.target.value)} style={iS}/>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        <button onClick={()=>setForm(f=>({...f,brc_entries:[...f.brc_entries,mkBRC()]}))}
-          style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
-                  borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                  borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>
           + Add BRC
         </button>
 
@@ -1152,27 +1031,330 @@ function BCModal({bc,allShips,onSave,onClose,saving}){
                      display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12}}>
           <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>BC Amount (USD)</div>
                <div style={{fontSize:16,fontWeight:700,color:"#fde68a"}}>{bcAmt>0?fU(bcAmt):"—"}</div></div>
-          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>Total IRM Recd (USD)</div>
-               <div style={{fontSize:16,fontWeight:700,color:"#fff"}}>{fU(totIRMusd)}</div></div>
-          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>Total IRM (INR)</div>
-               <div style={{fontSize:16,fontWeight:700,color:"#86efac"}}>{fR(totIRMinr)}</div></div>
-          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>Total BRC (USD)</div>
-               <div style={{fontSize:16,fontWeight:700,color:"#7dd3fc"}}>{fU(totBRCusd)}</div></div>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>Invoices Linked</div>
+               <div style={{fontSize:16,fontWeight:700,color:"#fff"}}>{form.invAllocs.filter(a=>a.invoiceNo).length} · USD {fU(totInv)}</div></div>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>BRCs Linked</div>
+               <div style={{fontSize:16,fontWeight:700,color:"#7dd3fc"}}>{form.brcAllocs.filter(a=>a.brcNo).length} · USD {fU(totBrc)}</div></div>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>Inv Balance</div>
+               <div style={{fontSize:16,fontWeight:700,color:invBal<-0.01?"#fca5a5":invBal<0.01?"#86efac":"#fff"}}>{fU(invBal)}</div></div>
         </div>
 
         {/* ── Actions ── */}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20}}>
-          <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",
-                                           borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>
-            Cancel
-          </button>
+          <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
           <button onClick={save} disabled={saving}
             style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",color:"#fff",border:"none",
                     borderRadius:8,padding:"8px 24px",cursor:"pointer",fontWeight:700,fontSize:13}}>
             {saving?"Saving…":"💾 Save BC"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
 
+
+// ─── IRM Modal ─────────────────────────────────────────────────────────────────
+function IRMModal({irm, allIRMs, onSave, onClose, saving}){
+  const [form,setForm]=useState({
+    id:       irm?.id||null,
+    irm_no:   irm?.irm_no||"",
+    irm_date: irm?.irm_date||"",
+    irm_total_usd: irm?.irm_total_usd||irm?.irm_amt_usd||"",
+    exchange_rate: irm?.exchange_rate||"",
+    irm_amt_inr:   irm?.irm_amt_inr||0,
+    intermediary_charges_usd: irm?.intermediary_charges_usd||"",
+    // utilised_usd tracked at BRC level, computed on display
+  });
+  const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  const autoINR=(irmUSD, exRate)=>setForm(f=>({...f,
+    irm_amt_inr:n(irmUSD)*n(exRate)
+  }));
+
+  const save=()=>{
+    if(!form.irm_no.trim()){alert("IRM No is required.");return;}
+    if(allIRMs.some(i=>i.id!==form.id && i.irm_no===form.irm_no.trim())){
+      alert("IRM No "+form.irm_no+" already exists. IRM No must be unique.");return;
+    }
+    if(!form.irm_date){alert("IRM Date is required.");return;}
+    if(!form.irm_total_usd){alert("Total IRM Amount (USD) is required.");return;}
+    if(!form.exchange_rate){alert("Exchange Rate is required.");return;}
+    onSave(form);
+  };
+  const lbl={fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3};
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",
+                 alignItems:"center",justifyContent:"center",zIndex:300,padding:12}}>
+      <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:600,
+                   boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h3 style={{margin:0,color:"#1e3a5f",fontSize:17}}>{irm?"Edit":"Create"} IRM Entry</h3>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div><label style={lbl}>IRM No *</label>
+            <input value={form.irm_no} onChange={e=>sf("irm_no",e.target.value)} style={iS} placeholder="e.g. IRM-001"/>
+          </div>
+          <div><label style={lbl}>IRM Date *</label>
+            <input type="date" value={form.irm_date} onChange={e=>sf("irm_date",e.target.value)} style={iS}/>
+          </div>
+          <div><label style={lbl}>Total IRM Amount (USD) *</label>
+            <input type="number" step="any" value={form.irm_total_usd}
+                   onChange={e=>{sf("irm_total_usd",e.target.value);autoINR(e.target.value,form.exchange_rate);}}
+                   style={iS} placeholder="0.00"/>
+          </div>
+          <div><label style={lbl}>Exchange Rate *</label>
+            <input type="number" step="any" value={form.exchange_rate}
+                   onChange={e=>{sf("exchange_rate",e.target.value);autoINR(form.irm_total_usd,e.target.value);}}
+                   style={iS} placeholder="e.g. 84.50"/>
+          </div>
+          <div><label style={lbl}>Intermediary Bank Charges (USD)</label>
+            <input type="number" step="any" value={form.intermediary_charges_usd}
+                   onChange={e=>sf("intermediary_charges_usd",e.target.value)} style={iS} placeholder="0.00"/>
+          </div>
+          <div><label style={{...lbl,color:"#0369a1"}}>IRM Amount (INR) — Auto</label>
+            <input readOnly value={fR(form.irm_amt_inr||0)} style={cS}/>
+          </div>
+        </div>
+        {/* Summary chip */}
+        {n(form.irm_total_usd)>0&&(
+          <div style={{background:"#eff6ff",borderRadius:8,padding:"8px 12px",marginTop:14,
+                       fontSize:12,color:"#1d4ed8",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            <div><div style={{fontSize:10,color:"#64748b"}}>Total IRM</div>
+                 <div style={{fontWeight:700}}>USD {fU(n(form.irm_total_usd))}</div></div>
+            <div><div style={{fontSize:10,color:"#64748b"}}>Charges</div>
+                 <div style={{fontWeight:700}}>USD {fU(n(form.intermediary_charges_usd))}</div></div>
+            <div><div style={{fontSize:10,color:"#64748b"}}>Net (INR)</div>
+                 <div style={{fontWeight:700}}>{fR(form.irm_amt_inr||0)}</div></div>
+          </div>
+        )}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20}}>
+          <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
+          <button onClick={save} disabled={saving}
+            style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",color:"#fff",border:"none",
+                    borderRadius:8,padding:"8px 24px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+            {saving?"Saving…":"💾 Save IRM"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BRC Modal ─────────────────────────────────────────────────────────────────
+function BRCModal({brc, allBRCs, allIRMs, allShips, allBCs, onSave, onClose, saving}){
+  const mkIRMAlloc=()=>({id:Date.now()+Math.random(), irmId:"", irmUtilAmt:""});
+
+  // Pre-compute IRM utilised amounts across all OTHER BRCs
+  const irmUsedElsewhere=(irmId)=>
+    allBRCs.filter(b=>b.id!==brc?.id)
+           .flatMap(b=>b.irm_allocations||[])
+           .filter(a=>String(a.irmId)===String(irmId))
+           .reduce((s,a)=>s+n(a.irmUtilAmt),0);
+
+  // Pre-compute invoice amounts already covered by OTHER BRCs in OTHER BCs
+  const invCoveredElsewhere=(invNo)=>
+    allBRCs.filter(b=>b.id!==brc?.id && b.linked_invoice_no===invNo)
+           .reduce((s,b)=>s+n(b.brc_amt_usd),0);
+
+  const [form,setForm]=useState({
+    id:              brc?.id||null,
+    brc_no:          brc?.brc_no||"",
+    brc_date:        brc?.brc_date||"",
+    brc_amt_usd:     brc?.brc_amt_usd||"",
+    linked_invoice_no: brc?.linked_invoice_no||"",
+    irm_allocations: brc?.irm_allocations?.length
+      ? brc.irm_allocations
+      : [mkIRMAlloc()],
+  });
+  const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  // IRM alloc helpers
+  const updIRM=(id,k,v)=>setForm(f=>({...f,irm_allocations:f.irm_allocations.map(a=>a.id!==id?a:{...a,[k]:v})}));
+  const addIRM=()=>setForm(f=>({...f,irm_allocations:[...f.irm_allocations,mkIRMAlloc()]}));
+  const remIRM=(id)=>setForm(f=>({...f,irm_allocations:f.irm_allocations.filter(a=>a.id!==id)}));
+
+  const brcAmt     = n(form.brc_amt_usd)||0;
+  const totIRMUtil = form.irm_allocations.reduce((s,a)=>s+n(a.irmUtilAmt),0);
+  const irmBal     = brcAmt - totIRMUtil;
+
+  const save=()=>{
+    if(!form.brc_no.trim()){alert("BRC No is required.");return;}
+    if(allBRCs.some(b=>b.id!==form.id && b.brc_no===form.brc_no.trim())){
+      alert("BRC No "+form.brc_no+" already exists. BRC No must be unique.");return;
+    }
+    if(!form.brc_date){alert("BRC Date is required.");return;}
+    if(!form.brc_amt_usd){alert("BRC Amount (USD) is required.");return;}
+    if(!form.linked_invoice_no){alert("Invoice is required.");return;}
+    const validIRMs=form.irm_allocations.filter(a=>a.irmId&&a.irmUtilAmt);
+    if(!validIRMs.length){alert("At least one IRM allocation is required.");return;}
+    for(const a of validIRMs){
+      if(n(a.irmUtilAmt)>brcAmt+0.01){alert("IRM utilisation cannot exceed BRC amount.");return;}
+    }
+    onSave({...form, irm_allocations:validIRMs});
+  };
+  const lbl={fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3};
+  const secHdr=(icon,title,right)=>(
+    <div style={{background:"#1e3a5f",borderRadius:8,padding:"8px 14px",color:"#fff",
+                 fontWeight:700,fontSize:13,marginBottom:10,marginTop:14,
+                 display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <span>{icon} {title}</span>
+      {right&&<span style={{fontSize:11,color:"#93c5fd"}}>{right}</span>}
+    </div>
+  );
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",
+                 alignItems:"center",justifyContent:"center",zIndex:300,padding:12}}>
+      <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:740,
+                   maxHeight:"95vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h3 style={{margin:0,color:"#1e3a5f",fontSize:17}}>{brc?"Edit":"Create"} BRC Entry</h3>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600}}>✕</button>
+        </div>
+
+        {/* ── BRC Core ── */}
+        {secHdr("✅","BRC Details",brcAmt>0?"Total: USD "+fU(brcAmt):"")}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:4}}>
+          <div><label style={lbl}>BRC No *</label>
+            <input value={form.brc_no} onChange={e=>sf("brc_no",e.target.value)} style={iS} placeholder="e.g. BRC-001"/>
+          </div>
+          <div><label style={lbl}>BRC Date *</label>
+            <input type="date" value={form.brc_date} onChange={e=>sf("brc_date",e.target.value)} style={iS}/>
+          </div>
+          <div><label style={lbl}>BRC Amount (USD) *</label>
+            <input type="number" step="any" value={form.brc_amt_usd}
+                   onChange={e=>sf("brc_amt_usd",e.target.value)} style={iS} placeholder="0.00"/>
+          </div>
+        </div>
+
+        {/* ── IRM Allocation ── */}
+        {secHdr("📥","IRM Allocation",
+          brcAmt>0?(irmBal<-0.01?"⚠️ Over by USD "+fU(Math.abs(irmBal))
+                   :irmBal<0.01?"✅ Fully Allocated"
+                   :"Remaining: USD "+fU(irmBal)):""
+        )}
+        {form.irm_allocations.map((a,idx)=>{
+          const irmObj    = allIRMs.find(i=>String(i.id)===String(a.irmId));
+          const irmTotal  = irmObj?n(irmObj.irm_total_usd||irmObj.irm_amt_usd):0;
+          const usedElse  = irmObj?irmUsedElsewhere(a.irmId):0;
+          const usedHere  = form.irm_allocations.filter((_,i)=>i!==idx).reduce((s,x)=>String(x.irmId)===String(a.irmId)?s+n(x.irmUtilAmt):s,0);
+          const available = irmTotal - usedElse - usedHere;
+          // Filter out fully utilised IRMs (allow current selection)
+          const availIRMs = allIRMs.filter(i=>{
+            const tot=n(i.irm_total_usd||i.irm_amt_usd);
+            const used=irmUsedElsewhere(i.id);
+            return (tot-used)>0.01 || String(i.id)===String(a.irmId);
+          });
+          return(
+            <div key={a.id} style={{background:"#f8fafc",borderRadius:8,padding:10,marginBottom:8,border:"1px solid #e2e8f0"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:10,alignItems:"flex-end"}}>
+                <div>
+                  <label style={lbl}>IRM No *</label>
+                  <select value={String(a.irmId||"")} onChange={e=>updIRM(a.id,"irmId",e.target.value)} style={iS}>
+                    <option value="">-- Select IRM --</option>
+                    {availIRMs.map(i=>{
+                      const tot=n(i.irm_total_usd||i.irm_amt_usd);
+                      const used=irmUsedElsewhere(i.id);
+                      return <option key={i.id} value={String(i.id)}>{i.irm_no} — Bal: USD {fU(tot-used)}</option>;
+                    })}
+                  </select>
+                  {irmObj&&<div style={{fontSize:10,color:"#0369a1",marginTop:2}}>
+                    Total: USD {fU(irmTotal)} · Used elsewhere: USD {fU(usedElse)} · Available: USD {fU(available)}
+                  </div>}
+                </div>
+                <div>
+                  <label style={lbl}>Amount to Utilise (USD) *</label>
+                  <input type="number" step="any" value={a.irmUtilAmt||""}
+                         onChange={e=>updIRM(a.id,"irmUtilAmt",e.target.value)}
+                         style={iS} placeholder="0.00"/>
+                  {n(a.irmUtilAmt)>available+0.01&&<div style={{fontSize:10,color:"#dc2626",marginTop:2}}>⚠️ Exceeds available balance</div>}
+                </div>
+                <div style={{paddingBottom:2}}>
+                  {form.irm_allocations.length>1
+                    ? <button onClick={()=>remIRM(a.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"7px 10px",cursor:"pointer"}}>✕</button>
+                    : <div style={{width:34}}/>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        <button onClick={addIRM}
+          style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",
+                  borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600,marginBottom:4}}>
+          + Add IRM
+        </button>
+
+        {/* ── Invoice Allocation ── */}
+        {secHdr("📄","Invoice Allocation","One invoice per BRC")}
+        {(()=>{
+          const invAmt=(invNo)=>{
+            const s=allShips.find(x=>x.invoice_no===invNo);
+            return s?n(s.qty)*n(s.rate_per_mt):0;
+          };
+          const coveredElse=form.linked_invoice_no?invCoveredElsewhere(form.linked_invoice_no):0;
+          const invTotal=invAmt(form.linked_invoice_no);
+          const remaining=invTotal-coveredElse-brcAmt;
+          // Available invoices: not fully covered
+          const availInvs=allShips.filter(s=>{
+            const tot=n(s.qty)*n(s.rate_per_mt);
+            const cov=invCoveredElsewhere(s.invoice_no);
+            return (tot-cov)>0.01 || s.invoice_no===form.linked_invoice_no;
+          });
+          return(
+            <>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:8}}>
+                <div>
+                  <label style={lbl}>Invoice No *</label>
+                  <select value={form.linked_invoice_no}
+                          onChange={e=>sf("linked_invoice_no",e.target.value)} style={iS}>
+                    <option value="">-- Select Invoice --</option>
+                    {availInvs.map(s=>{
+                      const tot=n(s.qty)*n(s.rate_per_mt);
+                      const cov=invCoveredElsewhere(s.invoice_no);
+                      return <option key={s.id} value={s.invoice_no}>
+                        {s.invoice_no} — USD {fU(tot)} (Bal: {fU(tot-cov)})
+                      </option>;
+                    })}
+                  </select>
+                </div>
+                <div>
+                  <label style={{...lbl,color:"#0369a1"}}>Invoice Amount (USD)</label>
+                  <input readOnly value={form.linked_invoice_no?fU(invAmt(form.linked_invoice_no)):"—"} style={cS}/>
+                </div>
+              </div>
+              {form.linked_invoice_no&&invTotal>0&&(
+                <div style={{background:remaining<-0.01?"#fee2e2":remaining<0.01?"#dcfce7":"#eff6ff",
+                             borderRadius:6,padding:"5px 10px",fontSize:11,fontWeight:600,
+                             color:remaining<-0.01?"#dc2626":remaining<0.01?"#16a34a":"#1d4ed8"}}>
+                  Invoice: USD {fU(invTotal)} · Covered by other BRCs: USD {fU(coveredElse)} · This BRC: USD {fU(brcAmt)} · Remaining: USD {fU(remaining)}
+                </div>
+              )}
+            </>
+          );
+        })()}
+
+        {/* ── Summary ── */}
+        <div style={{background:"#1e3a5f",borderRadius:10,padding:12,marginTop:16,
+                     display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>BRC Amount</div>
+               <div style={{fontSize:15,fontWeight:700,color:"#fde68a"}}>{brcAmt>0?fU(brcAmt):"—"}</div></div>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>IRM Utilised</div>
+               <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{fU(totIRMUtil)}</div></div>
+          <div><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>IRM Remaining</div>
+               <div style={{fontSize:15,fontWeight:700,color:irmBal<-0.01?"#fca5a5":irmBal<0.01?"#86efac":"#7dd3fc"}}>{fU(irmBal)}</div></div>
+        </div>
+
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20}}>
+          <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
+          <button onClick={save} disabled={saving}
+            style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",
+                    borderRadius:8,padding:"8px 24px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+            {saving?"Saving…":"💾 Save BRC"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1327,8 +1509,9 @@ function BCDocsModal({bc, canUpload, canDelete, onClose}){
 function DetailModal({shipment,bc,onClose,onViewDocs}){
   if(!shipment)return <span/>;
   const s=shipment,c=calcShip(s);
-  const brcNos=bc?bc.brc_entries?.map(b=>b.brc_no).filter(Boolean).join(", "):"—";
-  const brcDates=bc?bc.brc_entries?.map(b=>b.brc_date).filter(Boolean).join(", "):"—";
+  const shipBRCs=bcs.flatMap(b=>(b.brc_entries||[])).filter(b=>b.linked_invoice_no===s.invoice_no);
+  const brcNos=shipBRCs.map(b=>b.brc_no).filter(Boolean).join(", ")||"—";
+  const brcDates=shipBRCs.map(b=>b.brc_date).filter(Boolean).join(", ")||"—";
   const rows=[["FY",getFY(s.invoice_date)],["Invoice Date",s.invoice_date],["Buyer",s.buyer_name],["Country",s.buyer_country],["Product",s.product],["Port of Loading",s.port_of_loading],["Port of Discharge",s.port_of_discharge],["SB No",s.shipping_bill_no],["SB Date",s.shipping_bill_date],["Port Code",s.port_code],["BL No",s.bl_no],["BL Date",s.bl_date],["Qty (MT)",fi(s.qty)],["Rate/MT (USD)",fi(s.rate_per_mt)],["Delivery Terms",s.delivery_terms],["Invoice Amt (USD)",fU(c.invoiceAmtUSD)],["Exchange Rate",fi(s.exchange_rate)],["Invoice Amt (INR)",fR(c.invoiceAmtINR)],["IGST (INR)",fR(s.igst)],["Gross Total (INR)",fR(c.grossTotal)],["FOB (USD)",fU(s.fob_value_usd)],["FOB (INR)",fR(c.fobValueINR)],["RODTEP (INR)",fR(s.rodtep_amount)],["RODTEP Status",s.rodtep_status],["GST Status",s.gst_status],["Bill Collection No",bc?bc.bc_no:"—"],["BC Date",bc?bc.bc_date:"—"],["BRC No(s)",brcNos],["BRC Date(s)",brcDates],["Payment Rcvd (USD)",bc?fU(bc.total_amt_usd):"—"],["Payment Rcvd (INR)",bc?fR(bc.total_amt_inr):"—"],["Balance (USD)",bc?fU(c.invoiceAmtUSD-bc.total_amt_usd):fU(c.invoiceAmtUSD)],["Remarks",s.remarks||"—"]];
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:150,padding:12}}>
@@ -3613,6 +3796,8 @@ export default function App(){
   const [editBuyer,setEditBuyer]=useState(null);
   const [showContractForm,setShowContractForm]=useState(false);
   const [piModal,setPiModal]=useState(null); // {contract, buyer} when open
+  const [irmModal,setIrmModal]=useState(null);  // null | {irm|null}
+  const [brcModal,setBrcModal]=useState(null);  // null | {brc|null}
   const [editContract,setEditContract]=useState(null);
   const [buyerSearch,setBuyerSearch]=useState("");
   const [contractSearch,setContractSearch]=useState("");
@@ -3764,7 +3949,7 @@ export default function App(){
   // junior_accountant: can add shipment but NOT edit/delete existing ones
   const canEditShipment=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant"||isJuniorAccountant);
   const canAddShipment=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant"||isJuniorAccountant);
-  const getBC=s=>bcs.find(b=>b.id===s.bc_id)||null;
+  const getBC=s=>bcs.find(b=>(b.linked_invoices||[]).includes(s.invoice_no))||null;
 
   const fyCounts=useMemo(()=>{const c={};ALL_FYS.forEach(f=>c[f]=0);ships.forEach(s=>{const f=getFY(s.invoice_date);if(c[f]!==undefined)c[f]++;});return c;},[ships]);
   const fyShips=useMemo(()=>ships.filter(s=>getFY(s.invoice_date)===fy),[ships,fy]);
@@ -3985,32 +4170,14 @@ export default function App(){
       let bcId=bc.id;
       const isExisting=bcs.find(b=>b.id===bc.id);
       if(isExisting){
-        await sb(`bill_collections?id=eq.${bc.id}`,{method:"PATCH",body:JSON.stringify({bank_name:bcData.bank_name,bc_no:bcData.bc_no,bc_date:bcData.bc_date,bc_amount_usd:n(bcData.bc_amount_usd)||null,linked_invoices:bcData.linked_invoices,total_amt_usd:bcData.total_amt_usd,total_amt_inr:bcData.total_amt_inr})});
+        await sb(`bill_collections?id=eq.${bc.id}`,{method:"PATCH",body:JSON.stringify({bank_name:bcData.bank_name,bc_no:bcData.bc_no,bc_date:bcData.bc_date,bc_amount_usd:n(bcData.bc_amount_usd)||null,linked_invoices:bcData.linked_invoices||[],linked_brcs:bcData.linked_brcs||[],total_inv_usd:n(bcData.total_inv_usd)||null,total_brc_usd:n(bcData.total_brc_usd)||null})});
         await sb(`irm_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});
         await sb(`brc_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});
       }else{
-        const res=await sb("bill_collections",{method:"POST",body:JSON.stringify({bank_name:bcData.bank_name,bc_no:bcData.bc_no,bc_date:bcData.bc_date,bc_amount_usd:n(bcData.bc_amount_usd)||null,linked_invoices:bcData.linked_invoices,total_amt_usd:bcData.total_amt_usd,total_amt_inr:bcData.total_amt_inr})});
+        const res=await sb("bill_collections",{method:"POST",body:JSON.stringify({bank_name:bcData.bank_name,bc_no:bcData.bc_no,bc_date:bcData.bc_date,bc_amount_usd:n(bcData.bc_amount_usd)||null,linked_invoices:bcData.linked_invoices||[],linked_brcs:bcData.linked_brcs||[],total_inv_usd:n(bcData.total_inv_usd)||null,total_brc_usd:n(bcData.total_brc_usd)||null})});
         bcId=res[0]?.id;
       }
-      if(irm_entries?.length){await sb("irm_entries",{method:"POST",body:JSON.stringify(irm_entries.map(i=>({
-        bc_id:bcId,
-        irm_no:i.irmNo||i.irm_no||"",
-        irm_date:i.irmDate||i.irm_date||null,
-        irm_total_usd:n(i.irmTotalUSD||i.irm_total_usd||i.irmAmtUSD||i.irm_amt_usd),
-        irm_amt_usd:n(i.irmTotalUSD||i.irm_total_usd||i.irmAmtUSD||i.irm_amt_usd),
-        exchange_rate:n(i.exchangeRate||i.exchange_rate),
-        irm_amt_inr:n(i.irmAmtINR||i.irm_amt_inr),
-        intermediary_charges_usd:n(i.intermediaryChargesUSD||i.intermediary_charges_usd||0),
-        allocations:i.allocations||[],
-      })))});}
-      if(brc_entries?.length){await sb("brc_entries",{method:"POST",body:JSON.stringify(brc_entries.map(b=>({
-        bc_id:bcId,
-        brc_no:b.brcNo||b.brc_no||"",
-        brc_date:b.brcDate||b.brc_date||null,
-        brc_amt_usd:n(b.brcAmtUSD||b.brc_amt_usd),
-        linked_irm_id:b.linkedIrmId||b.linked_irm_id||null,
-        linked_invoice_no:b.linkedInvoiceNo||b.linked_invoice_no||null,
-      })))});}
+      // IRM and BRC entries are saved via their own modals
       await loadAll();setShowBC(false);setEditBC(null);
     }catch(e){alert("Error saving BC: "+e.message);}
     setSaving(false);
@@ -4474,7 +4641,7 @@ export default function App(){
             ))}
             <SH t="Bill Collection"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,alignItems:"end",marginBottom:8}}>
-              <div><label style={{fontSize:11,fontWeight:600,color:"#374151",display:"block",marginBottom:2}}>Bill Collection No</label><select value={shipForm.bc_id||""} onChange={e=>setSF("bc_id",e.target.value?Number(e.target.value):null)} style={iS}><option value="">Not linked</option>{bcs.map(b=><option key={b.id} value={b.id}>{b.bc_no} ({b.bank_name}) — {fU(b.total_amt_usd)}</option>)}</select></div>
+              
               {canEditBC&&<button onClick={()=>setShowBC(true)} style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:7,padding:"7px 10px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>+ New</button>}
             </div>
             {selectedBC&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:7,padding:8,fontSize:11,marginBottom:10}}><b style={{color:"#15803d"}}>{selectedBC.bc_no}</b> · {fU(selectedBC.total_amt_usd)}</div>}
@@ -4493,7 +4660,34 @@ export default function App(){
       )}
 
       {showProfit&&<ProfitFormModal fy={fy} editId={editProfitId} form={profitForm} calc={profitCalc} fyShips={fyShips} setF={setPF} onSelectInvoice={selectProfitInv} onSave={saveProfit} onClose={()=>setShowProfit(false)} saving={saving}/>}
-      {showBC&&<BCModal bc={editBC} allShips={ships} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
+      {showBC&&<BCModal bc={editBC} allShips={ships} allBCs={bcs} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} allBRCs={bcs.flatMap(b=>b.brc_entries||[])} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
+      {irmModal&&<IRMModal irm={irmModal.irm} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} onSave={async(f)=>{
+        setSaving(true);
+        try{
+          const bcId=irmModal.bcId;
+          if(f.id){
+            await sb(`irm_entries?id=eq.${f.id}`,{method:"PATCH",body:JSON.stringify({irm_no:f.irm_no,irm_date:f.irm_date||null,irm_total_usd:n(f.irm_total_usd),irm_amt_usd:n(f.irm_total_usd),exchange_rate:n(f.exchange_rate),irm_amt_inr:n(f.irm_amt_inr),intermediary_charges_usd:n(f.intermediary_charges_usd||0)})});
+          } else {
+            await sb("irm_entries",{method:"POST",body:JSON.stringify({bc_id:bcId,irm_no:f.irm_no,irm_date:f.irm_date||null,irm_total_usd:n(f.irm_total_usd),irm_amt_usd:n(f.irm_total_usd),exchange_rate:n(f.exchange_rate),irm_amt_inr:n(f.irm_amt_inr),intermediary_charges_usd:n(f.intermediary_charges_usd||0),allocations:[]})});
+          }
+          await loadAll(); setIrmModal(null);
+        }catch(e){alert("Error: "+e.message);}
+        setSaving(false);
+      }} onClose={()=>setIrmModal(null)} saving={saving}/>}
+      {brcModal&&<BRCModal brc={brcModal.brc} allBRCs={bcs.flatMap(b=>b.brc_entries||[])} allIRMs={bcs.flatMap(b=>b.irm_entries||[])} allShips={ships} allBCs={bcs} onSave={async(f)=>{
+        setSaving(true);
+        try{
+          const bcId=brcModal.bcId;
+          const payload={brc_no:f.brc_no,brc_date:f.brc_date||null,brc_amt_usd:n(f.brc_amt_usd),linked_invoice_no:f.linked_invoice_no||null,irm_allocations:f.irm_allocations||[]};
+          if(f.id){
+            await sb(`brc_entries?id=eq.${f.id}`,{method:"PATCH",body:JSON.stringify(payload)});
+          } else {
+            await sb("brc_entries",{method:"POST",body:JSON.stringify({...payload,bc_id:bcId})});
+          }
+          await loadAll(); setBrcModal(null);
+        }catch(e){alert("Error: "+e.message);}
+        setSaving(false);
+      }} onClose={()=>setBrcModal(null)} saving={saving}/>}
       {viewShipId&&<DetailModal shipment={viewShip} bc={viewShip?getBC(viewShip):null} onClose={()=>setViewShipId(null)} onViewDocs={()=>setShipDocsId(viewShipId)}/>}
       {showUsers&&<UserModal users={users} onClose={()=>setShowUsers(false)} onRefresh={loadAll}/>}
       {showChangePwd&&<ChangePwdModal onClose={()=>setShowChangePwd(false)}/>}
