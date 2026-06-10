@@ -1408,7 +1408,7 @@ function IRMDocsModal({irm, canUpload, canDelete, onClose}){
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
-  const folder=`irm/${irm.irm_no||irm.id}`;
+  const folder=`irm/${irm.id||String(irm.irm_no||"").replace(/[^a-zA-Z0-9_-]/g,"_")}`;
   const docs=[
     {key:"irm_swift",  label:"SWIFT / Bank Advice", accept:".pdf", maxMB:3},
     {key:"irm_copy",   label:"IRM Copy",             accept:".pdf", maxMB:3},
@@ -1481,7 +1481,7 @@ function BRCDocsModal({brc, canUpload, canDelete, onClose}){
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
-  const folder=`brc/${brc.brc_no||brc.id}`;
+  const folder=`brc/${brc.id||String(brc.brc_no||"").replace(/[^a-zA-Z0-9_-]/g,"_")}`;
   const docs=[
     {key:"brc_copy",   label:"BRC Copy",             accept:".pdf", maxMB:3},
     {key:"brc_other",  label:"Other",                accept:".pdf", maxMB:5},
@@ -1553,7 +1553,7 @@ function ShipDocsModal({shipment, canUpload, canDelete, onClose}){
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
-  const folder=`shipments/${shipment.invoice_no||shipment.id}`;
+  const folder=`shipments/${shipment.id||String(shipment.invoice_no||"").replace(/[^a-zA-Z0-9_-]/g,"_")}`;
 
   const loadFiles=async()=>{
     setLoading(true);
@@ -1683,7 +1683,7 @@ function BCDocsModal({bc, canUpload, canDelete, onClose}){
   const [uploading, setUploading] = useState({});
   const [deleting, setDeleting] = useState({});
   const fileRefs = useRef({});
-  const folder = `bc/${bc.bc_no}`;
+  const folder = `bc/${bc.id||String(bc.bc_no||"").replace(/[^a-zA-Z0-9_-]/g,"_")}`;
 
   const loadFiles = async () => {
     setLoading(true);
