@@ -40,7 +40,11 @@ const r2Upload = async (folder, docKey, file) => {
     method:"PUT", headers:{"Content-Type":file.type||"application/octet-stream"},
     body: file
   });
-  if(!res.ok) throw new Error("Upload failed");
+  if(!res.ok){
+    let msg="Upload failed";
+    try{ const t=await res.text(); msg=`Upload failed (${res.status}): ${t.slice(0,200)}`; }catch(e){}
+    throw new Error(msg);
+  }
   return key;
 };
 
@@ -52,22 +56,24 @@ const r2Delete = async (key) => {
 const r2List = async (folder) => {
   try {
     const res = await fetch(`${R2_WORKER}/list/${folder}`);
-    if(!res.ok) return [];
-    const data = await res.json();
-    const files = data.files||data.objects||data.items||[];
-    // Normalise each entry — ensure docType is extracted from key path
-    // Key format: folder/docKey/docKey.ext  e.g. bc/BC001/bc_ref_copy/bc_ref_copy.pdf
+    if(!res.ok){ console.warn("r2List non-ok:", res.status); return []; }
+    const raw = await res.text();
+    let data;
+    try{ data = JSON.parse(raw); }catch(e){ console.warn("r2List parse error:", raw.slice(0,200)); return []; }
+    console.log("r2List raw response for", folder, ":", JSON.stringify(data).slice(0,300));
+    const files = data.files||data.objects||data.items||data.keys||
+                  (Array.isArray(data)?data:[]);
     return files.map(f => {
-      if(f.docType) return f; // already has docType
-      const key = f.key||f.name||"";
-      // Extract docType: second-to-last path segment
+      if(typeof f === "string") f = {key: f};
+      if(f.docType) return f;
+      const key = f.key||f.name||f.Key||"";
       const parts = key.split("/").filter(Boolean);
       const docType = parts.length>=2 ? parts[parts.length-2] : parts[parts.length-1]||key;
       return {
         ...f,
         key,
         docType,
-        size:   f.size||f.Size||0,
+        size:     f.size||f.Size||f.ContentLength||0,
         uploaded: f.uploaded||f.LastModified||f.lastModified||"",
       };
     });
@@ -1698,9 +1704,10 @@ function BCDocsModal({bc, canUpload, canDelete, onClose}){
     setUploading(u=>({...u,[docKey]:true}));
     try {
       if(files[docKey]) await r2Delete(files[docKey].key);
-      await r2Upload(folder, docKey, file);
+      const uploadedKey = await r2Upload(folder, docKey, file);
+      console.log("Uploaded successfully, key:", uploadedKey);
       await loadFiles();
-    } catch(e){ alert("Upload failed: "+e.message); }
+    } catch(e){ alert("Upload failed: "+e.message); console.error("Upload error:", e); }
     setUploading(u=>({...u,[docKey]:false}));
   };
 
