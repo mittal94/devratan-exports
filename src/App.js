@@ -50,10 +50,28 @@ const r2Delete = async (key) => {
 };
 
 const r2List = async (folder) => {
-  const res = await fetch(`${R2_WORKER}/list/${folder}`);
-  if(!res.ok) return [];
-  const data = await res.json();
-  return data.files||[];
+  try {
+    const res = await fetch(`${R2_WORKER}/list/${folder}`);
+    if(!res.ok) return [];
+    const data = await res.json();
+    const files = data.files||data.objects||data.items||[];
+    // Normalise each entry — ensure docType is extracted from key path
+    // Key format: folder/docKey/docKey.ext  e.g. bc/BC001/bc_ref_copy/bc_ref_copy.pdf
+    return files.map(f => {
+      if(f.docType) return f; // already has docType
+      const key = f.key||f.name||"";
+      // Extract docType: second-to-last path segment
+      const parts = key.split("/").filter(Boolean);
+      const docType = parts.length>=2 ? parts[parts.length-2] : parts[parts.length-1]||key;
+      return {
+        ...f,
+        key,
+        docType,
+        size:   f.size||f.Size||0,
+        uploaded: f.uploaded||f.LastModified||f.lastModified||"",
+      };
+    });
+  } catch(e) { console.error("r2List error:", e); return []; }
 };
 
 const r2ViewUrl = (key) => `${R2_WORKER}/${key}`;
@@ -1514,6 +1532,137 @@ function BRCDocsModal({brc, canUpload, canDelete, onClose}){
           )}
           <div style={{marginTop:10,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
             📌 {Object.keys(files).length} of {docs.length} documents uploaded
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Shipment Docs Modal ─────────────────────────────────────────────────────
+function ShipDocsModal({shipment, canUpload, canDelete, onClose}){
+  const [files,setFiles]=useState({});
+  const [loading,setLoading]=useState(true);
+  const [uploading,setUploading]=useState({});
+  const [deleting,setDeleting]=useState({});
+  const fileRefs=useRef({});
+  const folder=`shipments/${shipment.invoice_no||shipment.id}`;
+
+  const loadFiles=async()=>{
+    setLoading(true);
+    try{
+      const list=await r2List(folder);
+      const m={};
+      list.forEach(f=>{m[f.docType]=f;});
+      setFiles(m);
+    }catch(e){console.error(e);}
+    setLoading(false);
+  };
+  useEffect(()=>{loadFiles();},[]);
+
+  const handleUpload=async(docKey,file,maxMB,accept)=>{
+    const ext=file.name.split(".").pop().toLowerCase();
+    const allowed=accept.split(",").map(a=>a.trim().replace(".",""));
+    if(!allowed.includes(ext)){alert("Allowed formats: "+accept);return;}
+    if(file.size>maxMB*1024*1024){alert(`File too large. Max size: ${maxMB}MB`);return;}
+    setUploading(u=>({...u,[docKey]:true}));
+    try{
+      if(files[docKey]) await r2Delete(files[docKey].key);
+      await r2Upload(folder,docKey,file);
+      await loadFiles();
+    }catch(e){alert("Upload failed: "+e.message);}
+    setUploading(u=>({...u,[docKey]:false}));
+  };
+
+  const handleDelete=async(docKey)=>{
+    if(!window.confirm("Delete this document?"))return;
+    setDeleting(d=>({...d,[docKey]:true}));
+    try{await r2Delete(files[docKey].key);await loadFiles();}
+    catch(e){alert("Delete failed: "+e.message);}
+    setDeleting(d=>({...d,[docKey]:false}));
+  };
+
+  const fmtSize=b=>b<1024*1024?(b/1024).toFixed(0)+"KB":(b/1024/1024).toFixed(1)+"MB";
+  const uploaded=Object.keys(files).length;
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",
+                 alignItems:"center",justifyContent:"center",zIndex:200,padding:10}}>
+      <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:620,
+                   maxHeight:"92vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        {/* Header */}
+        <div style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",
+                     borderRadius:"14px 14px 0 0",padding:"14px 18px",
+                     display:"flex",justifyContent:"space-between",alignItems:"center",
+                     position:"sticky",top:0,zIndex:10}}>
+          <div>
+            <div style={{fontWeight:700,color:"#fff",fontSize:15}}>📁 Documents — {shipment.invoice_no}</div>
+            <div style={{fontSize:11,color:"#bfdbfe",marginTop:2}}>
+              {shipment.buyer_name} · {shipment.invoice_date} · {uploaded}/{SHIP_DOCS.length} uploaded
+            </div>
+          </div>
+          <button onClick={onClose}
+            style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",
+                    borderRadius:6,padding:"5px 12px",cursor:"pointer",fontWeight:600,fontSize:14}}>✕</button>
+        </div>
+
+        <div style={{padding:14}}>
+          {loading
+            ? <div style={{textAlign:"center",padding:30,color:"#94a3b8"}}>⏳ Loading documents...</div>
+            : <div style={{display:"grid",gap:7}}>
+                {SHIP_DOCS.map(doc=>{
+                  const up=files[doc.key],isUp=uploading[doc.key],isDel=deleting[doc.key];
+                  return(
+                    <div key={doc.key}
+                      style={{background:up?"#f0fdf4":"#f8fafc",
+                              border:`1px solid ${up?"#86efac":"#e2e8f0"}`,
+                              borderRadius:10,padding:"10px 12px",
+                              display:"flex",justifyContent:"space-between",
+                              alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{doc.label}</div>
+                        <div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>{doc.accept} · Max {doc.maxMB}MB</div>
+                        {up&&<div style={{fontSize:10,color:"#16a34a",marginTop:2}}>
+                          ✅ {fmtSize(up.size)} · {up.uploaded?new Date(up.uploaded).toLocaleDateString("en-IN"):""}
+                        </div>}
+                      </div>
+                      <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                        {up&&<a href={r2ViewUrl(up.key)} target="_blank" rel="noreferrer"
+                          style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:6,
+                                  padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none"}}>
+                          👁 View
+                        </a>}
+                        {canUpload&&<>
+                          <input type="file" accept={doc.accept}
+                            ref={el=>fileRefs.current[doc.key]=el}
+                            onChange={e=>{const f=e.target.files[0];if(f)handleUpload(doc.key,f,doc.maxMB,doc.accept);e.target.value="";}}
+                            style={{display:"none"}}/>
+                          <button onClick={()=>fileRefs.current[doc.key]?.click()}
+                            disabled={isUp}
+                            style={{background:up?"#fef3c7":"#dcfce7",
+                                    color:up?"#d97706":"#16a34a",
+                                    border:"none",borderRadius:6,padding:"4px 10px",
+                                    cursor:"pointer",fontSize:11,fontWeight:600}}>
+                            {isUp?"⏳":up?"🔄 Replace":"⬆ Upload"}
+                          </button>
+                        </>}
+                        {canDelete&&up&&<button onClick={()=>handleDelete(doc.key)}
+                          disabled={isDel}
+                          style={{background:"#fee2e2",color:"#dc2626",border:"none",
+                                  borderRadius:6,padding:"4px 8px",cursor:"pointer",
+                                  fontSize:11,fontWeight:600}}>
+                          {isDel?"⏳":"🗑"}
+                        </button>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+          }
+          <div style={{marginTop:12,padding:"10px 12px",background:"#f0fdf4",
+                       borderRadius:8,fontSize:11,color:"#15803d",fontWeight:600}}>
+            📌 {uploaded} of {SHIP_DOCS.length} documents uploaded
           </div>
         </div>
       </div>
