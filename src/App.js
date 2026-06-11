@@ -1412,62 +1412,47 @@ function BRCModal({brc, allBRCs, allIRMs, allShips, allBCs, onSave, onClose, sav
 
 
 // ─── IRM Docs Modal ─────────────────────────────────────────────────────────
-function IRMDocsModal({irm, allBCs, allStandaloneBRCs, canUpload, canDelete, onClose}){
+function IRMDocsModal({irm, canUpload, canDelete, onClose}){
   const [files,setFiles]=useState({});
   const [loading,setLoading]=useState(true);
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
-  // Find parent BC via irm_allocations — store under bc/ prefix (confirmed working)
-  const allBRCsForIRM=[...(allBCs||[]).flatMap(b=>b.brc_entries||[]),...(allStandaloneBRCs||[])];
-  const parentBCForIRM=(()=>{
-    for(const bc of (allBCs||[])){
-      const bcBRCs=allBRCsForIRM.filter(b=>(bc.linked_brcs||[]).includes(b.brc_no));
-      const irmIds=[];
-      bcBRCs.forEach(b=>(b.irm_allocations||[]).forEach(a=>{
-        if(!irmIds.includes(String(a.irmId))) irmIds.push(String(a.irmId));
-      }));
-      const pos=irmIds.indexOf(String(irm.id));
-      if(pos>=0) return {bc, pos};
-    }
-    return null;
-  })();
-  const folder=parentBCForIRM
-    ? `bc/${parentBCForIRM.bc.bc_no}`
-    : `irm/${irm.irm_no||irm.id}`;
-  const irmDocKey=parentBCForIRM ? `irm_${parentBCForIRM.pos}` : "irm_copy";
+  const folder=`irm/${irm.irm_no||irm.id}`;
   const docs=[
-    {key:"irm_swift",      label:"SWIFT / Bank Advice", accept:".pdf", maxMB:3},
+    {key:"swift_advice",   label:"SWIFT / Bank Advice", accept:".pdf", maxMB:3},
     {key:"irm_copy",       label:"IRM Copy",             accept:".pdf", maxMB:3},
-    {key:"irm_bank_stmt",  label:"Bank Statement",       accept:".pdf", maxMB:5},
-    {key:"irm_other",      label:"Other",                accept:".pdf", maxMB:5},
+    {key:"bank_statement", label:"Bank Statement",       accept:".pdf", maxMB:5},
+    {key:"other",          label:"Other",                accept:".pdf", maxMB:5},
   ];
   const loadFiles=async()=>{
     setLoading(true);
     try{
+      const list=await r2List(folder);
       const m={};
-      const allFiles=await r2List(folder);
-      allFiles.forEach(f=>{
-        if(f.docType===irmDocKey) m["irm_copy"]={...f, docType:"irm_copy"};
-        else m[f.docType]=f;
-      });
+      list.forEach(f=>{m[f.docType]=f;});
       setFiles(m);
-    }catch(e){console.error("IRM loadFiles error:",e);}
+      console.log("IRM r2List result for",folder,":",list);
+    }catch(e){console.error("IRM docs error:",e);}
     setLoading(false);
   };
   useEffect(()=>{loadFiles();},[]);
   const handleUpload=async(key,file,maxMB)=>{
-    if(file.size>maxMB*1024*1024){alert(`Max ${maxMB}MB`);return;}
+    if(file.size>maxMB*1024*1024){alert("Max "+maxMB+"MB");return;}
     if(!file.name.match(/\.pdf$/i)){alert("PDF only");return;}
     setUploading(u=>({...u,[key]:true}));
-    try{if(files[key])await r2Delete(files[key].key);const uploadKey=key==="irm_copy"?irmDocKey:key;await r2Upload(folder,uploadKey,file);await loadFiles();}
-    catch(e){alert("Upload failed: "+e.message);}
+    try{
+      if(files[key]) await r2Delete(files[key].key);
+      await r2Upload(folder,key,file);
+      await loadFiles();
+    }catch(e){alert("Upload failed: "+e.message); console.error(e);}
     setUploading(u=>({...u,[key]:false}));
   };
   const handleDelete=async(key)=>{
-    if(!window.confirm("Delete this document?"))return;
+    if(!window.confirm("Delete?"))return;
     setDeleting(d=>({...d,[key]:true}));
-    try{await r2Delete(files[key].key);await loadFiles();}catch(e){alert("Delete failed: "+e.message);}
+    try{await r2Delete(files[key].key);await loadFiles();}
+    catch(e){alert("Delete failed: "+e.message);}
     setDeleting(d=>({...d,[key]:false}));
   };
   const fmtSize=b=>b<1024*1024?(b/1024).toFixed(0)+"KB":(b/1024/1024).toFixed(1)+"MB";
@@ -1475,8 +1460,10 @@ function IRMDocsModal({irm, allBCs, allStandaloneBRCs, canUpload, canDelete, onC
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:10}}>
       <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:520,maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
         <div style={{background:"linear-gradient(135deg,#0369a1,#0284c7)",borderRadius:"14px 14px 0 0",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:700,color:"#fff",fontSize:15}}>📥 IRM Documents — {irm.irm_no}</div>
-               <div style={{fontSize:11,color:"#bae6fd",marginTop:2}}>Date: {irm.irm_date||"—"} · Amount: {fU(irm.irm_total_usd||irm.irm_amt_usd||0)}</div></div>
+          <div>
+            <div style={{fontWeight:700,color:"#fff",fontSize:15}}>📥 IRM Documents — {irm.irm_no}</div>
+            <div style={{fontSize:11,color:"#bae6fd",marginTop:2}}>Date: {irm.irm_date||"—"} · Amount: {fU(irm.irm_total_usd||irm.irm_amt_usd||0)}</div>
+          </div>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>✕</button>
         </div>
         <div style={{padding:14}}>
@@ -1485,19 +1472,27 @@ function IRMDocsModal({irm, allBCs, allStandaloneBRCs, canUpload, canDelete, onC
               {docs.map(doc=>{
                 const up=files[doc.key],isUp=uploading[doc.key],isDel=deleting[doc.key];
                 return(
-                  <div key={doc.key} style={{background:up?"#f0fdf4":"#f8fafc",border:`1px solid ${up?"#86efac":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <div key={doc.key} style={{background:up?"#f0fdf4":"#f8fafc",border:"1px solid "+(up?"#86efac":"#e2e8f0"),borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{doc.label}</div>
-                      <div style={{fontSize:10,color:"#94a3b8"}}>PDF only · Max {doc.maxMB}MB</div>
+                      <div style={{fontSize:10,color:"#94a3b8"}}>PDF · Max {doc.maxMB}MB</div>
                       {up&&<div style={{fontSize:10,color:"#16a34a",marginTop:2}}>✅ {fmtSize(up.size)} · {new Date(up.uploaded).toLocaleDateString("en-IN")}</div>}
                     </div>
                     <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
                       {up&&<a href={r2ViewUrl(up.key)} target="_blank" rel="noreferrer" style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none"}}>👁 View</a>}
-                      {canUpload&&<><input type="file" accept=".pdf" ref={el=>fileRefs.current[doc.key]=el} onChange={e=>{const f=e.target.files[0];if(f)handleUpload(doc.key,f,doc.maxMB);e.target.value="";}} style={{display:"none"}}/>
-                        <button onClick={()=>fileRefs.current[doc.key]?.click()} disabled={isUp} style={{background:up?"#fef3c7":"#dcfce7",color:up?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+                      {canUpload&&<>
+                        <input type="file" accept=".pdf" ref={el=>fileRefs.current[doc.key]=el}
+                          onChange={e=>{const f=e.target.files[0];if(f)handleUpload(doc.key,f,doc.maxMB);e.target.value="";}}
+                          style={{display:"none"}}/>
+                        <button onClick={()=>fileRefs.current[doc.key]?.click()} disabled={isUp}
+                          style={{background:up?"#fef3c7":"#dcfce7",color:up?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
                           {isUp?"⏳":up?"🔄 Replace":"⬆ Upload"}
-                        </button></>}
-                      {canDelete&&up&&<button onClick={()=>handleDelete(doc.key)} disabled={isDel} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>{isDel?"⏳":"🗑"}</button>}
+                        </button>
+                      </>}
+                      {canDelete&&up&&<button onClick={()=>handleDelete(doc.key)} disabled={isDel}
+                        style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+                        {isDel?"⏳":"🗑"}
+                      </button>}
                     </div>
                   </div>
                 );
@@ -1513,51 +1508,46 @@ function IRMDocsModal({irm, allBCs, allStandaloneBRCs, canUpload, canDelete, onC
   );
 }
 
-// ─── BRC Docs Modal ─────────────────────────────────────────────────────────
-function BRCDocsModal({brc, allBCs, canUpload, canDelete, onClose}){
+
+function BRCDocsModal({brc, canUpload, canDelete, onClose}){
   const [files,setFiles]=useState({});
   const [loading,setLoading]=useState(true);
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
-  // Find parent BC and position — store under bc/ prefix (confirmed working in R2)
-  const parentBCForBRC=(allBCs||[]).find(b=>(b.linked_brcs||[]).includes(brc.brc_no));
-  const brcPos=parentBCForBRC?(parentBCForBRC.linked_brcs||[]).indexOf(brc.brc_no):0;
-  const folder=parentBCForBRC
-    ? `bc/${parentBCForBRC.bc_no}`       // store in BC folder (known working)
-    : `brc/${brc.brc_no||brc.id}`;       // fallback standalone
-  const docKey=parentBCForBRC ? `brc_${brcPos}` : "brc_copy";  // legacy key if in BC
+  const folder=`brc/${brc.brc_no||brc.id}`;
   const docs=[
-    {key:"brc_copy",   label:"BRC Copy",  accept:".pdf", maxMB:3},
-    {key:"brc_other",  label:"Other",     accept:".pdf", maxMB:5},
+    {key:"brc_copy", label:"BRC Copy", accept:".pdf", maxMB:3},
+    {key:"other",    label:"Other",    accept:".pdf", maxMB:5},
   ];
   const loadFiles=async()=>{
     setLoading(true);
     try{
+      const list=await r2List(folder);
       const m={};
-      const allFiles=await r2List(folder);
-      allFiles.forEach(f=>{
-        // Map actual docType to display key
-        if(f.docType===docKey) m["brc_copy"]={...f, docType:"brc_copy"};
-        else m[f.docType]=f;
-      });
+      list.forEach(f=>{m[f.docType]=f;});
       setFiles(m);
-    }catch(e){console.error("BRC loadFiles error:",e);}
+      console.log("BRC r2List result for",folder,":",list);
+    }catch(e){console.error("BRC docs error:",e);}
     setLoading(false);
   };
   useEffect(()=>{loadFiles();},[]);
   const handleUpload=async(key,file,maxMB)=>{
-    if(file.size>maxMB*1024*1024){alert(`Max ${maxMB}MB`);return;}
+    if(file.size>maxMB*1024*1024){alert("Max "+maxMB+"MB");return;}
     if(!file.name.match(/\.pdf$/i)){alert("PDF only");return;}
     setUploading(u=>({...u,[key]:true}));
-    try{if(files[key])await r2Delete(files[key].key);const uploadKey=parentBCForBRC?docKey:key;await r2Upload(folder,uploadKey,file);await loadFiles();}
-    catch(e){alert("Upload failed: "+e.message);}
+    try{
+      if(files[key]) await r2Delete(files[key].key);
+      await r2Upload(folder,key,file);
+      await loadFiles();
+    }catch(e){alert("Upload failed: "+e.message); console.error(e);}
     setUploading(u=>({...u,[key]:false}));
   };
   const handleDelete=async(key)=>{
-    if(!window.confirm("Delete this document?"))return;
+    if(!window.confirm("Delete?"))return;
     setDeleting(d=>({...d,[key]:true}));
-    try{await r2Delete(files[key].key);await loadFiles();}catch(e){alert("Delete failed: "+e.message);}
+    try{await r2Delete(files[key].key);await loadFiles();}
+    catch(e){alert("Delete failed: "+e.message);}
     setDeleting(d=>({...d,[key]:false}));
   };
   const fmtSize=b=>b<1024*1024?(b/1024).toFixed(0)+"KB":(b/1024/1024).toFixed(1)+"MB";
@@ -1565,8 +1555,10 @@ function BRCDocsModal({brc, allBCs, canUpload, canDelete, onClose}){
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:10}}>
       <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:480,maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
         <div style={{background:"linear-gradient(135deg,#15803d,#16a34a)",borderRadius:"14px 14px 0 0",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:700,color:"#fff",fontSize:15}}>✅ BRC Documents — {brc.brc_no||"—"}</div>
-               <div style={{fontSize:11,color:"#bbf7d0",marginTop:2}}>Date: {brc.brc_date||"—"} · Amount: {fU(brc.brc_amt_usd||0)}{brc.linked_invoice_no?" · Invoice: "+brc.linked_invoice_no:""}</div></div>
+          <div>
+            <div style={{fontWeight:700,color:"#fff",fontSize:15}}>✅ BRC Documents — {brc.brc_no||"—"}</div>
+            <div style={{fontSize:11,color:"#bbf7d0",marginTop:2}}>Date: {brc.brc_date||"—"} · Amount: {fU(brc.brc_amt_usd||0)}{brc.linked_invoice_no?" · Invoice: "+brc.linked_invoice_no:""}</div>
+          </div>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}>✕</button>
         </div>
         <div style={{padding:14}}>
@@ -1575,19 +1567,27 @@ function BRCDocsModal({brc, allBCs, canUpload, canDelete, onClose}){
               {docs.map(doc=>{
                 const up=files[doc.key],isUp=uploading[doc.key],isDel=deleting[doc.key];
                 return(
-                  <div key={doc.key} style={{background:up?"#f0fdf4":"#f8fafc",border:`1px solid ${up?"#86efac":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <div key={doc.key} style={{background:up?"#f0fdf4":"#f8fafc",border:"1px solid "+(up?"#86efac":"#e2e8f0"),borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{doc.label}</div>
-                      <div style={{fontSize:10,color:"#94a3b8"}}>PDF only · Max {doc.maxMB}MB</div>
+                      <div style={{fontSize:10,color:"#94a3b8"}}>PDF · Max {doc.maxMB}MB</div>
                       {up&&<div style={{fontSize:10,color:"#16a34a",marginTop:2}}>✅ {fmtSize(up.size)} · {new Date(up.uploaded).toLocaleDateString("en-IN")}</div>}
                     </div>
                     <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
                       {up&&<a href={r2ViewUrl(up.key)} target="_blank" rel="noreferrer" style={{background:"#dbeafe",color:"#1d4ed8",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,textDecoration:"none"}}>👁 View</a>}
-                      {canUpload&&<><input type="file" accept=".pdf" ref={el=>fileRefs.current[doc.key]=el} onChange={e=>{const f=e.target.files[0];if(f)handleUpload(doc.key,f,doc.maxMB);e.target.value="";}} style={{display:"none"}}/>
-                        <button onClick={()=>fileRefs.current[doc.key]?.click()} disabled={isUp} style={{background:up?"#fef3c7":"#dcfce7",color:up?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+                      {canUpload&&<>
+                        <input type="file" accept=".pdf" ref={el=>fileRefs.current[doc.key]=el}
+                          onChange={e=>{const f=e.target.files[0];if(f)handleUpload(doc.key,f,doc.maxMB);e.target.value="";}}
+                          style={{display:"none"}}/>
+                        <button onClick={()=>fileRefs.current[doc.key]?.click()} disabled={isUp}
+                          style={{background:up?"#fef3c7":"#dcfce7",color:up?"#d97706":"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>
                           {isUp?"⏳":up?"🔄 Replace":"⬆ Upload"}
-                        </button></>}
-                      {canDelete&&up&&<button onClick={()=>handleDelete(doc.key)} disabled={isDel} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>{isDel?"⏳":"🗑"}</button>}
+                        </button>
+                      </>}
+                      {canDelete&&up&&<button onClick={()=>handleDelete(doc.key)} disabled={isDel}
+                        style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+                        {isDel?"⏳":"🗑"}
+                      </button>}
                     </div>
                   </div>
                 );
@@ -1604,7 +1604,6 @@ function BRCDocsModal({brc, allBCs, canUpload, canDelete, onClose}){
 }
 
 
-// ─── Shipment Docs Modal ─────────────────────────────────────────────────────
 function ShipDocsModal({shipment, canUpload, canDelete, onClose}){
   const [files,setFiles]=useState({});
   const [loading,setLoading]=useState(true);
@@ -1735,7 +1734,7 @@ function ShipDocsModal({shipment, canUpload, canDelete, onClose}){
 }
 
 
-function BCDocsModal({bc, allIRMs, allBRCs, canUpload, canDelete, onClose}){
+function BCDocsModal({bc, canUpload, canDelete, onClose}){
   const [files, setFiles] = useState({});
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState({});
@@ -1779,19 +1778,15 @@ function BCDocsModal({bc, allIRMs, allBRCs, canUpload, canDelete, onClose}){
 
   const fmtSize = bytes => bytes<1024*1024?(bytes/1024).toFixed(0)+"KB":(bytes/1024/1024).toFixed(1)+"MB";
 
-  // Build sectioned doc list
-  // IRMs and BRCs are standalone — find linked ones via linked_brcs / irm_allocations
+  // BC level docs only — IRM/BRC have their own separate doc modals
   const bcLevelDocs = BC_DOCS;
-  const linkedBRCs = (allBRCs||[]).filter(b=>(bc.linked_brcs||[]).includes(b.brc_no));
-  const linkedIRMIds = new Set(linkedBRCs.flatMap(b=>(b.irm_allocations||[]).map(a=>String(a.irmId))));
-  const linkedIRMs = (allIRMs||[]).filter(i=>linkedIRMIds.has(String(i.id)));
-  const irmDocs = linkedIRMs.map((irm,i) => ({
+  const irmDocs = (bc.irm_entries||[]).map((irm,i) => ({
     key:`irm_${i}`,
     label:`IRM Copy — ${irm.irm_no||"IRM #"+(i+1)}`,
     accept:".pdf", maxMB:3,
     sub: irm.irm_no ? `IRM No: ${irm.irm_no} | Date: ${irm.irm_date||"—"} | Amt: USD ${irm.irm_total_usd||irm.irm_amt_usd||0}` : ""
   }));
-  const brcDocs = linkedBRCs.map((brc,i) => ({
+  const brcDocs = (bc.brc_entries||[]).map((brc,i) => ({
     key:`brc_${i}`,
     label:`BRC Copy — ${brc.brc_no||"BRC #"+(i+1)}`,
     accept:".pdf", maxMB:3,
@@ -5424,9 +5419,9 @@ export default function App(){
       )}
 
       {shipDocsId&&ships.find(x=>x.id===shipDocsId)&&<ShipDocsModal shipment={ships.find(x=>x.id===shipDocsId)} canUpload={canEdit} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setShipDocsId(null)}/>}
-      {bcDocsId&&bcs.find(x=>x.id===bcDocsId)&&<BCDocsModal bc={bcs.find(x=>x.id===bcDocsId)} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} allBRCs={[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs]} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBCDocsId(null)}/>}
-      {irmDocsModal&&<IRMDocsModal irm={irmDocsModal.irm||irmDocsModal} allBCs={bcs} allStandaloneBRCs={standaloneBRCs} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setIrmDocsModal(null)}/>}
-      {brcDocsModal&&<BRCDocsModal brc={brcDocsModal.brc||brcDocsModal} allBCs={bcs} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBrcDocsModal(null)}/>}
+      {bcDocsId&&bcs.find(x=>x.id===bcDocsId)&&<BCDocsModal bc={bcs.find(x=>x.id===bcDocsId)} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBCDocsId(null)}/>}
+      {irmDocsModal&&<IRMDocsModal irm={irmDocsModal.irm||irmDocsModal} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setIrmDocsModal(null)}/>}
+      {brcDocsModal&&<BRCDocsModal brc={brcDocsModal.brc||brcDocsModal} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBrcDocsModal(null)}/>}
       {showApprovals&&<ApprovalsModal
           pendings={pendings} userInfo={userInfo}
           onClose={()=>setShowApprovals(false)} onRefresh={loadAll} ships={ships}
