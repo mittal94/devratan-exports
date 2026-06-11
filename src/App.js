@@ -4340,35 +4340,43 @@ function AdvancePaymentForm({ships, buyers}){
     doc.text("APPLICATION FOR PROCESSING OF EXPORT ADVANCE PAYMENT",105,y,{align:"center"});
     doc.setTextColor(0,0,0); y+=8;
 
-    // Date block — properly spaced
+    // Date + address block
     NF(false,9);
-    doc.text("Date: "+f.date,M+5,y); y+=6;
-    doc.text("To,",M+5,y); y+=4.5;
-    doc.text("The Branch Head State Bank of India",M+5,y); y+=4.5;
-    doc.text("Industrial Finance Branch",M+5,y); y+=4.5;
-    doc.text("YN Road, Indore",M+5,y); y+=7;
-    doc.text("Dear Sir / Madam,",M+5,y); y+=7;
+    doc.text("Date: "+f.date,M,y); y+=5.5;
+    doc.text("To,",M,y); y+=5;
+    doc.text("The Branch Head, State Bank of India",M,y); y+=5;
+    doc.text("Industrial Finance Branch, YN Road, Indore",M,y); y+=5;
+    doc.text("Dear Sir / Madam,",M,y); y+=7;
 
     // Subject bold
     NF(true,9);
-    doc.text("Processing of Foreign Inward Remittance Towards Export Advance Payment",M+5,y); y+=6;
+    doc.text("Processing of Foreign Inward Remittance Towards Export Advance Payment",M,y); y+=6;
 
-    // Applicant
+    // Applicant line: "Name of the Applicant: " normal + "DEVRATAN..." bold + "   IEC: AARFD8883D" normal
     NF(false,9);
-    doc.text("Name of the Applicant :  ",M+5,y);
-    NF(true,9); doc.text("DEVRATAN ENTERPRISES LLP",M+5+doc.getTextWidth("Name of the Applicant :  "),y);
-    y+=5;
-    NF(false,9); doc.text("IEC",M+25,y); doc.text(": AARFD8883D",M+32,y); y+=7;
+    const naPre="Name of the Applicant: ";
+    doc.text(naPre,M,y);
+    NF(true,9);
+    const naW=doc.getStringUnitWidth(naPre)*9/doc.internal.scaleFactor;
+    doc.text("DEVRATAN ENTERPRISES LLP",M+naW,y);
+    NF(false,9);
+    const naW2=doc.getStringUnitWidth("DEVRATAN ENTERPRISES LLP")*9/doc.internal.scaleFactor;
+    doc.text("   IEC: AARFD8883D",M+naW+naW2,y);
+    y+=6;
 
-    // Amount line — all on one line, then tick note on next line
+    // Amount line: sentence with bold FCY amount inline
     NF(false,9);
-    const amtLine1="I/We request you to process the Export Advance Payment of ";
-    doc.text(amtLine1,M+5,y);
-    const ax=M+5+doc.getTextWidth(amtLine1);
-    NF(true,9); doc.text(f.fcy_currency+" "+f.fcy_amount,ax,y);
-    NF(false,9); doc.text(" received by",ax+doc.getTextWidth(f.fcy_currency+" "+f.fcy_amount),y);
+    const amtPre="I/We request you to process the Export Advance Payment of ";
+    const amtVal=f.fcy_currency+" "+f.fcy_amount;
+    doc.text(amtPre,M,y);
+    NF(true,9);
+    const preW=doc.getStringUnitWidth(amtPre)*9/doc.internal.scaleFactor;
+    doc.text(amtVal,M+preW,y);
+    NF(false,9);
+    const valW=doc.getStringUnitWidth(amtVal)*9/doc.internal.scaleFactor;
+    doc.text(" received by you in our favour, as mentioned below –",M+preW+valW,y);
     y+=4.5;
-    doc.text("you in our favour, as mentioned below \u2013 (tick whichever is applicable)",M+5,y); y+=5;
+    doc.text("(tick whichever is applicable)",M,y); y+=6;
 
     // Advance type — proper checkbox symbols using PDF font
     // Use simple [ ] and [X] with standard font
