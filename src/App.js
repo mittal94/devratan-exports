@@ -4252,115 +4252,125 @@ function AdvancePaymentForm({ships, buyers}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
   const [f,setF]=useState({
     date:today,
-    amount_usd:"",
+    fcy_amount:"", fcy_currency:"USD",
     advance_type:"Advance against Export of Goods",
-    remitter_name:"",
-    remitter_address:"",
+    remitter_name:"", remitter_address:"",
     consignee:"N.A.",
-    description:"",
-    hsn:"10063019",
-    pi_no:"",
-    expected_date:"",
-    country_origin:"INDIA",
-    port_loading:"",
-    port_discharge:"",
-    country_dest:"",
+    description:"", hsn:"10063019",
+    pi_no:"", expected_date:"",
+    country_origin:"INDIA", port_loading:"", port_discharge:"", country_dest:"",
     goods_category:"Free",
-    credit_account:"EPC / PCFC Account",
-    credit_account_no:"41269117338",
+    cc_fcy:"", epc_fcy:"",
     epc_ref_no:"",
-    fwd_contract_1_no:"",fwd_contract_1_amt:"",fwd_contract_1_util:"",
-    fwd_contract_2_no:"",fwd_contract_2_amt:"",fwd_contract_2_util:"",
+    fwd_contracts:[],
     charges_account:"41289547389",
     other_docs:"",
-    contact_name:"AKSHAY MITTAL",
-    contact_mobile:"9111282828",
-    contact_email:"MITTAL94@GMAIL.COM",
+    contact_name:"AKSHAY MITTAL", contact_mobile:"9111282828", contact_email:"MITTAL94@GMAIL.COM",
     place:"INDORE",
   });
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
 
+  const addFwdContract=()=>{
+    if(f.fwd_contracts.length>=5) return;
+    setF(p=>({...p,fwd_contracts:[...p.fwd_contracts,{no:"",amt:"",util:""}]}));
+  };
+  const updFwd=(i,k,v)=>setF(p=>{
+    const arr=[...p.fwd_contracts]; arr[i]={...arr[i],[k]:v}; return{...p,fwd_contracts:arr};
+  });
+  const delFwd=(i)=>setF(p=>({...p,fwd_contracts:p.fwd_contracts.filter((_,j)=>j!==i)}));
+
   const exportPDF=()=>{
     const JPDF=getPDF(); if(!JPDF) return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
-    const M=18, RW=174; // margins and row width
-    const addPage=()=>{doc.addPage();};
+    const M=15, RW=180, navy=[18,52,96], steel=[70,130,180], ltblue=[220,235,250], gold=[162,120,50], white=[255,255,255];
+    const seller=COMPANIES.devratan;
 
-    // ── Helper functions ──────────────────────────────────────────────────────
-    const setFont=(bold,size)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(size||9);};
-    const line=(x1,y1,x2,y2)=>{doc.setDrawColor(0);doc.setLineWidth(0.2);doc.line(x1,y1,x2,y2);};
-    const rect=(x,y,w,h)=>{doc.setDrawColor(0);doc.setLineWidth(0.2);doc.rect(x,y,w,h);};
-    const txt=(text,x,y,opts)=>{doc.text(String(text||""),x,y,opts||{});};
-    const wrapTxt=(text,x,y,maxW,lineH)=>{
-      const lines=doc.splitTextToSize(String(text||""),maxW);
-      doc.text(lines,x,y);
-      return y+lines.length*lineH;
+    // Helper functions
+    const NF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||9);doc.setTextColor(0,0,0);};
+    const TXT=(t,x,y,opts)=>{doc.text(String(t||""),x,y,opts||{});};
+    const WRAP=(t,x,y,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y);return y+ls.length*(lh||4.5);};
+    const LINE=(x1,y1,x2,y2)=>{doc.setDrawColor(100,100,100);doc.setLineWidth(0.2);doc.line(x1,y1,x2,y2);};
+    const RECT=(x,y,w,h)=>{doc.setDrawColor(100,100,100);doc.setLineWidth(0.2);doc.rect(x,y,w,h);};
+
+    const chkPg=(yPos,needed)=>{ if(yPos+needed>283){doc.addPage();pdfHeader();return 52;}return yPos;};
+
+    const pdfHeader=()=>{
+      // Same header as contract
+      doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
+      try{if(LOGO_B64)doc.addImage(LOGO_B64,"PNG",10,3,38,38);}catch(e){}
+      doc.setDrawColor(...steel); doc.setLineWidth(0.4); doc.line(52,6,52,40);
+      doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+      doc.text(seller.name,57,13);
+      const cnW=doc.getTextWidth(seller.name);
+      doc.setDrawColor(...gold); doc.setLineWidth(0.6); doc.line(57,14.5,57+cnW,14.5);
+      doc.setFontSize(7); doc.setFont("helvetica","italic"); doc.setTextColor(...steel);
+      doc.text(seller.tagline||"",57,18.5);
+      doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0); doc.setFontSize(6.5);
+      doc.text(seller.address,57,23);
+      doc.text((seller.phone||"")+(seller.email?"  |  "+seller.email:""),57,27.5);
+      if(seller.gstin) doc.text(seller.gstin,57,32);
     };
 
-    let y=15;
+    const pdfFooter=()=>{
+      const tp=doc.getNumberOfPages();
+      for(let i=1;i<=tp;i++){
+        doc.setPage(i);
+        doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
+        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...white);
+        doc.text(seller.name+"  |  "+seller.phone+"  |  "+seller.email,105,293,{align:"center"});
+        doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(220,220,220);
+        doc.text("Page "+i+" of "+tp,M+RW-2,293,{align:"right"});
+      }
+    };
 
-    // PAGE 1
-    // Title
-    setFont(true,11);
-    txt("APPLICATION FOR PROCESSING OF EXPORT ADVANCE PAYMENT",105,y,{align:"center"});
-    y+=7;
+    // ── PAGE 1: APPLICATION FORM ──────────────────────────────────────────────
+    pdfHeader();
+    let y=50;
+    NF(true,10); doc.setTextColor(...navy);
+    doc.text("APPLICATION FOR PROCESSING OF EXPORT ADVANCE PAYMENT",105,y,{align:"center"});
+    y+=7; doc.setTextColor(0,0,0);
 
-    // Date
-    setFont(false,9);
-    txt("Date: "+f.date,M+10,y);
-    y+=6;
+    NF(false,9);
+    doc.text("Date: "+f.date,M+5,y); y+=5;
+    doc.text("To,",M+5,y); y+=4;
+    doc.text("The Branch Head State Bank of India",M+5,y); y+=4;
+    doc.text("Industrial Finance Branch",M,y); y+=4;
+    doc.text("YN Road, Indore",M+5,y); y+=6;
+    doc.text("Dear Sir / Madam,",M+5,y); y+=6;
 
-    // Address block
-    txt("To,",M+10,y); y+=5;
-    txt("The Branch Head State Bank of India",M+10,y); y+=5;
-    txt("Industrial Finance Branch",M,y); y+=5;
-    txt("YN Road, Indore",M+10,y); y+=6;
-    txt("Dear Sir / Madam,",M+10,y); y+=7;
+    NF(true,9); doc.text("Processing of Foreign Inward Remittance Towards Export Advance Payment",M+5,y); y+=6;
+    NF(false,9);
+    doc.text("Name of the Applicant :  ",M+5,y);
+    NF(true,9); doc.text("DEVRATAN ENTERPRISES LLP",M+5+doc.getTextWidth("Name of the Applicant :  "),y);
+    y+=5; NF(false,9);
+    doc.text("IEC",M+20,y); doc.text(": AARFD8883D",M+28,y); y+=6;
 
-    // Subject line bold
-    setFont(true,9);
-    txt("Processing of Foreign Inward Remittance Towards Export Advance Payment",M+10,y); y+=6;
+    // Amount line
+    doc.text("I/We request you to process the Export Advance Payment of ",M+5,y);
+    const reqX=M+5+doc.getTextWidth("I/We request you to process the Export Advance Payment of ");
+    NF(true,9); doc.text(f.fcy_currency+" "+f.fcy_amount,reqX,y);
+    NF(false,9); doc.text(" received by you in our favour, as mentioned below \u2013 (tick whichever is applicable)",reqX+doc.getTextWidth(f.fcy_currency+" "+f.fcy_amount),y,{maxWidth:M+RW-(reqX+doc.getTextWidth(f.fcy_currency+" "+f.fcy_amount))}); y+=5;
 
-    // Applicant
-    setFont(false,9);
-    txt("Name of the Applicant :  ",M+10,y);
-    const nameX=M+10+doc.getTextWidth("Name of the Applicant :  ");
-    setFont(true,9); txt("DEVRATAN ENTERPRISES LLP",nameX,y); y+=5;
-    setFont(false,9); txt("IEC  : AARFD8883D",M+25,y); y+=6;
+    doc.text("CCY",M+5,y); doc.text("Amount",M+20,y); y+=4;
 
-    // Request line
-    txt("I/We request you to process the Export Advance Payment of ",M+10,y);
-    const reqX=M+10+doc.getTextWidth("I/We request you to process the Export Advance Payment of ");
-    setFont(true,9); txt("USD "+f.amount_usd,reqX,y);
-    const usdW=doc.getTextWidth("USD "+f.amount_usd);
-    setFont(false,9); txt(" received by",reqX+usdW,y); y+=5;
-    txt("you in our favour, as mentioned below \u2013 (tick whichever is applicable)",M+10,y); y+=5;
-
-    // CCY/Amount row
-    txt("CCY",M+10,y); txt("Amount",M+35,y); y+=4;
-
-    // Advance type checkboxes table
-    const advTypes=[
-      ["Advance against Export of Goods","Advance against Export of Software"],
-      ["Advance against Export of Services","Advance against Long Term Exports"],
-    ];
-    const boxW=87, boxH=8;
-    advTypes.forEach(row=>{
-      rect(M,y,boxW,boxH); rect(M+boxW,y,boxW,boxH);
-      row.forEach((label,i)=>{
-        const checked=f.advance_type===label?"[\u2713]":"[ ]";
-        setFont(false,8.5);
-        txt(checked+" "+label,M+2+i*boxW,y+5);
-      });
-      y+=boxH;
-    });
+    // Advance type checkboxes
+    const advOpts=["Advance against Export of Goods","Advance against Export of Software","Advance against Export of Services","Advance against Long Term Exports"];
+    const bw=RW/2, bh=7;
+    for(let r=0;r<2;r++){
+      for(let c2=0;c2<2;c2++){
+        const opt=advOpts[r*2+c2];
+        const bx=M+c2*bw;
+        RECT(bx,y,bw,bh);
+        const chk=f.advance_type===opt?"\u2611":"\u2610";
+        NF(false,8.5); doc.text(chk+" "+opt,bx+2,y+5);
+      }
+      y+=bh;
+    }
     y+=4;
 
-    // Export Details heading
-    setFont(true,9); txt("Export Details:",M,y); y+=5;
-
-    // Export details table — exact rows from bank form
-    const detailRows=[
+    // Export Details table
+    NF(true,9); doc.text("Export Details:",M,y); y+=4;
+    const dtRows=[
       ["a.","Name of the Remitter",":",f.remitter_name],
       ["b.","Remitter's Address (with Country Name)",":",f.remitter_address],
       ["c.","Details of Consignee / Buyer (if different from the Remitter, Invoice / Tripartite Agreement or any other supporting document to be furnished)",":",f.consignee],
@@ -4372,162 +4382,150 @@ function AdvancePaymentForm({ships, buyers}){
       ["i.","Port of Loading / Airport of Departure",":",f.port_loading],
       ["j.","Port of Discharge / Airport of Destination",":",f.port_discharge],
       ["k.","Country of Destination",":",f.country_dest],
-      ["l.","If Merchanting Trade (if second leg)",":", "Import Leg details: Shipment Date _______ Txn. Ref. No. ______"],
+      ["l.","If Merchanting Trade (if second leg)",":", "Import Leg details: Shipment Date ________ Txn. Ref. No. ________"],
       ["m.","Country of Loading/Shipment (in case of MTT)",":", "N.A."],
-      ["n.","Goods Category",":", f.goods_category==="Free"?"Free [ \u2713 ]   Restricted [   ]":"Free [   ]   Restricted [ \u2713 ]"],
+      ["n.","Goods Category",":", f.goods_category],
     ];
-    const colW=[8,80,5,81];
-    const tblX=M;
-    setFont(false,8.5);
-    detailRows.forEach(([sr,label,colon,val])=>{
-      // measure height needed
-      const labelLines=doc.splitTextToSize(label,colW[1]-2);
-      const valLines=doc.splitTextToSize(String(val||""),colW[3]-2);
-      const rowH=Math.max(labelLines.length,valLines.length)*4.5+2;
-      if(y+rowH>275){addPage();y=15;}
-      rect(tblX,y,colW[0],rowH);
-      rect(tblX+colW[0],y,colW[1],rowH);
-      rect(tblX+colW[0]+colW[1],y,colW[2],rowH);
-      rect(tblX+colW[0]+colW[1]+colW[2],y,colW[3],rowH);
-      txt(sr,tblX+1,y+5);
-      doc.text(labelLines,tblX+colW[0]+1,y+5);
-      txt(colon,tblX+colW[0]+colW[1]+1,y+5);
-      doc.text(valLines,tblX+colW[0]+colW[1]+colW[2]+1,y+5);
-      y+=rowH;
+    const c0=8,c1=82,c2=5,c3=RW-c0-c1-c2;
+    NF(false,8.5);
+    dtRows.forEach(([sr,lbl,col,val])=>{
+      const lLines=doc.splitTextToSize(lbl,c1-2);
+      const vLines=doc.splitTextToSize(String(val||""),c3-2);
+      const rh=Math.max(lLines.length,vLines.length)*4+3;
+      y=chkPg(y,rh);
+      RECT(M,y,c0,rh); RECT(M+c0,y,c1,rh); RECT(M+c0+c1,y,c2,rh); RECT(M+c0+c1+c2,y,c3,rh);
+      doc.text(sr,M+1,y+4.5);
+      doc.text(lLines,M+c0+1,y+4.5);
+      doc.text(col,M+c0+c1+1,y+4.5);
+      doc.text(vLines,M+c0+c1+c2+1,y+4.5);
+      y+=rh;
     });
-    y+=3;
+    y+=2;
 
-    // Restricted goods note
-    setFont(false,8);
-    txt("(In case of Restricted goods, enclose original Exchange Control Copy of Export License issued by DGFT, if obtained)",M,y,{maxWidth:RW}); y+=6;
-
-    // Export License table
-    setFont(false,8.5);
-    txt("Export License Details (for restricted goods):",M,y); y+=4;
-    const licCols=[["License No",35],["Date of Issue",30],["Date of Expiry",30],["License Value",30],["Amount Utilised",30]];
-    let lx=M;
-    licCols.forEach(([h,w])=>{rect(lx,y,w,7);txt(h,lx+1,y+5,{maxWidth:w-2});lx+=w;});
+    // Restricted note + license table
+    NF(false,7.5);
+    y=WRAP("(In case of Restricted goods, enclose original Exchange Control Copy of Export License issued by DGFT, if obtained)",M,y,RW,4);
+    y+=1;
+    NF(false,8); doc.text("Export License Details (for restricted goods):",M,y); y+=4;
+    const licH=[["License No",36],["Date of Issue",36],["Date of Expiry",36],["License Value",36],["Amount Utilised",36]];
+    let lx=M; NF(false,7.5);
+    licH.forEach(([h,w])=>{RECT(lx,y,w,7);doc.text(h,lx+1,y+4.5,{maxWidth:w-2});lx+=w;});
     y+=7; lx=M;
-    licCols.forEach(([h,w])=>{rect(lx,y,w,7);lx+=w;});
-    y+=10;
+    licH.forEach(([h,w])=>{RECT(lx,y,w,6);lx+=w;});
+    y+=8;
 
-    // Credit proceeds
-    setFont(true,9); txt("Credit the Proceeds to:",M+10,y); y+=4;
-    setFont(false,9); txt("CCY",M+10,y); txt("Amount",M+35,y); y+=4;
-    const creditRows=[
-      ["Cash Credit Account",""],
-      ["Current Account",""],
-      ["EEFC/DDA Account",""],
-      ["EPC / PCFC Account",f.credit_account==="EPC / PCFC Account"?f.credit_account_no:""],
-      ["EPC/PCFC Ref. No",f.credit_account==="EPC / PCFC Account"?f.epc_ref_no:""],
+    // Credit the Proceeds
+    NF(true,9); doc.text("Credit the Proceeds to:",M+5,y); y+=4;
+    NF(false,8.5); doc.text("CCY",M+5,y); doc.text("Amount",M+20,y); y+=4;
+    const creditData=[
+      ["Cash Credit Account","41289547389",f.cc_fcy],
+      ["EPC / PCFC Account","41269117338",f.epc_fcy],
     ];
-    creditRows.forEach(([label,val])=>{
-      const isBold=label==="EPC / PCFC Account";
-      rect(M,y,90,7); rect(M+90,y,30,7); rect(M+120,y,30,7); rect(M+150,y,RW-150,7);
-      setFont(isBold,8.5);
-      txt(label,M+1,y+5);
-      setFont(isBold,8.5);
-      txt(String(val||""),M+91,y+5);
-      y+=7;
-    });
-    y+=4;
-
-    // Forward contract
-    if(y>230){addPage();y=15;}
-    setFont(true,9); txt("Forward Contract Details (if any, to be utilized):",M,y); y+=4;
-    const fwdCols=[["S No",12],["Forward Contract No",45],["Forward Contract Amount",40],["Forward Contract Due Date",40],["Amount to be Utilised",37]];
-    let fx=M;
-    setFont(false,8.5);
-    fwdCols.forEach(([h,w])=>{rect(fx,y,w,7);txt(h,fx+1,y+5,{maxWidth:w-2});fx+=w;});
-    y+=7;
-    [[1,f.fwd_contract_1_no,f.fwd_contract_1_amt,"",f.fwd_contract_1_util],
-     [2,f.fwd_contract_2_no,f.fwd_contract_2_amt,"",f.fwd_contract_2_util],
-     ["","","","",""]].forEach(row=>{
-      fx=M;
-      fwdCols.forEach(([h,w],i)=>{rect(fx,y,w,7);txt(String(row[i]||""),fx+1,y+5,{maxWidth:w-2});fx+=w;});
-      y+=7;
-    });
-    y+=4;
-
-    // Charges line
-    setFont(false,8.5);
-    doc.text(doc.splitTextToSize("The relative charges along with applicable taxes (if any) may please be recovered from our Cash Credit/ Current Account No. "+f.charges_account,RW),M+10,y);
-    y+=10;
-
-    // Documents enclosed
-    setFont(true,9); txt("Documents enclosed: (strike off, whichever is not applicable)",M,y); y+=5;
-    setFont(false,8.5);
-    const docList=[
-      "Purchase Order / Firm agreement for supply of Goods/Software.",
-      "Proforma Invoice / Contract.",
-      "Original valid license for export of restricted goods.",
-      "For export of rough diamonds, Kimberley Process Certificate of Exporter.",
-      "Other documents (please specify, if any): "+(f.other_docs||""),
-    ];
-    docList.forEach(d=>{
-      if(y>275){addPage();y=15;}
-      txt("\u2022  "+d,M+10,y,{maxWidth:RW-10}); y+=5;
-    });
-    y+=3;
-
-    // Contact details table
-    if(y>255){addPage();y=15;}
-    setFont(true,9);
-    rect(M,y,RW,7); txt("Contact Details for this transaction:",M+1,y+5); y+=7;
-    const contactRows=[["Name",":",f.contact_name],["Mobile No.",":",f.contact_mobile],["Email ID",":",f.contact_email]];
-    setFont(false,8.5);
-    contactRows.forEach(([label,colon,val])=>{
-      rect(M,y,50,6); rect(M+50,y,5,6); rect(M+55,y,RW-55,6);
-      txt(label,M+1,y+4); txt(colon,M+51,y+4); txt(String(val||""),M+56,y+4);
+    const cw=[55,40,45,RW-140];
+    RECT(M,y,cw[0],6); RECT(M+cw[0],y,cw[1],6); RECT(M+cw[0]+cw[1],y,cw[2],6); RECT(M+cw[0]+cw[1]+cw[2],y,cw[3],6);
+    NF(true,7.5); doc.text("Account",M+1,y+4); doc.text("Account No.",M+cw[0]+1,y+4); doc.text("FCY Amount",M+cw[0]+cw[1]+1,y+4);
+    y+=6;
+    creditData.forEach(([acc,no,fcy])=>{
+      RECT(M,y,cw[0],6); RECT(M+cw[0],y,cw[1],6); RECT(M+cw[0]+cw[1],y,cw[2],6); RECT(M+cw[0]+cw[1]+cw[2],y,cw[3],6);
+      NF(false,8.5); doc.text(acc,M+1,y+4); doc.text(no,M+cw[0]+1,y+4); doc.text(String(fcy||""),M+cw[0]+cw[1]+1,y+4);
       y+=6;
     });
-    y+=6;
+    NF(false,8);
+    doc.text("EPC/PCFC Ref. No: "+(f.epc_ref_no||""),M+5,y+4); y+=8;
 
-    // Date/Place/Signature
-    setFont(true,9);
-    txt("Date: "+f.date,M,y); txt("Authorised Signatory(ies)",M+110,y); y+=5;
-    txt("Place: "+f.place,M,y); y+=5;
-    setFont(false,8.5); txt("(Please affix Company/Firm Stamp)",M+100,y); y+=5;
-    setFont(true,8.5); txt("[All pages to be signed by the Authorised Signatory(ies)]",M,y,{align:"left"}); y+=5;
+    // Forward contract
+    y=chkPg(y,20);
+    NF(true,9); doc.text("Forward Contract Details (if any, to be utilized):",M,y); y+=4;
+    const fwH=[["S No",12],["Forward Contract No",45],["Forward Contract Amount",42],["Forward Contract Due Date",42],["Amount to be Utilised",39]];
+    let fx=M; NF(false,7.5);
+    fwH.forEach(([h,w])=>{RECT(fx,y,w,8);doc.text(h,fx+1,y+4.5,{maxWidth:w-2});fx+=w;});
+    y+=8;
+    const fwRows=f.fwd_contracts.length>0?f.fwd_contracts:[{no:"",amt:"",util:""},{no:"",amt:"",util:""}];
+    fwRows.forEach((fc,i)=>{
+      fx=M;
+      const rowData=[String(i+1),fc.no||"",fc.amt||"","",fc.util||""];
+      fwH.forEach(([h,w],j)=>{RECT(fx,y,w,6);NF(false,8.5);doc.text(rowData[j],fx+1,y+4,{maxWidth:w-2});fx+=w;});
+      y+=6;
+    });
+    y+=3;
 
-    // ── PAGE 2: UNDERTAKING ───────────────────────────────────────────────────
-    addPage(); y=15;
-    setFont(true,11); txt("UNDERTAKING-CUM-DECLARATION FOR PROCESSING OF EXPORT ADVANCE PAYMENT",105,y,{align:"center"}); y+=7;
-    setFont(true,9); txt("I / We hereby undertake and declare that:",M,y); y+=6;
+    // Charges
+    y=chkPg(y,8);
+    NF(false,8.5);
+    y=WRAP("The relative charges along with applicable taxes (if any) may please be recovered from our Cash Credit/ Current Account No. "+f.charges_account,M+5,y,RW-5,4.5);
+    y+=4;
 
-    setFont(true,9); txt("Section - A (FEMA Declaration):",M,y); y+=5;
-    setFont(false,8.5); txt("(Under Section 10 (5), Chapter III of The Foreign Exchange Management Act, 1999)",M+5,y,{maxWidth:RW-5}); y+=7;
+    // Documents enclosed
+    y=chkPg(y,30);
+    NF(true,9); doc.text("Documents enclosed: (strike off, whichever is not applicable)",M,y); y+=5;
+    NF(false,8.5);
+    ["Purchase Order / Firm agreement for supply of Goods/Software.",
+     "Proforma Invoice / Contract.",
+     "Original valid license for export of restricted goods.",
+     "For export of rough diamonds, Kimberley Process Certificate of Exporter.",
+     "Other documents (please specify, if any): "+(f.other_docs||""),
+    ].forEach(d=>{y=chkPg(y,6);doc.text("\u2022  "+d,M+5,y,{maxWidth:RW-10});y+=5;});
+    y+=3;
 
-    const secAItems=[
+    // Contact table
+    y=chkPg(y,30);
+    RECT(M,y,RW,6); NF(true,9); doc.setTextColor(...navy);
+    doc.text("Contact Details for this transaction:",M+1,y+4);
+    y+=6; doc.setTextColor(0,0,0);
+    [["Name",":",f.contact_name],["Mobile No.",":",f.contact_mobile],["Email ID",":",f.contact_email]].forEach(([l,c2,v])=>{
+      RECT(M,y,50,5); RECT(M+50,y,5,5); RECT(M+55,y,RW-55,5);
+      NF(false,8.5); doc.text(l,M+1,y+3.5); doc.text(c2,M+51,y+3.5); doc.text(String(v||""),M+56,y+3.5);
+      y+=5;
+    });
+    y+=5;
+
+    // Date/Sign
+    y=chkPg(y,14);
+    NF(true,9);
+    doc.text("Date: "+f.date,M,y); doc.text("Authorised Signatory (ies)",M+RW-60,y); y+=5;
+    doc.text("Place: "+f.place,M,y); y+=4;
+    NF(false,8); doc.text("(Please affix Company/Firm Stamp)",M+RW-70,y); y+=5;
+    NF(true,8); doc.text("*[All pages to be signed by the Authorised Signatory(ies)]",M,y);
+
+    // ── PAGE 2: UNDERTAKING (single combined page) ────────────────────────────
+    doc.addPage(); pdfHeader();
+    y=50;
+    NF(true,10); doc.setTextColor(...navy);
+    doc.text("UNDERTAKING-CUM-DECLARATION FOR PROCESSING OF EXPORT ADVANCE PAYMENT",105,y,{align:"center"});
+    y+=7; doc.setTextColor(0,0,0);
+
+    NF(true,9); doc.text("I / We hereby undertake and declare that:",M,y); y+=6;
+    NF(true,9); doc.text("Section - A (FEMA Declaration):",M,y); y+=5;
+    NF(false,8.5); y=WRAP("(Under Section10 (5), Chapter III of The Foreign Exchange Management Act, 1999)",M+5,y,RW-5,4);
+    y+=4;
+
+    const secA=[
       "The transaction mentioned in this application does not contravene the provisions of the Foreign Exchange Management Act 1999 (FEMA) and rules/regulations made thereunder.",
       "I/We hereby declare that the transaction, the details of which are specifically mentioned in this application does not involve and is not designed for the purpose of any contravention or evasion of the provisions of the aforesaid act of any rule, regulation, notification, direction, or order made thereunder.",
       "I/We also hereby agree and undertake to give such information/documents as may be reasonably required by you to your satisfaction about this transaction in terms of the above declaration.",
       "I/We also understand that if I/we refuse to comply with any such requirements or make only unsatisfactory compliance therewith, the Bank shall refuse to undertake the transaction and shall, if it has reason to believe that any contravention / evasion is contemplated by me/us, report the matter to Reserve Bank of India.",
       "I/We further declare that the undersigned has/have the authority to give this declaration and undertaking on behalf of the Firm/Company.",
     ];
-    secAItems.forEach((item,i)=>{
-      setFont(false,8.5);
-      const lines=doc.splitTextToSize("\u2022  "+(i+1)+". "+item,RW-10);
-      if(y+lines.length*4.5>275){addPage();y=15;}
-      doc.text(lines,M+10,y); y+=lines.length*4.5+2;
+    NF(false,8.5);
+    secA.forEach((item,i)=>{
+      const txt="\u2022  "+(i+1)+". "+item;
+      const ls=doc.splitTextToSize(txt,RW-10);
+      y=chkPg(y,ls.length*4+2);
+      doc.text(ls,M+5,y); y+=ls.length*4+2;
     });
     y+=3;
 
-    setFont(true,9);
+    NF(true,8.5);
     const secBTitle="Section-B [Declaration for export of goods/software/services and submission of evidence of export and compliance with RBI guidelines]:";
-    const secBLines=doc.splitTextToSize(secBTitle,RW);
-    doc.text(secBLines,M,y); y+=secBLines.length*5+2;
+    const sbL=doc.splitTextToSize(secBTitle,RW);
+    doc.text(sbL,M,y); y+=sbL.length*4.5+3;
 
-    const secBItems=[
+    const secB=[
       "We shall ensure that the export of goods/software/services is made within three years / permissible period from the date of receipt of Export advance payment and submit all the documents relating to export of goods/software/services to you (SBI) within 21 days from the date of export of goods or date of invoice (in case of software/services).",
       "I/we understand that in the event of my/our inability to fulfill the export obligation within three years / permissible period from the date of receipt of advance payment, no remittance towards refund of unutilized portion of advance payment or interest shall be made after the expiry of the said period of three years / permissible period, without the prior approval of the RBI.",
       "Rate of interest (if any) payable on advance payment does not exceed the rates prescribed by RBI from time to time.",
       "In case of third-party transaction, we undertake to incorporate the name(s) of third-party(ies) in the Invoice and Shipping Bill / Softex.",
-      "In case of long-term export advance (with maximum tenor of 10 years), we confirm that: The contract with the overseas party/ buyer has clear nature, amount and delivery timelines of the products and penalty in case of non-performance or contract cancellation.",
-      "We have the capacity, systems and processes in place to ensure that the orders over the duration of the said tenure can be executed.",
-      "The export advance will be adjusted through future exports.",
-      "The advance receipt will not be utilized to liquidate Rupee Loan classified as NPA.",
-      "Double financing for working capital for execution of related export order will not be obtained.",
+      "In case of long-term export advance (with maximum tenor of 10 years), we confirm that: (a) The contract with the overseas party/ buyer has clear nature, amount and delivery timelines of the products and penalty in case of non-performance or contract cancellation. (b) We have the capacity, systems and processes in place to ensure that the orders over the duration of the said tenure can be executed. (c) The export advance will be adjusted through future exports. (d) The advance receipt will not be utilized to liquidate Rupee Loan classified as NPA. (e) Double financing for working capital for execution of related export order will not be obtained.",
       "I/We confirm that product pricing is in consonance with prevailing international prices.",
       "I/We undertake to comply with all regulatory and other regulations and guidelines in force issued by RBI, DGFT, Customs authorities, FEDAI, SBI, and any other regulatory/government agency as at the time of the transaction.",
       "I/we also agree that the exchange rate will be applicable at the time of deal booking and may vary from the rate prevailing when the request is submitted. I/we also understand that the rate communicated to us (if any) is an indicative rate and the actual rate may be different from the same.",
@@ -4535,137 +4533,171 @@ function AdvancePaymentForm({ships, buyers}){
       "I/we also declare that the transaction does not have linkage with any Specially Designated Nationals and Blocked Persons (SDN)/countries listed under applicable sanctions laws (as imposed by US-OFAC, UN, EU, or any Other Government and/or Regulatory authorities) in any manner. If the transaction involves linkage with any Specially Designated Nationals and Blocked Persons (SDN)/countries listed under applicable sanctions laws (as imposed by US-OFAC, UN, EU, or any Other Government and/or Regulatory authorities) in any manner, I/we undertake not to hold State Bank of India (SBI) responsible for any of its action or inaction in respect of such transactions.",
       "I/We hereby provide my/our consent to (State Bank of India, i.e., the Bank or its successor or assignee) to share with external agencies (either manually/physically or electronically/digitally) certain information furnished by me/us (including but not limited to HSN/SAC Code/ IE Code/Counterparty details/ Bill of Lading/ other Transaction details and documents) for the purpose of due diligence.",
     ];
-    secBItems.forEach((item,i)=>{
-      setFont(false,8.5);
-      const lines=doc.splitTextToSize("\u2022  "+(i+1)+". "+item,RW-10);
-      if(y+lines.length*4.5>275){addPage();y=15;}
-      doc.text(lines,M+10,y); y+=lines.length*4.5+2;
-    });
-    y+=4;
-
-    // Signature block
-    if(y>255){addPage();y=15;}
-    setFont(true,9);
-    txt("Date: "+f.date,M,y); txt("Authorised Signatory(ies)",M+110,y); y+=5;
-    txt("Place: "+f.place,M,y); y+=5;
-    setFont(false,8.5); txt("(Please affix Company/Firm Stamp)",M+100,y); y+=8;
-
-    // PAGE 3: standard undertaking (fixed text, no editable fields)
-    addPage(); y=15;
-    setFont(true,11); txt("UNDERTAKING-CUM-DECLARATION FOR PROCESSING OF EXPORT ADVANCE PAYMENT",105,y,{align:"center"}); y+=8;
-    setFont(false,8.5);
-    const p3paras=[
-      "In consideration of State Bank of India (hereinafter referred to as 'the Bank') acting on my/our request, I/We (Name of the Company/Firm) _________________ hereby irrevocably and unconditionally undertake and confirm to the Bank as under:",
-      "1. I/We will ensure compliance with all the rules, regulations and guidelines issued by the Reserve Bank of India (RBI) and other regulatory authorities relating to the export of goods/software/services from time to time.",
-      "2. In the event of any change in the export order/contract, I/We will immediately inform the Bank and comply with all the guidelines of RBI/FEMA in this regard.",
-      "3. I/We will ensure timely submission of all the required documents/evidence of export to the Bank within the time prescribed under the extant regulations/guidelines.",
-      "4. I/We will be solely responsible for any violation of FEMA provisions and rules/regulations made thereunder and will keep the Bank indemnified in this regard.",
-      "5. I/We will be responsible for payment of all taxes, duties and levies as may be applicable on the said export transaction.",
-      "6. I/We confirm that the export advance received will be utilized only for the purpose for which it is received.",
-      "7. I/We confirm that all the information provided in this application and accompanying documents is true and correct to the best of my/our knowledge and belief.",
-      "8. The Bank shall have the right to call for any additional information/documents from me/us as it may deem fit for processing this application.",
-      "9. I/We undertake not to hold the Bank responsible for any loss/damage that may arise due to fluctuation in exchange rates or for any other reason beyond the control of the Bank.",
-      "10. I/We agree to abide by the Bank's decision in all matters relating to the processing of this application.",
-    ];
-    p3paras.forEach(para=>{
-      const lines=doc.splitTextToSize(para,RW);
-      if(y+lines.length*4.5>265){addPage();y=15;}
-      doc.text(lines,M,y); y+=lines.length*4.5+4;
+    NF(false,8.5);
+    secB.forEach((item,i)=>{
+      const ls=doc.splitTextToSize("\u2022  "+(i+1)+". "+item,RW-10);
+      y=chkPg(y,ls.length*4+2);
+      doc.text(ls,M+5,y); y+=ls.length*4+2;
     });
     y+=5;
 
-    setFont(true,9);
-    txt("Date: "+f.date,M,y); txt("Authorised Signatory(ies)",M+110,y); y+=5;
-    txt("Place: "+f.place,M,y); y+=5;
-    setFont(false,8.5); txt("(Please affix Company/Firm Stamp)",M+100,y);
+    // Sign block
+    y=chkPg(y,14);
+    NF(true,9);
+    doc.text("Date: "+f.date,M,y); doc.text("Authorised Signatory (ies)",M+RW-60,y); y+=5;
+    doc.text("Place: "+f.place,M,y); y+=4;
+    NF(false,8); doc.text("(Please affix Company/Firm Stamp)",M+RW-70,y);
 
-    // Page numbers
-    const tp=doc.getNumberOfPages();
-    for(let i=1;i<=tp;i++){
-      doc.setPage(i);
-      setFont(false,8);
-      doc.text("Page "+i+" of "+tp,105,290,{align:"center"});
-    }
-
+    pdfFooter();
     doc.save("SBI_Advance_Payment_Form.pdf");
   };
 
+  // ── FORM UI ────────────────────────────────────────────────────────────────
   return(
     <div style={{background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
       <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>💵 Application for Processing of Export Advance Payment</h3>
       <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>SBI Industrial Finance Branch, YN Road, Indore</p>
 
       <SectionHeader title="Basic Details"/>
-      <FRow label="Date"><FInput value={f.date} onChange={v=>sf("date",v)}/></FRow>
-      <FRow label="Amount (USD)" required><FInput value={f.amount_usd} onChange={v=>sf("amount_usd",v)} placeholder="e.g. 46400.00"/></FRow>
+      <FRow label="Date" required>
+        <input type="date" value={f.date.split(".").reverse().join("-")}
+          onChange={e=>{const[y,m,d]=e.target.value.split("-");sf("date",`${d}.${m}.${y}`);}}
+          style={{...iS,fontSize:12}}/>
+      </FRow>
+      <FRow label="Amount in FCY" required>
+        <div style={{display:"flex",gap:6}}>
+          <select value={f.fcy_currency} onChange={e=>sf("fcy_currency",e.target.value)}
+            style={{...iS,width:80,fontSize:12}}>
+            {["USD","EUR","GBP","JPY","AED","SGD","AUD"].map(c=><option key={c}>{c}</option>)}
+          </select>
+          <FInput value={f.fcy_amount} onChange={v=>sf("fcy_amount",v)} placeholder="e.g. 46400.00"/>
+        </div>
+      </FRow>
       <FRow label="Advance Type">
-        <select value={f.advance_type} onChange={e=>sf("advance_type",e.target.value)} style={iS}>
-          {["Advance against Export of Goods","Advance against Export of Software","Advance against Export of Services","Advance against Long Term Exports"].map(o=><option key={o}>{o}</option>)}
-        </select>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          {["Advance against Export of Goods","Advance against Export of Software","Advance against Export of Services","Advance against Long Term Exports"].map(opt=>(
+            <label key={opt} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer",
+              padding:"6px 10px",border:`2px solid ${f.advance_type===opt?"#1e3a5f":"#e2e8f0"}`,
+              borderRadius:6,background:f.advance_type===opt?"#eff6ff":"#f8fafc",fontWeight:f.advance_type===opt?700:400}}>
+              <input type="radio" name="advance_type" value={opt} checked={f.advance_type===opt}
+                onChange={()=>sf("advance_type",opt)} style={{accentColor:"#1e3a5f"}}/>
+              {opt}
+            </label>
+          ))}
+        </div>
       </FRow>
 
       <SectionHeader title="Export Details"/>
       <FRow label="Name of Remitter" required><FInput value={f.remitter_name} onChange={v=>sf("remitter_name",v)}/></FRow>
       <FRow label="Remitter's Address (with Country)"><FTextarea value={f.remitter_address} onChange={v=>sf("remitter_address",v)}/></FRow>
       <FRow label="Consignee / Buyer (if different)"><FInput value={f.consignee} onChange={v=>sf("consignee",v)}/></FRow>
-      <FRow label="Description of Goods & Qty (with Purpose Code)" required><FInput value={f.description} onChange={v=>sf("description",v)} placeholder="e.g. INDIAN PARBOILED RICE – 130 MT"/></FRow>
+      <FRow label="Description of Goods & Qty + Purpose Code" required><FInput value={f.description} onChange={v=>sf("description",v)} placeholder="e.g. INDIAN PARBOILED RICE – 130 MT"/></FRow>
       <FRow label="HSN / SAC Code"><FInput value={f.hsn} onChange={v=>sf("hsn",v)}/></FRow>
       <FRow label="Proforma Invoice / PO No. & Date" required><FInput value={f.pi_no} onChange={v=>sf("pi_no",v)}/></FRow>
-      <FRow label="Expected Date of Export"><FInput value={f.expected_date} onChange={v=>sf("expected_date",v)} placeholder="e.g. 30 MAY 2026"/></FRow>
+      <FRow label="Expected Date of Export">
+        <input type="date" value={f.expected_date?f.expected_date.split(" ").length>1?"":f.expected_date:""}
+          onChange={e=>{const[y,m,d]=e.target.value.split("-");sf("expected_date",`${d} ${["","JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"][parseInt(m)]} ${y}`);}}
+          style={{...iS,fontSize:12}}/>
+      </FRow>
       <FRow label="Country of Origin"><FInput value={f.country_origin} onChange={v=>sf("country_origin",v)}/></FRow>
       <FRow label="Port of Loading" required><FInput value={f.port_loading} onChange={v=>sf("port_loading",v)}/></FRow>
       <FRow label="Port of Discharge" required><FInput value={f.port_discharge} onChange={v=>sf("port_discharge",v)}/></FRow>
       <FRow label="Country of Destination" required><FInput value={f.country_dest} onChange={v=>sf("country_dest",v)}/></FRow>
       <FRow label="Goods Category">
-        <select value={f.goods_category} onChange={e=>sf("goods_category",e.target.value)} style={iS}>
-          <option>Free</option><option>Restricted</option>
-        </select>
+        <div style={{display:"flex",gap:12}}>
+          {["Free","Restricted"].map(opt=>(
+            <label key={opt} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer",
+              padding:"6px 14px",border:`2px solid ${f.goods_category===opt?"#1e3a5f":"#e2e8f0"}`,
+              borderRadius:6,background:f.goods_category===opt?"#eff6ff":"#f8fafc",fontWeight:f.goods_category===opt?700:400}}>
+              <input type="radio" name="goods_cat" value={opt} checked={f.goods_category===opt}
+                onChange={()=>sf("goods_category",opt)} style={{accentColor:"#1e3a5f"}}/>
+              {opt}
+            </label>
+          ))}
+        </div>
       </FRow>
 
-      <SectionHeader title="Credit Proceeds To"/>
-      <FRow label="Account Type">
-        <select value={f.credit_account} onChange={e=>sf("credit_account",e.target.value)} style={iS}>
-          {["Cash Credit Account","Current Account","EEFC/DDA Account","EPC / PCFC Account"].map(o=><option key={o}>{o}</option>)}
-        </select>
-      </FRow>
-      <FRow label="Account Number"><FInput value={f.credit_account_no} onChange={v=>sf("credit_account_no",v)}/></FRow>
-      <FRow label="EPC/PCFC Ref. No"><FInput value={f.epc_ref_no} onChange={v=>sf("epc_ref_no",v)}/></FRow>
-
-      <SectionHeader title="Forward Contract Details (if any)"/>
-      <div style={{overflowX:"auto"}}>
+      <SectionHeader title="Credit the Proceeds To"/>
+      <div style={{overflowX:"auto",marginBottom:10}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead>
-            <tr>{["S No","Forward Contract No","Amount","Due Date","Amount to Utilise"].map(h=><th key={h} style={{border:"1px solid #e2e8f0",padding:"6px 8px",background:"#f8fafc",textAlign:"left"}}>{h}</th>)}</tr>
+            <tr>
+              {["Account","Account No. (Fixed)","FCY Amount"].map(h=>(
+                <th key={h} style={{border:"1px solid #e2e8f0",padding:"6px 8px",background:"#f1f5f9",textAlign:"left"}}>{h}</th>
+              ))}
+            </tr>
           </thead>
           <tbody>
-            {[1,2].map(i=>(
-              <tr key={i}>
-                <td style={{border:"1px solid #e2e8f0",padding:4,width:40,textAlign:"center"}}>{i}</td>
-                <td style={{border:"1px solid #e2e8f0",padding:4}}><input value={f["fwd_contract_"+i+"_no"]} onChange={e=>sf("fwd_contract_"+i+"_no",e.target.value)} style={{...iS,fontSize:11}}/></td>
-                <td style={{border:"1px solid #e2e8f0",padding:4}}><input value={f["fwd_contract_"+i+"_amt"]} onChange={e=>sf("fwd_contract_"+i+"_amt",e.target.value)} style={{...iS,fontSize:11}}/></td>
-                <td style={{border:"1px solid #e2e8f0",padding:4}}></td>
-                <td style={{border:"1px solid #e2e8f0",padding:4}}><input value={f["fwd_contract_"+i+"_util"]} onChange={e=>sf("fwd_contract_"+i+"_util",e.target.value)} style={{...iS,fontSize:11}}/></td>
-              </tr>
-            ))}
+            <tr>
+              <td style={{border:"1px solid #e2e8f0",padding:"6px 8px",fontWeight:600}}>Cash Credit Account</td>
+              <td style={{border:"1px solid #e2e8f0",padding:"6px 8px",color:"#64748b"}}>41289547389</td>
+              <td style={{border:"1px solid #e2e8f0",padding:4}}>
+                <input value={f.cc_fcy} onChange={e=>sf("cc_fcy",e.target.value)}
+                  placeholder={f.fcy_currency+" amount"} style={{...iS,fontSize:11}}/>
+              </td>
+            </tr>
+            <tr>
+              <td style={{border:"1px solid #e2e8f0",padding:"6px 8px",fontWeight:600}}>EPC / PCFC Account</td>
+              <td style={{border:"1px solid #e2e8f0",padding:"6px 8px",color:"#64748b"}}>41269117338</td>
+              <td style={{border:"1px solid #e2e8f0",padding:4}}>
+                <input value={f.epc_fcy} onChange={e=>sf("epc_fcy",e.target.value)}
+                  placeholder={f.fcy_currency+" amount"} style={{...iS,fontSize:11}}/>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
+      <FRow label="EPC/PCFC Ref. No"><FInput value={f.epc_ref_no} onChange={v=>sf("epc_ref_no",v)}/></FRow>
+
+      <SectionHeader title="Forward Contract Details (if any)"/>
+      {f.fwd_contracts.length>0&&(
+        <div style={{overflowX:"auto",marginBottom:8}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr>{["S No","Forward Contract No","FC Amount","FC Due Date","Amount to Utilise",""].map(h=>(
+                <th key={h} style={{border:"1px solid #e2e8f0",padding:"5px 6px",background:"#f1f5f9",textAlign:"left",fontSize:11}}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {f.fwd_contracts.map((fc,i)=>(
+                <tr key={i}>
+                  <td style={{border:"1px solid #e2e8f0",padding:4,textAlign:"center",width:30}}>{i+1}</td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={fc.no} onChange={e=>updFwd(i,"no",e.target.value)} style={{...iS,fontSize:11}}/></td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={fc.amt} onChange={e=>updFwd(i,"amt",e.target.value)} placeholder={f.fcy_currency} style={{...iS,fontSize:11}}/></td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3}}><input type="date" onChange={e=>updFwd(i,"due",e.target.value)} style={{...iS,fontSize:11}}/></td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={fc.util} onChange={e=>updFwd(i,"util",e.target.value)} placeholder={f.fcy_currency} style={{...iS,fontSize:11}}/></td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3,textAlign:"center"}}>
+                    <button onClick={()=>delFwd(i)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:11}}>✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {f.fwd_contracts.length<5&&(
+        <button onClick={addFwdContract}
+          style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,
+                  padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+          + Add Forward Contract {f.fwd_contracts.length>0?`(${f.fwd_contracts.length}/5)`:""}
+        </button>
+      )}
+      {f.fwd_contracts.length>=5&&<div style={{fontSize:11,color:"#64748b"}}>Maximum 5 forward contracts added.</div>}
 
       <SectionHeader title="Other Details"/>
       <FRow label="Charges from A/c No."><FInput value={f.charges_account} onChange={v=>sf("charges_account",v)}/></FRow>
       <FRow label="Other Documents (if any)"><FInput value={f.other_docs} onChange={v=>sf("other_docs",v)} placeholder="Specify if any"/></FRow>
 
       <SectionHeader title="Contact Details"/>
-      <FRow label="Contact Name"><FInput value={f.contact_name} onChange={v=>sf("contact_name",v)}/></FRow>
+      <FRow label="Name"><FInput value={f.contact_name} onChange={v=>sf("contact_name",v)}/></FRow>
       <FRow label="Mobile No."><FInput value={f.contact_mobile} onChange={v=>sf("contact_mobile",v)}/></FRow>
       <FRow label="Email"><FInput value={f.contact_email} onChange={v=>sf("contact_email",v)}/></FRow>
       <FRow label="Place"><FInput value={f.place} onChange={v=>sf("place",v)}/></FRow>
 
-      <div style={{marginTop:16,padding:"10px 14px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
-        📄 PDF will generate all 3 pages: Application form + FEMA Undertaking + Standard Undertaking (fixed text, same date/place)
+      <div style={{marginTop:14,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
+        📄 PDF generates 2 pages: Application Form (Page 1) + Undertaking-cum-Declaration with Section A &amp; B (Page 2)
       </div>
-
-      <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
+      <div style={{display:"flex",gap:10,marginTop:12,justifyContent:"flex-end"}}>
         <button onClick={exportPDF}
           style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",
                   borderRadius:8,padding:"8px 20px",cursor:"pointer",fontWeight:700,fontSize:13}}>
