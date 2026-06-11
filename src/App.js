@@ -4234,6 +4234,20 @@ export default function App(){
   const [piModal,setPiModal]=useState(null); // {contract, buyer} when open
   const [bcSubTab,setBcSubTab]=useState("irm"); // "irm" | "brc" | "bc"
 
+  // One-time debug: check R2 for specific folders
+  useEffect(()=>{
+    if(!isAdmin) return;
+    const folders=[
+      "irm/3034026PM0B10161",
+      "brc/SBIN0030340A01371306",
+      "bc/SBIN0030340A01371498","bc/3034026DC0B00418","bc/3034026EB0B00052",
+      "bc/3034026DC0B00377","bc/3034026DC0B00275","bc/3034026EB0B00078","bc/3034026PM0B10161"
+    ];
+    Promise.all(folders.map(f=>r2List(f).then(files=>({f,files})))).then(results=>{
+      results.forEach(({f,files})=>console.log(`R2[${f}]:`,files.length,"files",files.map(x=>x.docType+"|"+x.key)));
+    });
+  },[isAdmin]);
+
   const [irmDocsModal,setIrmDocsModal]=useState(null);  // irm object
   const [brcDocsModal,setBrcDocsModal]=useState(null);  // brc object
   const [irmModal,setIrmModal]=useState(null);  // null | {irm|null}
