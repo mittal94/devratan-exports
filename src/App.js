@@ -1438,9 +1438,10 @@ function IRMDocsModal({irm, bcNo, irmIndex, canUpload, canDelete, onClose}){
       const m={};
       // New-style: irm/{irm_no}/docKey/docKey.pdf
       newList.forEach(f=>{m[f.docType]=f;});
-      // Legacy-style: bc/{bc_no}/irm_{n}/irm_{n}.pdf → map to irm_copy slot
+      // Legacy-style: bc/{bc_no}/irm_0/irm_0.pdf — docType is "irm_0"
+      // Map legacy irm_0 → irm_copy slot so it shows under "IRM Copy"
       if(legacyDocKey){
-        legList.filter(f=>f.docType===legacyDocKey||f.key.includes('/'+legacyDocKey+'/')).forEach(f=>{
+        legList.filter(f=>f.docType===legacyDocKey).forEach(f=>{
           if(!m["irm_copy"]) m["irm_copy"]={...f, docType:"irm_copy"};
         });
       }
@@ -1529,8 +1530,9 @@ function BRCDocsModal({brc, bcNo, brcIndex, canUpload, canDelete, onClose}){
       ]);
       const m={};
       newList.forEach(f=>{m[f.docType]=f;});
+      // Legacy-style: bc/{bc_no}/brc_0/brc_0.pdf — docType is "brc_0"
       if(legacyDocKey){
-        legList.filter(f=>f.docType===legacyDocKey||f.key.includes('/'+legacyDocKey+'/')).forEach(f=>{
+        legList.filter(f=>f.docType===legacyDocKey).forEach(f=>{
           if(!m["brc_copy"]) m["brc_copy"]={...f, docType:"brc_copy"};
         });
       }
@@ -4203,19 +4205,7 @@ export default function App(){
   const [showContractForm,setShowContractForm]=useState(false);
   const [piModal,setPiModal]=useState(null); // {contract, buyer} when open
   const [bcSubTab,setBcSubTab]=useState("irm"); // "irm" | "brc" | "bc"
-  const [r2Debug,setR2Debug]=useState(null); // debug output
 
-  const debugR2=async(folder)=>{
-    try{
-      // Test 1: list
-      const listRes=await fetch(`${R2_WORKER}/list/${folder}`);
-      const listText=await listRes.text();
-      // Test 2: list without trailing folder (some workers need different path)
-      const listRes2=await fetch(`${R2_WORKER}/list?prefix=${encodeURIComponent(folder)}`);
-      const listText2=await listRes2.text();
-      setR2Debug({folder, status:listRes.status, body:listText.slice(0,500), alt:listText2.slice(0,300)});
-    }catch(e){setR2Debug({folder,error:e.message});}
-  };
   const [irmDocsModal,setIrmDocsModal]=useState(null);  // irm object
   const [brcDocsModal,setBrcDocsModal]=useState(null);  // brc object
   const [irmModal,setIrmModal]=useState(null);  // null | {irm|null}
@@ -5045,25 +5035,6 @@ export default function App(){
               ))}
             </div>
 
-            {/* ── R2 Debug Tool ── */}
-            {isAdmin&&(
-              <div style={{background:"#fef3c7",borderRadius:8,padding:"8px 12px",marginBottom:12,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                <span style={{fontSize:11,fontWeight:700,color:"#92400e"}}>🔧 R2 Debug:</span>
-                <input id="r2DebugInput" placeholder="folder e.g. bc/3034026EB0B00014" style={{...iS,width:260,fontSize:11,padding:"4px 8px"}} defaultValue="bc/3034026EB0B00014"/>
-                <button onClick={()=>debugR2(document.getElementById("r2DebugInput").value)}
-                  style={{background:"#92400e",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11}}>Test</button>
-                {r2Debug&&<button onClick={()=>setR2Debug(null)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10}}>✕</button>}
-              </div>
-            )}
-            {r2Debug&&(
-              <div style={{background:"#1e1e2e",borderRadius:8,padding:12,marginBottom:12,fontFamily:"monospace",fontSize:11,color:"#a6e3a1",overflowX:"auto",maxHeight:200,overflow:"auto"}}>
-                <div style={{color:"#89b4fa",marginBottom:4}}>Folder: {r2Debug.folder}</div>
-                <div style={{color:"#89b4fa",marginBottom:4}}>Status: {r2Debug.status||"error"}</div>
-                {r2Debug.error&&<div style={{color:"#f38ba8"}}>Error: {r2Debug.error}</div>}
-                <div style={{color:"#cdd6f4",marginBottom:4}}>Response: {r2Debug.body}</div>
-                {r2Debug.alt&&<div style={{color:"#fab387",marginTop:4}}>Alt query: {r2Debug.alt}</div>}
-              </div>
-            )}
             {/* ════════════ IRM SUB-TAB ════════════ */}
             {bcSubTab==="irm"&&(()=>{
               const allIRMs = [...bcs.flatMap(b=>b.irm_entries||[]), ...standaloneIRMs];
