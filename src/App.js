@@ -4345,7 +4345,7 @@ function AdvancePaymentForm({ships, buyers}){
     doc.text("Date: "+f.date,M+5,y); y+=6;
     doc.text("To,",M+5,y); y+=4.5;
     doc.text("The Branch Head State Bank of India",M+5,y); y+=4.5;
-    doc.text("Industrial Finance Branch",M,y); y+=4.5;
+    doc.text("Industrial Finance Branch",M+5,y); y+=4.5;
     doc.text("YN Road, Indore",M+5,y); y+=7;
     doc.text("Dear Sir / Madam,",M+5,y); y+=7;
 
@@ -4369,7 +4369,6 @@ function AdvancePaymentForm({ships, buyers}){
     NF(false,9); doc.text(" received by",ax+doc.getTextWidth(f.fcy_currency+" "+f.fcy_amount),y);
     y+=4.5;
     doc.text("you in our favour, as mentioned below \u2013 (tick whichever is applicable)",M+5,y); y+=5;
-    doc.text("CCY",M+10,y); doc.text("Amount",M+25,y); y+=4;
 
     // Advance type — proper checkbox symbols using PDF font
     // Use simple [ ] and [X] with standard font
@@ -4440,16 +4439,15 @@ function AdvancePaymentForm({ships, buyers}){
 
     // Credit Proceeds — check if it fits, else new page
     y=chkPg(y,55);
-    NF(true,9); doc.text("Credit the Proceeds to:",M+5,y); y+=4;
-    NF(false,8.5); doc.text("CCY",M+5,y); doc.text("Amount",M+20,y); y+=4;
+    NF(true,9); doc.text("Credit the Proceeds to:",M+5,y); y+=5;
     // 4-col table: Account | Account No | FCY | Blank
-    const cCols=[55,42,45,38];
+    const cCols=[65,55,60];
     // Header row
     NF(true,7.5);
     let cx=M;
     cCols.forEach((w,i)=>{
       RECT(cx,y,w,6);
-      const hd=["Account","Account No. (Fixed)","FCY Amount",""][i];
+      const hd=["Account","Account No. (Fixed)","FCY Amount"][i];
       doc.text(hd,cx+1,y+4,{maxWidth:w-2});
       cx+=w;
     });
@@ -4460,7 +4458,7 @@ function AdvancePaymentForm({ships, buyers}){
       cx=M;
       cCols.forEach((w,i)=>{
         RECT(cx,y,w,6);
-        const v=[acc,no,String(fcy||""),""][i];
+        const v=[acc,no,String(fcy||"")][i];
         doc.text(v,cx+1,y+4,{maxWidth:w-2});
         cx+=w;
       });
