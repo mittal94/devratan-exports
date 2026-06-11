@@ -1412,7 +1412,7 @@ function BRCModal({brc, allBRCs, allIRMs, allShips, allBCs, onSave, onClose, sav
 
 
 // ─── IRM Docs Modal ─────────────────────────────────────────────────────────
-function IRMDocsModal({irm, bcNo, irmIndex, canUpload, canDelete, onClose}){
+function IRMDocsModal({irm, allBCs, canUpload, canDelete, onClose}){
   const [files,setFiles]=useState({});
   const [loading,setLoading]=useState(true);
   const [uploading,setUploading]=useState({});
@@ -1420,8 +1420,15 @@ function IRMDocsModal({irm, bcNo, irmIndex, canUpload, canDelete, onClose}){
   const fileRefs=useRef({});
   const folder=`irm/${irm.irm_no||irm.id}`;
   // Legacy folder: old uploads were stored in bc/{bc_no} with key irm_{index}
-  const legacyFolder = bcNo ? `bc/${bcNo}` : null;
-  const legacyDocKey = irmIndex!=null ? `irm_${irmIndex}` : null;
+  // Search all BCs where this IRM could have been filed (legacy uploads)
+  // Old BCDocsModal stored irm_0, irm_1 etc. — we need to check all BCs
+  // Pass allBCs so we can probe each one
+  const bcsToSearch = (allBCs||[]).map((bc,bcIdx)=>{
+    // Find position of this IRM in the BC's irm_entries (if linked)
+    const entries = bc.irm_entries||[];
+    const idx = entries.findIndex(e=>e.irm_no===irm.irm_no||String(e.id)===String(irm.id));
+    return idx>=0 ? {bcNo:bc.bc_no,idx} : null;
+  }).filter(Boolean);
   const docs=[
     {key:"irm_swift",      label:"SWIFT / Bank Advice", accept:".pdf", maxMB:3},
     {key:"irm_copy",       label:"IRM Copy",             accept:".pdf", maxMB:3},
@@ -1431,20 +1438,22 @@ function IRMDocsModal({irm, bcNo, irmIndex, canUpload, canDelete, onClose}){
   const loadFiles=async()=>{
     setLoading(true);
     try{
-      const [newList, legList] = await Promise.all([
+      // Load from both new path AND all possible BC legacy paths
+      const lists = await Promise.all([
         r2List(folder),
-        legacyFolder ? r2List(legacyFolder) : Promise.resolve([]),
+        ...bcsToSearch.map(({bcNo:bn,idx})=>r2List(`bc/${bn}`).then(files=>({files,bcNo:bn,idx})))
       ]);
       const m={};
-      // New-style: irm/{irm_no}/docKey/docKey.pdf
-      newList.forEach(f=>{m[f.docType]=f;});
-      // Legacy-style: bc/{bc_no}/irm_0/irm_0.pdf — docType is "irm_0"
-      // Map legacy irm_0 → irm_copy slot so it shows under "IRM Copy"
-      if(legacyDocKey){
-        legList.filter(f=>f.docType===legacyDocKey).forEach(f=>{
+      // New path files
+      lists[0].forEach(f=>{m[f.docType]=f;});
+      // Legacy BC path files — irm_0, irm_1 etc.
+      lists.slice(1).forEach(result=>{
+        if(!result || !result.files) return;
+        const legKey=`irm_${result.idx}`;
+        result.files.filter(f=>f.docType===legKey).forEach(f=>{
           if(!m["irm_copy"]) m["irm_copy"]={...f, docType:"irm_copy"};
         });
-      }
+      });
       setFiles(m);
     }catch(e){console.error("IRM loadFiles error:",e);}
     setLoading(false);
@@ -1508,15 +1517,18 @@ function IRMDocsModal({irm, bcNo, irmIndex, canUpload, canDelete, onClose}){
 }
 
 // ─── BRC Docs Modal ─────────────────────────────────────────────────────────
-function BRCDocsModal({brc, bcNo, brcIndex, canUpload, canDelete, onClose}){
+function BRCDocsModal({brc, allBCs, canUpload, canDelete, onClose}){
   const [files,setFiles]=useState({});
   const [loading,setLoading]=useState(true);
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
   const folder=`brc/${brc.brc_no||brc.id}`;
-  const legacyFolder = bcNo ? `bc/${bcNo}` : null;
-  const legacyDocKey = brcIndex!=null ? `brc_${brcIndex}` : null;
+  const bcsToSearch = (allBCs||[]).map((bcItem)=>{
+    const entries = bcItem.brc_entries||[];
+    const idx = entries.findIndex(e=>e.brc_no===brc.brc_no||String(e.id)===String(brc.id));
+    return idx>=0 ? {bcNo:bcItem.bc_no,idx} : null;
+  }).filter(Boolean);
   const docs=[
     {key:"brc_copy",   label:"BRC Copy",  accept:".pdf", maxMB:3},
     {key:"brc_other",  label:"Other",     accept:".pdf", maxMB:5},
@@ -1524,18 +1536,19 @@ function BRCDocsModal({brc, bcNo, brcIndex, canUpload, canDelete, onClose}){
   const loadFiles=async()=>{
     setLoading(true);
     try{
-      const [newList, legList] = await Promise.all([
+      const lists = await Promise.all([
         r2List(folder),
-        legacyFolder ? r2List(legacyFolder) : Promise.resolve([]),
+        ...bcsToSearch.map(({bcNo:bn,idx})=>r2List(`bc/${bn}`).then(files=>({files,bcNo:bn,idx})))
       ]);
       const m={};
-      newList.forEach(f=>{m[f.docType]=f;});
-      // Legacy-style: bc/{bc_no}/brc_0/brc_0.pdf — docType is "brc_0"
-      if(legacyDocKey){
-        legList.filter(f=>f.docType===legacyDocKey).forEach(f=>{
+      lists[0].forEach(f=>{m[f.docType]=f;});
+      lists.slice(1).forEach(result=>{
+        if(!result || !result.files) return;
+        const legKey=`brc_${result.idx}`;
+        result.files.filter(f=>f.docType===legKey).forEach(f=>{
           if(!m["brc_copy"]) m["brc_copy"]={...f, docType:"brc_copy"};
         });
-      }
+      });
       setFiles(m);
     }catch(e){console.error("BRC loadFiles error:",e);}
     setLoading(false);
@@ -5082,7 +5095,7 @@ export default function App(){
                               </div>
                             </div>
                             <div style={{display:"flex",gap:6}}>
-                              <button onClick={()=>setIrmDocsModal({irm, bcNo:parentBC?.bc_no, irmIndex:(parentBC?.irm_entries||[]).findIndex(x=>x.id===irm.id)})}
+                              <button onClick={()=>setIrmDocsModal({irm})}
                                 style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:6,
                                         padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📁 Docs</button>
                               {canEditBC&&<button onClick={()=>setIrmModal({irm,bcId:parentBC?.id})}
@@ -5146,7 +5159,7 @@ export default function App(){
                               </div>
                             </div>
                             <div style={{display:"flex",gap:6}}>
-                              <button onClick={()=>setBrcDocsModal({brc, bcNo:parentBC?.bc_no, brcIndex:(parentBC?.brc_entries||[]).findIndex(x=>x.id===brc.id)})}
+                              <button onClick={()=>setBrcDocsModal({brc})}
                                 style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:6,
                                         padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📁 Docs</button>
                               {canEditBC&&<button onClick={()=>setBrcModal({brc,bcId:parentBC?.id})}
@@ -5414,8 +5427,8 @@ export default function App(){
 
       {shipDocsId&&ships.find(x=>x.id===shipDocsId)&&<ShipDocsModal shipment={ships.find(x=>x.id===shipDocsId)} canUpload={canEdit} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setShipDocsId(null)}/>}
       {bcDocsId&&bcs.find(x=>x.id===bcDocsId)&&<BCDocsModal bc={bcs.find(x=>x.id===bcDocsId)} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBCDocsId(null)}/>}
-      {irmDocsModal&&<IRMDocsModal irm={irmDocsModal.irm||irmDocsModal} bcNo={irmDocsModal.bcNo} irmIndex={irmDocsModal.irmIndex} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setIrmDocsModal(null)}/>}
-      {brcDocsModal&&<BRCDocsModal brc={brcDocsModal.brc||brcDocsModal} bcNo={brcDocsModal.bcNo} brcIndex={brcDocsModal.brcIndex} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBrcDocsModal(null)}/>}
+      {irmDocsModal&&<IRMDocsModal irm={irmDocsModal.irm||irmDocsModal} allBCs={bcs} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setIrmDocsModal(null)}/>}
+      {brcDocsModal&&<BRCDocsModal brc={brcDocsModal.brc||brcDocsModal} allBCs={bcs} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBrcDocsModal(null)}/>}
       {showApprovals&&<ApprovalsModal
           pendings={pendings} userInfo={userInfo}
           onClose={()=>setShowApprovals(false)} onRefresh={loadAll} ships={ships}
