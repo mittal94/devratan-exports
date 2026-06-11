@@ -1432,35 +1432,24 @@ function IRMDocsModal({irm, allBCs, allStandaloneBRCs, canUpload, canDelete, onC
       // 1. New path: irm/{irm_no}/
       const newFiles = await r2List(folder);
       newFiles.forEach(f=>{m[f.docType]=f;});
-      // 2. Legacy path: find BC + position via irm_allocations in standaloneBRCs
-      // Each BRC has irm_allocations:[{irmId, irmUtilAmt}]
-      // Find BRCs that allocated from this IRM → get their BC → get IRM position
+      // 2. Legacy path: BC folder may contain irm_0, irm_1 etc.
+      // Strategy: fetch ALL BC folders and look for irm_* files
+      // We can identify which IRM a slot belongs to by checking IRM order in the BC
       const allBRCsFlat=[...(allBCs||[]).flatMap(b=>b.brc_entries||[]),...(allStandaloneBRCs||[])];
-      // Find unique (bcNo, irmPos) pairs for this IRM
-      const legacyKeys=new Set();
-      allBRCsFlat.forEach(brc=>{
-        (brc.irm_allocations||[]).forEach(a=>{
-          if(String(a.irmId)!==String(irm.id)) return;
-          // Find which BC this BRC belongs to
-          const parentBC=(allBCs||[]).find(b=>(b.linked_brcs||[]).includes(brc.brc_no));
-          if(!parentBC) return;
-          // Find IRM position in BC: collect all unique IRM ids used by BC's BRCs, sorted by insertion
-          const bcBRCs=allBRCsFlat.filter(b=>(parentBC.linked_brcs||[]).includes(b.brc_no));
-          const irmIds=[]; // ordered unique IRM ids
-          bcBRCs.forEach(b=>(b.irm_allocations||[]).forEach(al=>{
-            if(!irmIds.includes(String(al.irmId))) irmIds.push(String(al.irmId));
-          }));
-          const pos=irmIds.indexOf(String(irm.id));
-          if(pos>=0) legacyKeys.add(`${parentBC.bc_no}::irm_${pos}`);
-        });
-      });
-      // Fetch each unique BC folder and find the file
-      const bcNosToFetch=[...new Set([...legacyKeys].map(k=>k.split("::")[0]))];
-      await Promise.all(bcNosToFetch.map(async bcNo=>{
-        const files=await r2List(`bc/${bcNo}`);
-        files.forEach(f=>{
-          const expectedKey=[...legacyKeys].find(k=>k.startsWith(bcNo+"::"))?.split("::")[1];
-          if(expectedKey && f.docType===expectedKey && !m["irm_copy"]){
+      await Promise.all((allBCs||[]).map(async bc=>{
+        const bcFiles=await r2List(`bc/${bc.bc_no}`);
+        const irmFiles=bcFiles.filter(f=>/^irm_\d+$/.test(f.docType));
+        if(!irmFiles.length) return;
+        // Build ordered list of unique IRM ids used in this BC's BRCs
+        const bcBRCs=allBRCsFlat.filter(b=>(bc.linked_brcs||[]).includes(b.brc_no));
+        const irmIds=[];
+        bcBRCs.forEach(b=>(b.irm_allocations||[]).forEach(a=>{
+          if(!irmIds.includes(String(a.irmId))) irmIds.push(String(a.irmId));
+        }));
+        irmFiles.forEach(f=>{
+          const idx=parseInt(f.docType.replace("irm_",""),10);
+          const fIrmId=irmIds[idx];
+          if(fIrmId && String(fIrmId)===String(irm.id) && !m["irm_copy"]){
             m["irm_copy"]={...f, docType:"irm_copy"};
           }
         });
@@ -5211,15 +5200,7 @@ export default function App(){
                               borderRadius:8,padding:"7px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>
                       + New BC
                     </button>}
-                {isAdmin&&<button onClick={()=>{
-                  const folders=["irm/3034026PM0B10161","brc/SBIN0030340A01371306","bc/SBIN0030340A01371498","bc/3034026DC0B00418","bc/3034026EB0B00052","bc/3034026DC0B00377","bc/3034026DC0B00275","bc/3034026EB0B00078","bc/3034026PM0B10161"];
-                  Promise.all(folders.map(f=>r2List(f).then(files=>({f,files})))).then(results=>{
-                    results.forEach(({f,files})=>console.log("R2["+f+"]: "+files.length+" files",JSON.stringify(files.map(x=>x.docType+"|"+x.key))));
-                    alert("R2 debug logged to console. Open DevTools > Console");
-                  });
-                }} style={{background:"#fef3c7",color:"#92400e",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>
-                  🔧 Debug R2
-                </button>}
+
                   </div>
                 </div>
                 {bcs.length===0&&<div style={{background:"#fff",borderRadius:12,padding:30,textAlign:"center",color:"#94a3b8",fontSize:13}}>No bill collections yet. Create IRM and BRC entries first.</div>}
