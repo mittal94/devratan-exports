@@ -1412,23 +1412,13 @@ function BRCModal({brc, allBRCs, allIRMs, allShips, allBCs, onSave, onClose, sav
 
 
 // ─── IRM Docs Modal ─────────────────────────────────────────────────────────
-function IRMDocsModal({irm, allBCs, canUpload, canDelete, onClose}){
+function IRMDocsModal({irm, allBCs, allStandaloneBRCs, canUpload, canDelete, onClose}){
   const [files,setFiles]=useState({});
   const [loading,setLoading]=useState(true);
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
   const folder=`irm/${irm.irm_no||irm.id}`;
-  // Legacy folder: old uploads were stored in bc/{bc_no} with key irm_{index}
-  // Search all BCs where this IRM could have been filed (legacy uploads)
-  // Old BCDocsModal stored irm_0, irm_1 etc. — we need to check all BCs
-  // Pass allBCs so we can probe each one
-  const bcsToSearch = (allBCs||[]).map((bc,bcIdx)=>{
-    // Find position of this IRM in the BC's irm_entries (if linked)
-    const entries = bc.irm_entries||[];
-    const idx = entries.findIndex(e=>e.irm_no===irm.irm_no||String(e.id)===String(irm.id));
-    return idx>=0 ? {bcNo:bc.bc_no,idx} : null;
-  }).filter(Boolean);
   const docs=[
     {key:"irm_swift",      label:"SWIFT / Bank Advice", accept:".pdf", maxMB:3},
     {key:"irm_copy",       label:"IRM Copy",             accept:".pdf", maxMB:3},
@@ -1438,22 +1428,43 @@ function IRMDocsModal({irm, allBCs, canUpload, canDelete, onClose}){
   const loadFiles=async()=>{
     setLoading(true);
     try{
-      // Load from both new path AND all possible BC legacy paths
-      const lists = await Promise.all([
-        r2List(folder),
-        ...bcsToSearch.map(({bcNo:bn,idx})=>r2List(`bc/${bn}`).then(files=>({files,bcNo:bn,idx})))
-      ]);
       const m={};
-      // New path files
-      lists[0].forEach(f=>{m[f.docType]=f;});
-      // Legacy BC path files — irm_0, irm_1 etc.
-      lists.slice(1).forEach(result=>{
-        if(!result || !result.files) return;
-        const legKey=`irm_${result.idx}`;
-        result.files.filter(f=>f.docType===legKey).forEach(f=>{
-          if(!m["irm_copy"]) m["irm_copy"]={...f, docType:"irm_copy"};
+      // 1. New path: irm/{irm_no}/
+      const newFiles = await r2List(folder);
+      newFiles.forEach(f=>{m[f.docType]=f;});
+      // 2. Legacy path: find BC + position via irm_allocations in standaloneBRCs
+      // Each BRC has irm_allocations:[{irmId, irmUtilAmt}]
+      // Find BRCs that allocated from this IRM → get their BC → get IRM position
+      const allBRCsFlat=[...(allBCs||[]).flatMap(b=>b.brc_entries||[]),...(allStandaloneBRCs||[])];
+      // Find unique (bcNo, irmPos) pairs for this IRM
+      const legacyKeys=new Set();
+      allBRCsFlat.forEach(brc=>{
+        (brc.irm_allocations||[]).forEach(a=>{
+          if(String(a.irmId)!==String(irm.id)) return;
+          // Find which BC this BRC belongs to
+          const parentBC=(allBCs||[]).find(b=>(b.linked_brcs||[]).includes(brc.brc_no));
+          if(!parentBC) return;
+          // Find IRM position in BC: collect all unique IRM ids used by BC's BRCs, sorted by insertion
+          const bcBRCs=allBRCsFlat.filter(b=>(parentBC.linked_brcs||[]).includes(b.brc_no));
+          const irmIds=[]; // ordered unique IRM ids
+          bcBRCs.forEach(b=>(b.irm_allocations||[]).forEach(al=>{
+            if(!irmIds.includes(String(al.irmId))) irmIds.push(String(al.irmId));
+          }));
+          const pos=irmIds.indexOf(String(irm.id));
+          if(pos>=0) legacyKeys.add(`${parentBC.bc_no}::irm_${pos}`);
         });
       });
+      // Fetch each unique BC folder and find the file
+      const bcNosToFetch=[...new Set([...legacyKeys].map(k=>k.split("::")[0]))];
+      await Promise.all(bcNosToFetch.map(async bcNo=>{
+        const files=await r2List(`bc/${bcNo}`);
+        files.forEach(f=>{
+          const expectedKey=[...legacyKeys].find(k=>k.startsWith(bcNo+"::"))?.split("::")[1];
+          if(expectedKey && f.docType===expectedKey && !m["irm_copy"]){
+            m["irm_copy"]={...f, docType:"irm_copy"};
+          }
+        });
+      }));
       setFiles(m);
     }catch(e){console.error("IRM loadFiles error:",e);}
     setLoading(false);
@@ -1524,11 +1535,6 @@ function BRCDocsModal({brc, allBCs, canUpload, canDelete, onClose}){
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
   const folder=`brc/${brc.brc_no||brc.id}`;
-  const bcsToSearch = (allBCs||[]).map((bcItem)=>{
-    const entries = bcItem.brc_entries||[];
-    const idx = entries.findIndex(e=>e.brc_no===brc.brc_no||String(e.id)===String(brc.id));
-    return idx>=0 ? {bcNo:bcItem.bc_no,idx} : null;
-  }).filter(Boolean);
   const docs=[
     {key:"brc_copy",   label:"BRC Copy",  accept:".pdf", maxMB:3},
     {key:"brc_other",  label:"Other",     accept:".pdf", maxMB:5},
@@ -1536,19 +1542,24 @@ function BRCDocsModal({brc, allBCs, canUpload, canDelete, onClose}){
   const loadFiles=async()=>{
     setLoading(true);
     try{
-      const lists = await Promise.all([
-        r2List(folder),
-        ...bcsToSearch.map(({bcNo:bn,idx})=>r2List(`bc/${bn}`).then(files=>({files,bcNo:bn,idx})))
-      ]);
       const m={};
-      lists[0].forEach(f=>{m[f.docType]=f;});
-      lists.slice(1).forEach(result=>{
-        if(!result || !result.files) return;
-        const legKey=`brc_${result.idx}`;
-        result.files.filter(f=>f.docType===legKey).forEach(f=>{
+      // 1. New path: brc/{brc_no}/
+      const newFiles = await r2List(folder);
+      newFiles.forEach(f=>{m[f.docType]=f;});
+      // 2. Legacy path: find BC + position of this BRC
+      // BC.linked_brcs = ["brc_no1","brc_no2",...] — position = legacy key index
+      const legacyPairs=[];
+      (allBCs||[]).forEach(bc=>{
+        const lbrcs=bc.linked_brcs||[];
+        const pos=lbrcs.indexOf(brc.brc_no);
+        if(pos>=0) legacyPairs.push({bcNo:bc.bc_no, key:`brc_${pos}`});
+      });
+      await Promise.all(legacyPairs.map(async({bcNo,key})=>{
+        const files=await r2List(`bc/${bcNo}`);
+        files.filter(f=>f.docType===key).forEach(f=>{
           if(!m["brc_copy"]) m["brc_copy"]={...f, docType:"brc_copy"};
         });
-      });
+      }));
       setFiles(m);
     }catch(e){console.error("BRC loadFiles error:",e);}
     setLoading(false);
@@ -1743,7 +1754,7 @@ function ShipDocsModal({shipment, canUpload, canDelete, onClose}){
 }
 
 
-function BCDocsModal({bc, canUpload, canDelete, onClose}){
+function BCDocsModal({bc, allIRMs, allBRCs, canUpload, canDelete, onClose}){
   const [files, setFiles] = useState({});
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState({});
@@ -1788,18 +1799,22 @@ function BCDocsModal({bc, canUpload, canDelete, onClose}){
   const fmtSize = bytes => bytes<1024*1024?(bytes/1024).toFixed(0)+"KB":(bytes/1024/1024).toFixed(1)+"MB";
 
   // Build sectioned doc list
+  // IRMs and BRCs are standalone — find linked ones via linked_brcs / irm_allocations
   const bcLevelDocs = BC_DOCS;
-  const irmDocs = (bc.irm_entries||[]).map((irm,i) => ({
+  const linkedBRCs = (allBRCs||[]).filter(b=>(bc.linked_brcs||[]).includes(b.brc_no));
+  const linkedIRMIds = new Set(linkedBRCs.flatMap(b=>(b.irm_allocations||[]).map(a=>String(a.irmId))));
+  const linkedIRMs = (allIRMs||[]).filter(i=>linkedIRMIds.has(String(i.id)));
+  const irmDocs = linkedIRMs.map((irm,i) => ({
     key:`irm_${i}`,
     label:`IRM Copy — ${irm.irm_no||"IRM #"+(i+1)}`,
     accept:".pdf", maxMB:3,
-    sub: irm.irm_no ? `IRM No: ${irm.irm_no} | Date: ${irm.irm_date||"—"} | Amt: $${irm.irm_amt_usd||0}` : ""
+    sub: irm.irm_no ? `IRM No: ${irm.irm_no} | Date: ${irm.irm_date||"—"} | Amt: USD ${irm.irm_total_usd||irm.irm_amt_usd||0}` : ""
   }));
-  const brcDocs = (bc.brc_entries||[]).map((brc,i) => ({
+  const brcDocs = linkedBRCs.map((brc,i) => ({
     key:`brc_${i}`,
     label:`BRC Copy — ${brc.brc_no||"BRC #"+(i+1)}`,
     accept:".pdf", maxMB:3,
-    sub: brc.brc_no ? `BRC No: ${brc.brc_no} | Date: ${brc.brc_date||"—"} | Amt: $${brc.brc_amt_usd||0}` : ""
+    sub: brc.brc_no ? `BRC No: ${brc.brc_no} | Date: ${brc.brc_date||"—"} | Amt: USD ${brc.brc_amt_usd||0}` : ""
   }));
   const allDocs = [...bcLevelDocs, ...irmDocs, ...brcDocs];
 
@@ -5426,8 +5441,8 @@ export default function App(){
       )}
 
       {shipDocsId&&ships.find(x=>x.id===shipDocsId)&&<ShipDocsModal shipment={ships.find(x=>x.id===shipDocsId)} canUpload={canEdit} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setShipDocsId(null)}/>}
-      {bcDocsId&&bcs.find(x=>x.id===bcDocsId)&&<BCDocsModal bc={bcs.find(x=>x.id===bcDocsId)} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBCDocsId(null)}/>}
-      {irmDocsModal&&<IRMDocsModal irm={irmDocsModal.irm||irmDocsModal} allBCs={bcs} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setIrmDocsModal(null)}/>}
+      {bcDocsId&&bcs.find(x=>x.id===bcDocsId)&&<BCDocsModal bc={bcs.find(x=>x.id===bcDocsId)} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} allBRCs={[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs]} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBCDocsId(null)}/>}
+      {irmDocsModal&&<IRMDocsModal irm={irmDocsModal.irm||irmDocsModal} allBCs={bcs} allStandaloneBRCs={standaloneBRCs} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setIrmDocsModal(null)}/>}
       {brcDocsModal&&<BRCDocsModal brc={brcDocsModal.brc||brcDocsModal} allBCs={bcs} canUpload={canEditBC} canDelete={isAdmin||isSeniorAccountant} onClose={()=>setBrcDocsModal(null)}/>}
       {showApprovals&&<ApprovalsModal
           pendings={pendings} userInfo={userInfo}
