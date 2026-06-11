@@ -4174,7 +4174,7 @@ function BankingFormsTab({ships, buyers, bcs}){
     {id:"a2",       label:"SBI Form A-2",                     icon:"📋"},
     {id:"freight",  label:"SBI Freight Payment Form",         icon:"🚢"},
   ];
-  const [activeForm, setActiveForm] = React.useState("advance");
+  const [activeForm, setActiveForm] = useState("advance");
 
   return(
     <div>
@@ -4250,7 +4250,7 @@ function ExportButtons({onPDF, onWord}){
 // ── Form 1: Advance Payment Form ───────────────────────────────────────────────
 function AdvancePaymentForm({ships, buyers}){
   const today = new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
-  const [f,setF] = React.useState({
+  const [f,setF] = useState({
     date: today,
     amount_usd:"", amount_ccy:"USD",
     remitter_name:"", remitter_address:"",
@@ -4429,7 +4429,7 @@ function AdvancePaymentForm({ships, buyers}){
 // ── Form 2: Export Bill Collection Form ────────────────────────────────────────
 function ExportBCForm({ships, buyers}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
-  const [f,setF]=React.useState({
+  const [f,setF]=useState({
     date:today, buyer_name:"", buyer_address:"",
     bill_type:"Non LC", export_type:"Regular", nature:"Goods",
     bill_amount_usd:"", payment_terms:"Sight",
@@ -4629,7 +4629,7 @@ function ExportBCForm({ships, buyers}){
 // ── Form 3: Form A-2 (plain, no header/footer) ────────────────────────────────
 function FormA2({ships}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
-  const [f,setF]=React.useState({
+  const [f,setF]=useState({
     date:today,
     applicant_name:"Devratan Enterprises LLP",
     applicant_address:"Off No 206, 2nd Floor, Indore Trade Center, Madhumilan Square, Indore MP 452001",
@@ -4767,7 +4767,7 @@ function FormA2({ships}){
 // ── Form 4: Freight Payment Form ───────────────────────────────────────────────
 function FreightPaymentForm({ships}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
-  const [f,setF]=React.useState({
+  const [f,setF]=useState({
     date:today,
     goods_description:"EXPORT OCEAN FREIGHT PAYMENT",
     invoice_no:"", invoice_date:"",
