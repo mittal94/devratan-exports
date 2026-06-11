@@ -1418,7 +1418,24 @@ function IRMDocsModal({irm, allBCs, allStandaloneBRCs, canUpload, canDelete, onC
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
-  const folder=`irm/${irm.irm_no||irm.id}`;
+  // Find parent BC via irm_allocations — store under bc/ prefix (confirmed working)
+  const allBRCsForIRM=[...(allBCs||[]).flatMap(b=>b.brc_entries||[]),...(allStandaloneBRCs||[])];
+  const parentBCForIRM=(()=>{
+    for(const bc of (allBCs||[])){
+      const bcBRCs=allBRCsForIRM.filter(b=>(bc.linked_brcs||[]).includes(b.brc_no));
+      const irmIds=[];
+      bcBRCs.forEach(b=>(b.irm_allocations||[]).forEach(a=>{
+        if(!irmIds.includes(String(a.irmId))) irmIds.push(String(a.irmId));
+      }));
+      const pos=irmIds.indexOf(String(irm.id));
+      if(pos>=0) return {bc, pos};
+    }
+    return null;
+  })();
+  const folder=parentBCForIRM
+    ? `bc/${parentBCForIRM.bc.bc_no}`
+    : `irm/${irm.irm_no||irm.id}`;
+  const irmDocKey=parentBCForIRM ? `irm_${parentBCForIRM.pos}` : "irm_copy";
   const docs=[
     {key:"irm_swift",      label:"SWIFT / Bank Advice", accept:".pdf", maxMB:3},
     {key:"irm_copy",       label:"IRM Copy",             accept:".pdf", maxMB:3},
@@ -1429,31 +1446,11 @@ function IRMDocsModal({irm, allBCs, allStandaloneBRCs, canUpload, canDelete, onC
     setLoading(true);
     try{
       const m={};
-      // 1. New path: irm/{irm_no}/
-      const newFiles = await r2List(folder);
-      newFiles.forEach(f=>{m[f.docType]=f;});
-      // 2. Legacy path: BC folder may contain irm_0, irm_1 etc.
-      // Strategy: fetch ALL BC folders and look for irm_* files
-      // We can identify which IRM a slot belongs to by checking IRM order in the BC
-      const allBRCsFlat=[...(allBCs||[]).flatMap(b=>b.brc_entries||[]),...(allStandaloneBRCs||[])];
-      await Promise.all((allBCs||[]).map(async bc=>{
-        const bcFiles=await r2List(`bc/${bc.bc_no}`);
-        const irmFiles=bcFiles.filter(f=>/^irm_\d+$/.test(f.docType));
-        if(!irmFiles.length) return;
-        // Build ordered list of unique IRM ids used in this BC's BRCs
-        const bcBRCs=allBRCsFlat.filter(b=>(bc.linked_brcs||[]).includes(b.brc_no));
-        const irmIds=[];
-        bcBRCs.forEach(b=>(b.irm_allocations||[]).forEach(a=>{
-          if(!irmIds.includes(String(a.irmId))) irmIds.push(String(a.irmId));
-        }));
-        irmFiles.forEach(f=>{
-          const idx=parseInt(f.docType.replace("irm_",""),10);
-          const fIrmId=irmIds[idx];
-          if(fIrmId && String(fIrmId)===String(irm.id) && !m["irm_copy"]){
-            m["irm_copy"]={...f, docType:"irm_copy"};
-          }
-        });
-      }));
+      const allFiles=await r2List(folder);
+      allFiles.forEach(f=>{
+        if(f.docType===irmDocKey) m["irm_copy"]={...f, docType:"irm_copy"};
+        else m[f.docType]=f;
+      });
       setFiles(m);
     }catch(e){console.error("IRM loadFiles error:",e);}
     setLoading(false);
@@ -1463,7 +1460,7 @@ function IRMDocsModal({irm, allBCs, allStandaloneBRCs, canUpload, canDelete, onC
     if(file.size>maxMB*1024*1024){alert(`Max ${maxMB}MB`);return;}
     if(!file.name.match(/\.pdf$/i)){alert("PDF only");return;}
     setUploading(u=>({...u,[key]:true}));
-    try{if(files[key])await r2Delete(files[key].key);await r2Upload(folder,key,file);await loadFiles();}
+    try{if(files[key])await r2Delete(files[key].key);const uploadKey=key==="irm_copy"?irmDocKey:key;await r2Upload(folder,uploadKey,file);await loadFiles();}
     catch(e){alert("Upload failed: "+e.message);}
     setUploading(u=>({...u,[key]:false}));
   };
@@ -1523,7 +1520,13 @@ function BRCDocsModal({brc, allBCs, canUpload, canDelete, onClose}){
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
-  const folder=`brc/${brc.brc_no||brc.id}`;
+  // Find parent BC and position — store under bc/ prefix (confirmed working in R2)
+  const parentBCForBRC=(allBCs||[]).find(b=>(b.linked_brcs||[]).includes(brc.brc_no));
+  const brcPos=parentBCForBRC?(parentBCForBRC.linked_brcs||[]).indexOf(brc.brc_no):0;
+  const folder=parentBCForBRC
+    ? `bc/${parentBCForBRC.bc_no}`       // store in BC folder (known working)
+    : `brc/${brc.brc_no||brc.id}`;       // fallback standalone
+  const docKey=parentBCForBRC ? `brc_${brcPos}` : "brc_copy";  // legacy key if in BC
   const docs=[
     {key:"brc_copy",   label:"BRC Copy",  accept:".pdf", maxMB:3},
     {key:"brc_other",  label:"Other",     accept:".pdf", maxMB:5},
@@ -1532,23 +1535,12 @@ function BRCDocsModal({brc, allBCs, canUpload, canDelete, onClose}){
     setLoading(true);
     try{
       const m={};
-      // 1. New path: brc/{brc_no}/
-      const newFiles = await r2List(folder);
-      newFiles.forEach(f=>{m[f.docType]=f;});
-      // 2. Legacy path: find BC + position of this BRC
-      // BC.linked_brcs = ["brc_no1","brc_no2",...] — position = legacy key index
-      const legacyPairs=[];
-      (allBCs||[]).forEach(bc=>{
-        const lbrcs=bc.linked_brcs||[];
-        const pos=lbrcs.indexOf(brc.brc_no);
-        if(pos>=0) legacyPairs.push({bcNo:bc.bc_no, key:`brc_${pos}`});
+      const allFiles=await r2List(folder);
+      allFiles.forEach(f=>{
+        // Map actual docType to display key
+        if(f.docType===docKey) m["brc_copy"]={...f, docType:"brc_copy"};
+        else m[f.docType]=f;
       });
-      await Promise.all(legacyPairs.map(async({bcNo,key})=>{
-        const files=await r2List(`bc/${bcNo}`);
-        files.filter(f=>f.docType===key).forEach(f=>{
-          if(!m["brc_copy"]) m["brc_copy"]={...f, docType:"brc_copy"};
-        });
-      }));
       setFiles(m);
     }catch(e){console.error("BRC loadFiles error:",e);}
     setLoading(false);
@@ -1558,7 +1550,7 @@ function BRCDocsModal({brc, allBCs, canUpload, canDelete, onClose}){
     if(file.size>maxMB*1024*1024){alert(`Max ${maxMB}MB`);return;}
     if(!file.name.match(/\.pdf$/i)){alert("PDF only");return;}
     setUploading(u=>({...u,[key]:true}));
-    try{if(files[key])await r2Delete(files[key].key);await r2Upload(folder,key,file);await loadFiles();}
+    try{if(files[key])await r2Delete(files[key].key);const uploadKey=parentBCForBRC?docKey:key;await r2Upload(folder,uploadKey,file);await loadFiles();}
     catch(e){alert("Upload failed: "+e.message);}
     setUploading(u=>({...u,[key]:false}));
   };
