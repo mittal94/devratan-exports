@@ -56,19 +56,29 @@ const r2Delete = async (key) => {
 const r2List = async (folder) => {
   try {
     const res = await fetch(`${R2_WORKER}/list/${folder}`);
-    if(!res.ok){ console.warn("r2List non-ok:", res.status); return []; }
+    if(!res.ok){ console.warn("r2List non-ok:", res.status, "folder:", folder); return []; }
     const raw = await res.text();
     let data;
     try{ data = JSON.parse(raw); }catch(e){ console.warn("r2List parse error:", raw.slice(0,200)); return []; }
-    console.log("r2List raw response for", folder, ":", JSON.stringify(data).slice(0,300));
     const files = data.files||data.objects||data.items||data.keys||
                   (Array.isArray(data)?data:[]);
     return files.map(f => {
       if(typeof f === "string") f = {key: f};
-      if(f.docType) return f;
+      // key format from r2Upload: {folder}/{docKey}/{docKey}.{ext}
+      // e.g. brc/SBIN001/brc_copy/brc_copy.pdf
       const key = f.key||f.name||f.Key||"";
-      const parts = key.split("/").filter(Boolean);
-      const docType = parts.length>=2 ? parts[parts.length-2] : parts[parts.length-1]||key;
+      let docType = f.docType||"";
+      if(!docType){
+        const parts = key.split("/").filter(Boolean);
+        if(parts.length >= 1){
+          // Always use the filename base as docType — most reliable
+          // Works for both: folder/docKey/docKey.ext AND folder/docKey.ext
+          const filename = parts[parts.length-1]; // last segment = filename
+          docType = filename.includes(".") ? filename.split(".").slice(0,-1).join(".") : filename;
+        } else {
+          docType = key;
+        }
+      }
       return {
         ...f,
         key,
@@ -1415,7 +1425,7 @@ function IRMDocsModal({irm, canUpload, canDelete, onClose}){
     {key:"irm_bank_stmt", label:"Bank Statement",    accept:".pdf", maxMB:5},
     {key:"irm_other",  label:"Other",                accept:".pdf", maxMB:5},
   ];
-  const loadFiles=async()=>{setLoading(true);try{const list=await r2List(folder);const m={};list.forEach(f=>{m[f.docType]=f;});setFiles(m);}catch(e){console.error(e);}setLoading(false);};
+  const loadFiles=async()=>{setLoading(true);try{const list=await r2List(folder);console.log("IRM docs for",folder,":",list);const m={};list.forEach(f=>{m[f.docType]=f;});setFiles(m);}catch(e){console.error("IRM loadFiles error:",e);}setLoading(false);};
   useEffect(()=>{loadFiles();},[]);
   const handleUpload=async(key,file,maxMB)=>{
     if(file.size>maxMB*1024*1024){alert(`Max ${maxMB}MB`);return;}
@@ -1486,7 +1496,7 @@ function BRCDocsModal({brc, canUpload, canDelete, onClose}){
     {key:"brc_copy",   label:"BRC Copy",             accept:".pdf", maxMB:3},
     {key:"brc_other",  label:"Other",                accept:".pdf", maxMB:5},
   ];
-  const loadFiles=async()=>{setLoading(true);try{const list=await r2List(folder);const m={};list.forEach(f=>{m[f.docType]=f;});setFiles(m);}catch(e){console.error(e);}setLoading(false);};
+  const loadFiles=async()=>{setLoading(true);try{const list=await r2List(folder);console.log("BRC docs for",folder,":",list);const m={};list.forEach(f=>{m[f.docType]=f;});setFiles(m);}catch(e){console.error("BRC loadFiles error:",e);}setLoading(false);};
   useEffect(()=>{loadFiles();},[]);
   const handleUpload=async(key,file,maxMB)=>{
     if(file.size>maxMB*1024*1024){alert(`Max ${maxMB}MB`);return;}
