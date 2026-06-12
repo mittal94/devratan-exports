@@ -406,7 +406,7 @@ function ExportModal({ type, data, onClose, getBC }) {
         dlCSV(`Devratan_BC_${fromDate||"all"}_to_${toDate||"all"}.csv`, toCSV(hdrs, rows));
       }
     } else if (type === "dashboard") {
-      exportDashboardPDF(data, getBC);
+      exportDashboardPDF(data, getBC, bcs, standaloneBRCs, standaloneIRMs);
     }
     onClose();
   };
@@ -472,16 +472,18 @@ function ExportModal({ type, data, onClose, getBC }) {
     doc.save(`Devratan_BC_Report.pdf`);
   };
 
-  const exportDashboardPDF = (fyShips, getBC) => {
+  const exportDashboardPDF = (fyShips, getBC, allBcs, allStandaloneBRCs, allStandaloneIRMs) => {
     const JPDF = getPDF();
     if(!JPDF){ alert("PDF library not loaded. Please refresh the page."); return; }
     const doc = new JPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const _pdfBRCs=[...allBcs.flatMap(b=>b.brc_entries||[]),...allStandaloneBRCs];
+    const _pdfIRMs=[...allBcs.flatMap(b=>b.irm_entries||[]),...allStandaloneIRMs];
     const totals = fyShips.reduce((a,s) => {
-      const c = calcShip(s), bc = getBC(s);
+      const c = calcShip(s);
+      const {paidUSD:pU,paidINR:pI}=calcEffectivePaid(s.invoice_no,_pdfBRCs,_pdfIRMs);
       a.count++; a.invUSD+=c.invoiceAmtUSD; a.invINR+=c.invoiceAmtINR;
-      a.fobUSD+=n(s.fob_value_usd); a.paidUSD+=bc?bc.total_amt_usd:0;
-      a.paidINR+=bc?bc.total_amt_inr:0;
-      a.bal+=bc?c.invoiceAmtUSD-bc.total_amt_usd:c.invoiceAmtUSD;
+      a.fobUSD+=n(s.fob_value_usd); a.paidUSD+=pU; a.paidINR+=pI;
+      a.bal+=c.invoiceAmtUSD-pU;
       a.rodPend+=s.rodtep_status==="Pending"?1:0; a.gstPend+=s.gst_status==="Pending"?1:0;
       return a;
     }, {count:0,invUSD:0,invINR:0,fobUSD:0,paidUSD:0,paidINR:0,bal:0,rodPend:0,gstPend:0});
@@ -6151,7 +6153,7 @@ export default function App(){
     },{count:0,invUSD:0,invINR:0,fobUSD:0,fobINR:0,gross:0,paidUSD:0,paidINR:0,bal:0,brcPend:0,rodPend:0,gstPend:0});
   },[fyShips,bcs,standaloneBRCs,standaloneIRMs]);
 
-  const allYears=useMemo(()=>ALL_FYS.map(f=>{const ss=ships.filter(s=>getFY(s.invoice_date)===f);return ss.reduce((a,s)=>{const c=calcShip(s),bc=getBC(s);a.count++;a.inv+=c.invoiceAmtUSD;a.fob+=n(s.fob_value_usd);a.paid+=bc?bc.total_amt_usd:0;a.bal+=bc?c.invoiceAmtUSD-bc.total_amt_usd:c.invoiceAmtUSD;return a;},{fy:f,count:0,inv:0,fob:0,paid:0,bal:0});}), [ships,bcs]);
+  const allYears=useMemo(()=>{const _brcsAll=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];const _irmsAll=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];return ALL_FYS.map(f=>{const ss=ships.filter(s=>getFY(s.invoice_date)===f);return ss.reduce((a,s)=>{const c=calcShip(s);const {paidUSD}=calcEffectivePaid(s.invoice_no,_brcsAll,_irmsAll);a.count++;a.inv+=c.invoiceAmtUSD;a.fob+=n(s.fob_value_usd);a.paid+=paidUSD;a.bal+=c.invoiceAmtUSD-paidUSD;return a;},{fy:f,count:0,inv:0,fob:0,paid:0,bal:0});});}, [ships,bcs,standaloneBRCs,standaloneIRMs]);
 
   const filtered=useMemo(()=>{
     let s=[...fyShips];
