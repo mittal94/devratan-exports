@@ -6339,15 +6339,18 @@ export default function App(){
   const selectProfitInv=inv=>{
     const s=ships.find(x=>x.invoice_no===inv);
     if(!s){setPF("invoice_no",inv);return;}
-    const bc=getBC(s),c=calcShip(s);
-    setProfitForm(f=>({...f,invoice_no:inv,invoice_date:s.invoice_date,buyer_name:s.buyer_name,port_of_discharge:s.port_of_discharge,invoice_amt_inr:c.invoiceAmtINR,payment_received_inr:bc?bc.total_amt_inr:0,qty_mt:s.qty}));
+    const c=calcShip(s);
+    const _allBRCs=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
+    const _allIRMs=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
+    const {paidINR}=calcEffectivePaid(inv,_allBRCs,_allIRMs);
+    setProfitForm(f=>({...f,invoice_no:inv,invoice_date:s.invoice_date,buyer_name:s.buyer_name,port_of_discharge:s.port_of_discharge,invoice_amt_inr:c.invoiceAmtINR,payment_received_inr:Math.round(paidINR)}));
   };
 
   const saveProfit=async()=>{
     if(!profitForm.invoice_no){alert("Invoice No required.");return;}
     setSaving(true);
     try{
-      const payload={...profitForm};delete payload.id;delete payload.created_at;
+      const payload={...profitForm};delete payload.id;delete payload.created_at;delete payload.qty_mt;
       const numFields=["invoice_amt_inr","payment_received_inr","rice_purchase_val","pp_bags_purchase_val","local_transport","ocean_freight","cha_clearing","shipping_line_charges","inspect_agency","coc_ectn","other_exp"];
       numFields.forEach(f=>{if(payload[f]===""||payload[f]===undefined)payload[f]=null;else payload[f]=Number(payload[f])||null;});
       if(editProfitId){await sb(`profitability?id=eq.${editProfitId}`,{method:"PATCH",body:JSON.stringify(payload)});}
