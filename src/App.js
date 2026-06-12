@@ -4868,7 +4868,7 @@ function ExportBCForm({ships, buyers}){
     const buyerAddr=doc.splitTextToSize(f.buyer_address||"",eiCols[1]-3);
     doc.text(buyerName,M+eiCols[0]+1,y+9);
     if(f.buyer_address) doc.text(buyerAddr,M+eiCols[0]+1,y+9+buyerName.length*4);
-    y+=eiH+2;
+    y+=eiH+4;
 
     // Bill Details
     NF(true,9); doc.text("Bill Details:",M,y); y+=4;
@@ -5039,7 +5039,7 @@ function ExportBCForm({ships, buyers}){
     doc.text("",M+1,y+4);
     doc.text("Outside India",M+bcCols[0]+1,y+4);
     doc.text("Our a/c: "+(f.charges_outside==="Our a/c"?"[X]":"[ ]")+"  Their a/c: "+(f.charges_outside==="Their a/c"?"[X]":"[ ]"),M+bcCols[0]+bcCols[1]+1,y+4);
-    y+=8;
+    y+=12;
 
     // Additional Information
     y=chkPg(y,40);
