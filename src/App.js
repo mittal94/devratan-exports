@@ -1914,7 +1914,7 @@ function DetailModal({shipment,bc,allBRCs,allIRMs,onClose,onViewDocs}){
   );
 }
 
-function ProfitabilityContent({fy,fyProfits,canEdit,canDelete,openAddProfit,openEditProfit,onDelete,onExportSingle}){
+function ProfitabilityContent({fy,fyProfits,ships,canEdit,canDelete,openAddProfit,openEditProfit,onDelete,onExportSingle}){
   const totP=fyProfits.reduce((a,p)=>{
     try{ const c=calcProfit(p,ships); a.invINR+=n(p.invoice_amt_inr); a.paidINR+=n(p.payment_received_inr); a.totalCIF+=c.totalCIF; a.profit+=c.profit; }catch(e){}
     return a;
@@ -6731,7 +6731,7 @@ export default function App(){
                 {canEditPL&&<button onClick={openAddProfit} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:12}}>+ Add</button>}
               </div>
             </div>
-            <ProfitabilityContent fy={fy} fyProfits={fyProfits} canEdit={canEditPL} canDelete={canDelete} openAddProfit={openAddProfit} openEditProfit={openEditProfit} onDelete={deleteProfit}/>
+            <ProfitabilityContent fy={fy} fyProfits={fyProfits} ships={ships} canEdit={canEditPL} canDelete={canDelete} openAddProfit={openAddProfit} openEditProfit={openEditProfit} onDelete={deleteProfit}/>
           </div>
         )}
 
