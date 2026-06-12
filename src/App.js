@@ -5310,17 +5310,24 @@ function ExportBCForm({ships, buyers}){
 
 function FormA2({ships}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
+  const toDisplay=iso=>{if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
+  const toISO=dd=>{if(!dd||!dd.includes("."))return"";const[d,m,y]=dd.split(".");return`${y}-${m}-${d}`;};
+
   const [f,setF]=useState({
     date:today,
     applicant_name:"Devratan Enterprises LLP",
     applicant_address:"Off No 206, 2nd Floor, Indore Trade Center, Madhumilan Square, Indore MP 452001",
     account_no:"41289547389",
     amount_ccy:"USD", amount:"",
-    purpose:"", purpose_code:"",
-    payment_mode:"b",
-    beneficiary_name:"", beneficiary_bank:"", beneficiary_address:"",
-    beneficiary_account:"", beneficiary_swift:"",
-    intermediary_bank:"N.A.", intermediary_swift:"",
+    purpose:"", purpose_code:"S0204",
+    charges:"OUR",
+    remittance_type:"direct",  // "draft" | "direct" | "tc" | "notes"
+    beneficiary_name:"",
+    beneficiary_address:"",
+    bank_name:"",
+    bank_address:"",
+    account_number:"",
+    swift_code:"",
     declarant_name:"AKSHAY MITTAL",
   });
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
@@ -5328,124 +5335,361 @@ function FormA2({ships}){
   const exportPDF=()=>{
     const JPDF=getPDF(); if(!JPDF) return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
-    const M=15,pw=180,navy=[18,52,96],lgray=[235,243,252],dgray=[180,192,208];
+    const M=20, RW=170; // wider margins for plain A4
+    const NF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||9);doc.setTextColor(0,0,0);};
+    const TW=(t,sz)=>doc.getStringUnitWidth(String(t))*(sz||9)/doc.internal.scaleFactor;
+    const WRAP=(t,x,y,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y);return y+ls.length*(lh||4.5);};
+    const RECT=(x,y,w,h)=>{doc.setDrawColor(80,80,80);doc.setLineWidth(0.2);doc.rect(x,y,w,h);};
+    const LINE=(x1,y1,x2,y2)=>{doc.setDrawColor(80,80,80);doc.setLineWidth(0.3);doc.line(x1,y1,x2,y2);};
+    const chkPg=(y,n)=>{if(y+(n||8)>282){doc.addPage();return 20;}return y;};
+    const pdfFooter=()=>{
+      const tp=doc.getNumberOfPages();
+      for(let i=1;i<=tp;i++){
+        doc.setPage(i);
+        NF(false,7.5); doc.setTextColor(120,120,120);
+        doc.text("Page "+i+" of "+tp,105,290,{align:"center"});
+        doc.setTextColor(0,0,0);
+      }
+    };
+
+    // ── PAGE 1: APPLICATION ───────────────────────────────────────────────────
     let y=20;
-    // Plain page — no header
-    doc.setFontSize(13); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-    doc.text("FORM A2",105,y,{align:"center"}); y+=6;
-    doc.setFontSize(9); doc.setFont(undefined,"normal"); doc.setTextColor(50,50,50);
-    doc.text("Application cum Declaration (To be completed by the applicant)",105,y,{align:"center"}); y+=6;
-    doc.text("Application for drawal of foreign exchange",105,y,{align:"center"}); y+=10;
-    doc.autoTable({
-      startY:y,margin:{left:M,right:M},tableWidth:pw,
-      body:[
-        [{content:"Details of the Applicant",colSpan:2,styles:{fontStyle:"bold",fillColor:[220,235,250],textColor:navy,fontSize:9}}],
-        ["Name",f.applicant_name],
-        ["Address",f.applicant_address],
-        ["Account No.",f.account_no],
-        [{content:"Details of Foreign Exchange Required",colSpan:2,styles:{fontStyle:"bold",fillColor:[220,235,250],textColor:navy,fontSize:9}}],
-        ["Amount (Specify Currency)",`${f.amount_ccy} ${f.amount}`],
-        ["Purpose",f.purpose],
-        ["Purpose Code",f.purpose_code],
-      ],
-      styles:{fontSize:8.5,cellPadding:{top:3,bottom:3,left:5,right:5},lineColor:dgray,lineWidth:0.3},
-      columnStyles:{0:{cellWidth:70,fillColor:lgray}},
-      tableLineColor:[120,150,180],tableLineWidth:0.5,
+
+    // Title block
+    NF(true,12);
+    doc.text("Form A2",M,y); y+=6;
+    NF(true,10);
+    doc.text("Application cum Declaration",M,y); y+=5;
+    NF(false,8.5);
+    doc.text("(To be completed by the applicant)",M,y); y+=5;
+    NF(true,9);
+    doc.text("Application for drawal of foreign exchange",M,y); y+=8;
+    LINE(M,y-2,M+RW,y-2);
+
+    // Applicant details
+    NF(true,9); doc.text("Details of the applicant -",M,y); y+=6;
+    NF(false,9);
+    doc.text("Name: "+f.applicant_name,M+5,y); y+=5;
+    const addrLines=doc.splitTextToSize("Address: "+f.applicant_address,RW-5);
+    doc.text(addrLines,M+5,y); y+=addrLines.length*4.5+2;
+    doc.text("Account No.: "+f.account_no,M+5,y); y+=8;
+    LINE(M,y-2,M+RW,y-2);
+
+    // Foreign exchange details
+    NF(true,9); doc.text("Details of the foreign exchange required",M,y); y+=6;
+    NF(false,9);
+    // Amount line with bold value
+    doc.text("Amount (Specify currency) : ",M+5,y);
+    const amtLblW=TW("Amount (Specify currency) : ",9);
+    NF(true,9); doc.text(f.amount_ccy+" "+f.amount,M+5+amtLblW,y);
+    NF(false,9); y+=5;
+    y=WRAP("Purpose: "+f.purpose+(f.purpose_code?" ("+f.purpose_code+")":""),M+5,y,RW-5,4.5);
+    y+=2;
+    doc.text("CHARGES: "+(f.charges||"OUR"),M+5,y); y+=8;
+    LINE(M,y-2,M+RW,y-2);
+
+    // Authorisation
+    NF(false,9);
+    y=WRAP("I authorise you to debit my Saving Bank / Current / RFC / EEFC Account No. "+f.account_no+" together with your charges and",M,y,RW,4.5);
+    y+=5;
+
+    // Options a/b/c/d — with checkmarks
+    const opts=[
+      {key:"draft",   label:"a) Issue a draft", sub:"Beneficiary's Name: "+(f.remittance_type==="draft"?f.beneficiary_name:"___________________")+"    Address: "+(f.remittance_type==="draft"?f.beneficiary_address:"________________________________")},
+      {key:"direct",  label:"b) Effect the foreign exchange remittance directly -", sub:null},
+      {key:"tc",      label:"c) Issue travellers cheques for", sub:f.remittance_type==="tc"?f.amount+" "+f.amount_ccy:"_____________________________"},
+      {key:"notes",   label:"d) Issue foreign currency notes for", sub:f.remittance_type==="notes"?f.amount+" "+f.amount_ccy:"_________________________"},
+    ];
+    opts.forEach(opt=>{
+      const selected=f.remittance_type===opt.key;
+      NF(selected,9);
+      const prefix=selected?"* ":"  ";
+      if(opt.sub===null){
+        doc.text(prefix+opt.label,M+5,y); y+=5;
+        // Show beneficiary details for direct remittance
+        if(selected){
+          NF(false,9);
+          doc.text("Beneficiary's Name: "+f.beneficiary_name,M+10,y); y+=5;
+          y=WRAP("Name and address of the Bank: "+f.bank_name+(f.bank_address?", "+f.bank_address:""),M+10,y,RW-10,4.5);
+          y+=1;
+          doc.text("Account No.: "+f.account_number+(f.swift_code?"   SWIFT: "+f.swift_code:""),M+10,y); y+=5;
+        } else {
+          NF(false,9);
+          doc.text("Beneficiary's Name: ___________________",M+10,y); y+=5;
+          doc.text("Name and address of the Bank: ___________________________________________",M+10,y); y+=5;
+          doc.text("Account No.: ___________________   SWIFT: ___________________",M+10,y); y+=5;
+        }
+      } else {
+        doc.text(prefix+opt.label,M+5,y);
+        NF(false,9); doc.text(String(opt.sub||""),M+5+TW(prefix+opt.label,selected?9:9)+2,y);
+        y+=5;
+      }
     });
-    y=doc.lastAutoTable.finalY+5;
-    doc.setFontSize(8.5); doc.setFont(undefined,"normal"); doc.setTextColor(30,30,30);
-    doc.text(`I authorise you to debit my Current/CC Account No. ${f.account_no} and effect the foreign exchange remittance directly:`,M,y,{maxWidth:pw}); y+=10;
-    doc.autoTable({
-      startY:y,margin:{left:M,right:M},tableWidth:pw,
-      body:[
-        [{content:"Beneficiary / Remittance Details",colSpan:2,styles:{fontStyle:"bold",fillColor:[220,235,250],textColor:navy,fontSize:9}}],
-        ["Beneficiary Name",f.beneficiary_name],
-        ["Bank Name",f.beneficiary_bank],
-        ["Bank Address",f.beneficiary_address],
-        ["Account Number",f.beneficiary_account],
-        ["SWIFT Code",f.beneficiary_swift],
-        ["Intermediary Bank",f.intermediary_bank],
-        ["Intermediary SWIFT",f.intermediary_swift],
-      ],
-      styles:{fontSize:8.5,cellPadding:{top:3,bottom:3,left:5,right:5},lineColor:dgray,lineWidth:0.3},
-      columnStyles:{0:{cellWidth:70,fillColor:lgray}},
-      tableLineColor:[120,150,180],tableLineWidth:0.5,
+    y+=2;
+    NF(false,7.5); doc.text("(Strike out whichever is not applicable)",M,y); y+=8;
+    LINE(M,y-2,M+RW,y-2);
+
+    // Signature block
+    NF(false,9);
+    doc.text("Signature: ________________________________",M,y); y+=8;
+    LINE(M,y-2,M+RW,y-2);
+
+    // Declaration
+    NF(true,9); doc.text("Declaration",M,y); y+=5;
+    NF(false,8.5); doc.text("(Under FEMA 1999)",M,y); y+=6;
+    NF(false,9);
+    doc.text("I, "+f.applicant_name+" declare that -",M,y); y+=6;
+    y=WRAP("The total amount of foreign exchange purchased from or remitted through, all sources in India during this calendar year including this application is within "+f.amount_ccy+" the annual limit prescribed by Reserve Bank of India for the said purpose.",M+5,y,RW-5,4.5);
+    y+=4;
+    doc.text("Foreign exchange purchased from you is for the purpose indicated above.",M+5,y); y+=5;
+    NF(false,7.5); doc.text("(Strike out whichever is not applicable)",M,y); y+=8;
+
+    // Sign / Date / Name
+    NF(false,9);
+    doc.text("Signature: ________________________________",M,y);
+    doc.text("Date: "+f.date,M+RW-30,y); y+=6;
+    doc.text("Name: "+f.declarant_name,M,y); y+=8;
+    LINE(M,y-2,M+RW,y-2);
+
+    // AD / Bank section (to be filled by bank)
+    NF(true,8.5); doc.text("(To be filled in by Authorised Dealer)",M,y); y+=6;
+    NF(false,8.5);
+    doc.text("AD Code No.: ________________________________",M,y); y+=5;
+    doc.text("Form No.: ________________________________",M,y); y+=5;
+    doc.text("Currency: ________________    Amount: ________________    Equivalent to Rs.: _______________",M,y); y+=8;
+    LINE(M,y-2,M+RW,y-2);
+
+    // Purpose code note
+    NF(false,7.5);
+    y=WRAP("ADs should put a tick (\u2713) against an appropriate purpose code. (In case of doubt/difficulty, consult customer/RBI.)",M,y,RW,3.8);
+    y+=4;
+
+    // ── Purpose Code Table ────────────────────────────────────────────────────
+    const purposeCodes=[
+      ["Capital Account Transactions (00)","",""],
+      ["S0001","Indian investment abroad in equity capital (shares)",""],
+      ["S0002","Indian investment abroad in debt securities",""],
+      ["S0003","Indian investment abroad in branches",""],
+      ["S0004","Indian investment abroad in subsidiaries and associates",""],
+      ["S0005","Indian investment abroad in real estate",""],
+      ["S0006","Repatriation of Foreign Direct Investment in India - in equity shares",""],
+      ["S0007","Repatriation of Foreign Direct Investment in India - in debt securities",""],
+      ["S0008","Repatriation of Foreign Direct Investment in India in real estate",""],
+      ["S0009","Repatriation of Foreign Portfolio Investment in India in equity shares",""],
+      ["S0010","Repatriation of Foreign Portfolio Investment in India in debt securities",""],
+      ["S0011","Loans extended to Non-Residents",""],
+      ["S0012","Repayment of long and medium-term loans with original maturity above one year received from Non-Residents.",""],
+      ["S0013","Repayment of short-term loans with original maturity up to one year received from Non-Residents.",""],
+      ["S0014","Repatriation of Non-Resident Deposits (FCNRB/NRERA etc)",""],
+      ["S0015","Repayment of loans & overdrafts taken by ADs on their own account.",""],
+      ["S0016","Sale of a foreign currency against another foreign currency",""],
+      ["S0017","Purchase of intangible assets like patents, copyrights, trade marks etc.",""],
+      ["S0018","Other capital payments not included elsewhere",""],
+      ["Transportation (02)","",""],
+      ["S0201","Payments for surplus freight/passenger fare by foreign shipping companies operating in India.",""],
+      ["S0202","Payment for operating expenses of Indian shipping companies operating abroad.",""],
+      ["S0203","Freight on imports - Shipping companies",""],
+      ["S0204","Freight on exports - Shipping companies",""],
+      ["S0205","Operational leasing (with crew) - Shipping companies",""],
+      ["S0206","Booking of passages abroad - Shipping companies",""],
+      ["S0207","Payments for surplus freight/passenger fare by foreign Airlines companies operating in India.",""],
+      ["S0208","Operating expenses of Indian Airlines companies operating abroad",""],
+      ["S0209","Freight on imports - Airlines companies",""],
+      ["S0210","Freight on exports - Airlines companies",""],
+      ["S0211","Operational leasing (with crew) - Airlines companies",""],
+      ["S0212","Booking of passages abroad - Airlines companies",""],
+      ["S0213","Payments on account of stevedoring, demurrage, port handling charges etc.",""],
+      ["Travel (03)","",""],
+      ["S0301","Remittance towards Business travel.",""],
+      ["S0302","Travel under basic travel quota (BTQ)",""],
+      ["S0303","Travel for pilgrimage",""],
+      ["S0304","Travel for medical treatment",""],
+      ["S0305","Travel for education (including fees, hostel expenses etc.)",""],
+      ["S0306","Other travel (international credit cards)",""],
+      ["Communication Services (04)","",""],
+      ["S0401","Postal services",""],
+      ["S0402","Courier services",""],
+      ["S0403","Telecommunication services",""],
+      ["S0404","Satellite services",""],
+      ["Construction Services (05)","",""],
+      ["S0501","Construction of projects abroad by Indian companies including import of goods at project site",""],
+      ["S0502","Payments for cost of construction etc. of projects executed by foreign companies in India.",""],
+      ["Insurance Services (06)","",""],
+      ["S0601","Payments for Life insurance premium",""],
+      ["S0602","Freight insurance - relating to import & export of goods",""],
+      ["S0603","Other general insurance premium",""],
+      ["S0604","Reinsurance premium",""],
+      ["S0605","Auxiliary services (commission on insurance)",""],
+      ["S0606","Settlement of claims",""],
+      ["Financial Services (07)","",""],
+      ["S0701","Financial intermediation except investment banking - Bank charges, collection charges, LC charges, cancellation of forward contracts, commission on financial leasing etc.",""],
+      ["S0702","Investment banking - brokerage, underwriting commission etc.",""],
+      ["S0703","Auxiliary services - charges on operation & regulatory fees, custodial services, depository services etc.",""],
+      ["Computer and Information Services (08)","",""],
+      ["S0801","Hardware consultancy/implementation",""],
+      ["S0802","Software consultancy/implementation",""],
+      ["S0803","Data base, data processing charges",""],
+      ["S0804","Repair and maintenance of computer and software",""],
+      ["S0805","News agency services",""],
+      ["S0806","Other information services - Subscription to newspapers, periodicals",""],
+      ["Royalties and License Fees (09)","",""],
+      ["S0901","Franchises services - patents, copyrights, trade marks, industrial processes, franchises etc.",""],
+      ["S0902","Payment for use, through licensing arrangements, of produced originals or prototypes (such as manuscripts and films)",""],
+      ["Other Business Services (10)","",""],
+      ["S1001","Merchanting services - net payments (from Sale & purchase of goods without crossing the border).",""],
+      ["S1002","Trade related services - commission on exports / imports",""],
+      ["S1003","Operational leasing services (other than financial leasing) without operating crew, including charter hire",""],
+      ["S1004","Legal services",""],
+      ["S1005","Accounting, auditing, book keeping and tax consulting services",""],
+      ["S1006","Business and management consultancy and public relations services",""],
+      ["S1007","Advertising, trade fair, market research and public opinion polling service",""],
+      ["S1008","Research & Development services",""],
+      ["S1009","Architectural, engineering and other technical services",""],
+      ["S1010","Agricultural, mining and on-site processing services",""],
+      ["S1011","Payments for maintenance of offices abroad",""],
+      ["S1012","Distribution services",""],
+      ["S1013","Environmental services",""],
+      ["S1019","Other services not included elsewhere",""],
+      ["Personal, Cultural and Recreational Services (11)","",""],
+      ["S1101","Audio-visual and related services",""],
+      ["S1102","Personal, cultural services such as those related to museums, libraries, archives and sporting activities",""],
+      ["Government n.i.e. (12)","",""],
+      ["S1201","Maintenance of Indian embassies abroad",""],
+      ["S1202","Remittances by foreign embassies in India",""],
+      ["Transfers (13)","",""],
+      ["S1301","Remittance by non-residents towards family maintenance and savings",""],
+      ["S1302","Remittance towards personal gifts and donations",""],
+      ["S1303","Remittance towards donations to religious and charitable institutions abroad",""],
+      ["S1304","Remittance towards grants and donations to other governments and charitable institutions established by the governments.",""],
+      ["S1305","Contributions/donations by the Government to international institutions",""],
+      ["S1306","Remittance towards payment / refund of taxes.",""],
+      ["Income (14)","",""],
+      ["S1401","Compensation of employees",""],
+      ["S1402","Remittance towards interest on Non-Resident deposits (FCNRB/NRERA/NRNRD/NRSR etc.)",""],
+      ["S1403","Remittance towards interest on loans from Non-Residents (ST/MT/LT loans)",""],
+      ["S1404","Remittance of interest on debt securities - debentures/bonds/FRNs etc.",""],
+      ["S1405","Remittance towards interest payment by ADs on their own account",""],
+      ["S1406","Repatriation of profits",""],
+      ["S1407","Payment/repatriation of dividends",""],
+      ["Others (15)","",""],
+      ["S1501","Refunds/rebates/reduction in invoice value on account of exports",""],
+      ["S1502","Reversal of wrong entries, refunds of amount remitted for non exports",""],
+      ["S1503","Payments by residents for international bidding",""],
+      ["S1504","Notional sales when export bills negotiated/purchased/discounted are dishonoured/crystallized/cancelled",""],
+    ];
+
+    // Build autoTable body — category rows as headers, code rows as data
+    const tableRows=[];
+    purposeCodes.forEach(([code,desc])=>{
+      const isCategory=!code.startsWith("S");
+      const isSel=code===f.purpose_code;
+      tableRows.push({code,desc,isCategory,isSel});
     });
-    y=doc.lastAutoTable.finalY+6;
-    doc.setFontSize(8.5); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-    doc.text("Declaration (Under FEMA 1999):",M,y); y+=6;
-    doc.setFont(undefined,"normal"); doc.setTextColor(30,30,30);
-    doc.text("I, "+f.applicant_name+" declare that the total amount of foreign exchange purchased from or remitted through all sources in India during this calendar year including this application is within the annual limit prescribed by Reserve Bank of India for the said purpose. Foreign exchange purchased from you is for the purpose indicated above.",M,y,{maxWidth:pw}); y+=16;
-    doc.text(`Signature: ____________________________     Name: ${f.declarant_name}`,M,y); y+=6;
-    doc.text(`Date: ${f.date}`,M,y);
-    // No bankingPdfFooter — plain page per requirement
+
+    doc.autoTable({
+      startY:y, margin:{left:M,right:M}, tableWidth:RW,
+      body:tableRows.map(r=>{
+        if(r.isCategory) return [{content:r.code,colSpan:3,styles:{fontStyle:"bold",fillColor:[220,235,250],textColor:[18,52,96],fontSize:8}}];
+        return[
+          {content:r.isSel?"\u2713":"",styles:{halign:"center",fontStyle:"bold",textColor:[0,100,0],fontSize:10}},
+          {content:r.code,styles:{fontStyle:r.isSel?"bold":"normal",textColor:r.isSel?[0,100,0]:[0,0,0],fontSize:7.5}},
+          {content:r.desc,styles:{fontStyle:r.isSel?"bold":"normal",textColor:r.isSel?[0,100,0]:[0,0,0],fontSize:7.5}},
+        ];
+      }),
+      styles:{cellPadding:{top:1.5,bottom:1.5,left:2,right:2},lineColor:[160,160,160],lineWidth:0.15},
+      columnStyles:{0:{cellWidth:8,halign:"center"},1:{cellWidth:18},2:{cellWidth:RW-26}},
+      tableLineColor:[120,120,120],tableLineWidth:0.2,
+    });
+
+    pdfFooter();
     doc.save("SBI_Form_A2.pdf");
   };
 
-  const exportWord=async()=>{
-    const docx=getDocx(); if(!docx) return;
-    const {Document,Packer,Paragraph,TextRun,AlignmentType} = docx;
-    const p=(text,opts={})=>new Paragraph({spacing:{before:opts.before||60,after:opts.after||60},alignment:opts.align||AlignmentType.LEFT,children:[new TextRun({text:String(text||""),bold:!!opts.bold,size:opts.size||18,font:"Arial",color:opts.color||"111111"})]});
-    const doc2=new Document({sections:[{properties:{page:{size:{width:11906,height:16838},margin:{top:1440,right:1440,bottom:1440,left:1440}}},children:[
-      p("FORM A2",{bold:true,size:28,align:AlignmentType.CENTER,before:0,after:60}),
-      p("Application cum Declaration (To be completed by the applicant)",{align:AlignmentType.CENTER,after:60}),
-      p("Application for drawal of foreign exchange",{align:AlignmentType.CENTER,after:180}),
-      p("Details of the Applicant:",{bold:true,after:80}),
-      p(`Name: ${f.applicant_name}`,{after:60}),
-      p(`Address: ${f.applicant_address}`,{after:60}),
-      p(`Account No.: ${f.account_no}`,{after:120}),
-      p("Details of Foreign Exchange Required:",{bold:true,after:80}),
-      p(`Amount: ${f.amount_ccy} ${f.amount}`,{after:60}),
-      p(`Purpose: ${f.purpose}`,{after:60}),
-      p(`Purpose Code: ${f.purpose_code}`,{after:120}),
-      p(`I authorise you to debit Account No. ${f.account_no} and effect the remittance:`,{after:80}),
-      p("Remittance Details:",{bold:true,after:80}),
-      p(`Beneficiary: ${f.beneficiary_name}`,{after:60}),
-      p(`Bank: ${f.beneficiary_bank}`,{after:60}),
-      p(`Bank Address: ${f.beneficiary_address}`,{after:60}),
-      p(`Account No.: ${f.beneficiary_account}     SWIFT: ${f.beneficiary_swift}`,{after:60}),
-      p(`Intermediary Bank: ${f.intermediary_bank}     SWIFT: ${f.intermediary_swift}`,{after:120}),
-      p("Declaration (Under FEMA 1999):",{bold:true,after:80}),
-      p(`I, ${f.applicant_name} declare that the total amount of foreign exchange purchased from or remitted through all sources in India during this calendar year including this application is within the annual limit prescribed by Reserve Bank of India for the said purpose.`,{after:120}),
-      p(`Signature: ____________________________     Name: ${f.declarant_name}`,{after:60}),
-      p(`Date: ${f.date}`,{after:60}),
-    ]}]});
-    const blob=await Packer.toBlob(doc2);
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a"); a.href=url; a.download="SBI_Form_A2.docx";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  };
+  const DateInput=({value,onChange})=>(
+    <input type="date" value={toISO(value)} onChange={e=>onChange(toDisplay(e.target.value))} style={{...iS,fontSize:12}}/>
+  );
 
   return(
     <div style={{background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
-      <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>📋 Form A-2 — Application for Drawal of Foreign Exchange</h3>
-      <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>Plain format — no company header/footer on PDF</p>
+      <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>📋 Form A2 — Application for Drawal of Foreign Exchange</h3>
+      <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>Plain A4 format — no header/footer · Purpose code table auto-printed on page 2</p>
+
       <SectionHeader title="Applicant Details"/>
-      <FRow label="Date"><FInput value={f.date} onChange={v=>sf("date",v)}/></FRow>
+      <FRow label="Date" required><DateInput value={f.date} onChange={v=>sf("date",v)}/></FRow>
       <FRow label="Applicant Name"><FInput value={f.applicant_name} onChange={v=>sf("applicant_name",v)}/></FRow>
-      <FRow label="Applicant Address"><FTextarea value={f.applicant_address} onChange={v=>sf("applicant_address",v)}/></FRow>
+      <FRow label="Address"><FTextarea value={f.applicant_address} onChange={v=>sf("applicant_address",v)}/></FRow>
       <FRow label="Account No."><FInput value={f.account_no} onChange={v=>sf("account_no",v)}/></FRow>
+
       <SectionHeader title="Foreign Exchange Details"/>
-      <FRow label="Currency"><select value={f.amount_ccy} onChange={e=>sf("amount_ccy",e.target.value)} style={iS}>{["USD","EUR","GBP","JPY"].map(c=><option key={c}>{c}</option>)}</select></FRow>
-      <FRow label="Amount" required><FInput value={f.amount} onChange={v=>sf("amount",v)} placeholder="e.g. 2187.00"/></FRow>
+      <FRow label="Amount in FCY" required>
+        <div style={{display:"flex",gap:6}}>
+          <select value={f.amount_ccy} onChange={e=>sf("amount_ccy",e.target.value)} style={{...iS,width:90,fontSize:12}}>
+            {["USD","EUR","GBP","JPY","AED","SGD","AUD","CNY"].map(c=><option key={c}>{c}</option>)}
+          </select>
+          <FInput value={f.amount} onChange={v=>sf("amount",v)} placeholder="e.g. 2187.00"/>
+        </div>
+      </FRow>
       <FRow label="Purpose" required><FInput value={f.purpose} onChange={v=>sf("purpose",v)} placeholder="e.g. EXPORT OCEAN FREIGHT PAYMENT"/></FRow>
       <FRow label="Purpose Code"><FInput value={f.purpose_code} onChange={v=>sf("purpose_code",v)} placeholder="e.g. S0204"/></FRow>
-      <SectionHeader title="Beneficiary Details"/>
-      <FRow label="Beneficiary Name" required><FInput value={f.beneficiary_name} onChange={v=>sf("beneficiary_name",v)}/></FRow>
-      <FRow label="Bank Name" required><FInput value={f.beneficiary_bank} onChange={v=>sf("beneficiary_bank",v)}/></FRow>
-      <FRow label="Bank Address"><FTextarea value={f.beneficiary_address} onChange={v=>sf("beneficiary_address",v)}/></FRow>
-      <FRow label="Account Number" required><FInput value={f.beneficiary_account} onChange={v=>sf("beneficiary_account",v)}/></FRow>
-      <FRow label="SWIFT Code" required><FInput value={f.beneficiary_swift} onChange={v=>sf("beneficiary_swift",v)}/></FRow>
-      <FRow label="Intermediary Bank"><FInput value={f.intermediary_bank} onChange={v=>sf("intermediary_bank",v)}/></FRow>
-      <FRow label="Intermediary SWIFT"><FInput value={f.intermediary_swift} onChange={v=>sf("intermediary_swift",v)}/></FRow>
+      <FRow label="Charges">
+        <div style={{display:"flex",gap:10}}>
+          {["OUR","BEN","SHA"].map(opt=>(
+            <label key={opt} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer",
+              padding:"6px 14px",border:`2px solid ${f.charges===opt?"#1e3a5f":"#e2e8f0"}`,
+              borderRadius:6,background:f.charges===opt?"#eff6ff":"#f8fafc",fontWeight:f.charges===opt?700:400}}>
+              <input type="radio" name="charges" checked={f.charges===opt} onChange={()=>sf("charges",opt)} style={{accentColor:"#1e3a5f"}}/>{opt}
+            </label>
+          ))}
+        </div>
+      </FRow>
+
+      <SectionHeader title="Remittance Type"/>
+      <FRow label="Type">
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          {[["draft","a) Issue a draft"],["direct","b) Direct remittance"],["tc","c) Travellers cheques"],["notes","d) Foreign currency notes"]].map(([val,lbl])=>(
+            <label key={val} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer",
+              padding:"6px 10px",border:`2px solid ${f.remittance_type===val?"#1e3a5f":"#e2e8f0"}`,
+              borderRadius:6,background:f.remittance_type===val?"#eff6ff":"#f8fafc",fontWeight:f.remittance_type===val?700:400}}>
+              <input type="radio" name="remit_type" checked={f.remittance_type===val} onChange={()=>sf("remittance_type",val)} style={{accentColor:"#1e3a5f"}}/>
+              {lbl}
+            </label>
+          ))}
+        </div>
+      </FRow>
+
+      {(f.remittance_type==="draft"||f.remittance_type==="direct")&&(
+        <>
+          <SectionHeader title="Beneficiary Details"/>
+          <FRow label="Beneficiary Name" required><FInput value={f.beneficiary_name} onChange={v=>sf("beneficiary_name",v)}/></FRow>
+          <FRow label="Beneficiary Address"><FTextarea value={f.beneficiary_address} onChange={v=>sf("beneficiary_address",v)}/></FRow>
+          {f.remittance_type==="direct"&&<>
+            <FRow label="Bank Name" required><FInput value={f.bank_name} onChange={v=>sf("bank_name",v)}/></FRow>
+            <FRow label="Bank Address"><FTextarea value={f.bank_address} onChange={v=>sf("bank_address",v)}/></FRow>
+            <FRow label="Account Number" required><FInput value={f.account_number} onChange={v=>sf("account_number",v)}/></FRow>
+            <FRow label="SWIFT Code"><FInput value={f.swift_code} onChange={v=>sf("swift_code",v)}/></FRow>
+          </>}
+        </>
+      )}
+
       <SectionHeader title="Declaration"/>
       <FRow label="Name of Declarant"><FInput value={f.declarant_name} onChange={v=>sf("declarant_name",v)}/></FRow>
-      <ExportButtons onPDF={exportPDF} onWord={exportWord}/>
+
+      <div style={{marginTop:14,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
+        📄 PDF: Page 1 — Application form · Page 2+ — Purpose Code table (selected code <strong>{f.purpose_code}</strong> highlighted in green ✓)
+      </div>
+      <div style={{display:"flex",gap:10,marginTop:12,justifyContent:"flex-end"}}>
+        <button onClick={exportPDF}
+          style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",
+                  borderRadius:8,padding:"8px 20px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+          📄 Export PDF
+        </button>
+      </div>
     </div>
   );
 }
 
-// ── Form 4: Freight Payment Form ───────────────────────────────────────────────
+
+
 function FreightPaymentForm({ships}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
   const [f,setF]=useState({
