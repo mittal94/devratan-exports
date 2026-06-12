@@ -181,9 +181,11 @@ const calcShip = s => {
   return { invoiceAmtUSD:inv, invoiceAmtINR:inv*n(s.exchange_rate), grossTotal:inv*n(s.exchange_rate)+n(s.igst), fobValueINR:n(s.fob_value_usd)*n(s.exchange_rate) };
 };
 
-const calcProfit = p => {
+const calcProfit = (p, ships) => {
   const rice=n(p.rice_purchase_val), interest=rice*0.01, bankCh=n(p.payment_received_inr)*0.0011;
-  const localBrokerage=n(p.qty_mt)*100;
+  // qty_mt: use stored value, or look up from ships array, or fallback to 0
+  const qtyMT = n(p.qty_mt) || (ships ? n((ships.find(s=>s.invoice_no===p.invoice_no)||{}).qty) : 0);
+  const localBrokerage=qtyMT*100;
   const totalFOB=n(p.cha_clearing)+n(p.shipping_line_charges)+n(p.inspect_agency)+n(p.coc_ectn)+n(p.other_exp)+localBrokerage;
   const totalDirect=rice+n(p.pp_bags_purchase_val)+n(p.local_transport)+interest+bankCh+n(p.ocean_freight);
   const totalCIF=totalDirect+totalFOB;
@@ -274,11 +276,11 @@ const exportShipmentPDF = (s, bc) => {
   doc.save(`Shipment_${s.invoice_no}.pdf`);
 };
 
-const exportProfitPDF = (p) => {
+const exportProfitPDF = (p, allShipsForProfit) => {
   const JPDF = getPDF();
   if(!JPDF){ alert("PDF library not loaded. Please refresh the page."); return; }
   const doc = new JPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const c = calcProfit(p);
+  const c = calcProfit(p, allShipsForProfit||[]);
   let y = pdfHeader(doc, "Profitability Entry", `Invoice: ${p.invoice_no} | Buyer: ${p.buyer_name||"—"}`);
   y += 4;
   const rows = [
@@ -390,7 +392,7 @@ function ExportModal({ type, data, onClose, getBC }) {
       } else {
         const hdrs = ["Invoice No","Date","Buyer","Port Disch","Invoice(INR)","Pmt(INR)","Rice Purchase","PP Bags","Local Transport","Interest","Bank Charges","Ocean Freight","CHA Clearing","Shipping Line","Inspection","COC/ECTN","Other Exp","Total FOB","Total CIF","Net Profit"];
         const rows = filtered.map(p => {
-          const c = calcProfit(p);
+          const c = calcProfit(p,ships);
           return [p.invoice_no,p.invoice_date,p.buyer_name,p.port_of_discharge,fi(p.invoice_amt_inr),fi(p.payment_received_inr),fi(p.rice_purchase_val),fi(p.pp_bags_purchase_val),fi(p.local_transport),fi(c.interest),fi(c.bankCh),fi(p.ocean_freight),fi(p.cha_clearing),fi(p.shipping_line_charges),fi(p.inspect_agency),fi(p.coc_ectn),fi(p.other_exp),fi(c.totalFOB),fi(c.totalCIF),fi(c.profit)];
         });
         dlCSV(`Devratan_PL_${fromDate||"all"}_to_${toDate||"all"}.csv`, toCSV(hdrs, rows));
@@ -441,7 +443,7 @@ function ExportModal({ type, data, onClose, getBC }) {
       startY: y,
       head: [["Invoice No","Date","Buyer","Invoice(INR)","Pmt(INR)","Total CIF","Net Profit"]],
       body: profits.map(p => {
-        const c = calcProfit(p);
+        const c = calcProfit(p,ships);
         return [p.invoice_no,p.invoice_date,p.buyer_name,pdfINR(p.invoice_amt_inr),pdfINR(p.payment_received_inr),pdfINR(c.totalCIF),pdfINR(c.profit)];
       }),
       styles:{fontSize:8,cellPadding:3},
@@ -1914,7 +1916,7 @@ function DetailModal({shipment,bc,allBRCs,allIRMs,onClose,onViewDocs}){
 
 function ProfitabilityContent({fy,fyProfits,canEdit,canDelete,openAddProfit,openEditProfit,onDelete,onExportSingle}){
   const totP=fyProfits.reduce((a,p)=>{
-    try{ const c=calcProfit(p); a.invINR+=n(p.invoice_amt_inr); a.paidINR+=n(p.payment_received_inr); a.totalCIF+=c.totalCIF; a.profit+=c.profit; }catch(e){}
+    try{ const c=calcProfit(p,ships); a.invINR+=n(p.invoice_amt_inr); a.paidINR+=n(p.payment_received_inr); a.totalCIF+=c.totalCIF; a.profit+=c.profit; }catch(e){}
     return a;
   },{invINR:0,paidINR:0,totalCIF:0,profit:0});
   return(
@@ -1932,14 +1934,14 @@ function ProfitabilityContent({fy,fyProfits,canEdit,canDelete,openAddProfit,open
         :<div style={{display:"grid",gap:14}}>
           {fyProfits.map(p=>{
             let c={interest:0,bankCh:0,totalFOB:0,totalCIF:0,profit:0};
-            try{c=calcProfit(p);}catch(e){}
+            try{c=calcProfit(p,ships);}catch(e){}
             return(
               <div key={p.id} style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
                 <div style={{background:"linear-gradient(135deg,#1e3a5f,#1e5799)",padding:"11px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
                   <div><span style={{fontWeight:700,color:"#fff",fontSize:14}}>{p.invoice_no}</span><span style={{marginLeft:10,fontSize:12,color:"#93c5fd"}}>{p.invoice_date} · {p.buyer_name}</span></div>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
                     <div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#93c5fd"}}>Net Profit</div><div style={{fontSize:17,fontWeight:700,color:c.profit>=0?"#86efac":"#fca5a5"}}>{fR(c.profit)}</div></div>
-                    <button onClick={()=>exportProfitPDF(p)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>📄 PDF</button>
+                    <button onClick={()=>exportProfitPDF(p,ships)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>📄 PDF</button>
                     {canEdit&&<button onClick={()=>openEditProfit(p)} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
                     {canDelete&&<button onClick={()=>onDelete(p.id)} style={{background:"rgba(220,38,38,0.3)",color:"#fca5a5",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
                   </div>
@@ -6382,7 +6384,7 @@ export default function App(){
     setSaving(false);
   };
 
-  const profitCalc=useMemo(()=>{try{return calcProfit(profitForm);}catch{return{interest:0,bankCh:0,localBrokerage:0,totalFOB:0,totalDirect:0,totalCIF:0,profit:0};}},[profitForm]);
+  const profitCalc=useMemo(()=>{try{return calcProfit(profitForm,ships);}catch{return{interest:0,bankCh:0,localBrokerage:0,totalFOB:0,totalDirect:0,totalCIF:0,profit:0};}},[profitForm,ships]);
   const shipCalc=useMemo(()=>calcShip(shipForm),[shipForm]);
   const selectedBC=bcs.find(b=>b.id===shipForm.bc_id)||null;
   const viewShip=ships.find(s=>s.id===viewShipId)||null;
