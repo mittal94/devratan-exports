@@ -4777,6 +4777,7 @@ function ExportBCForm({ships, buyers}){
     dispatch_name:"", dispatch_address:"", dispatch_swift:"", dispatch_contact:"",
     charges_india:"Our a/c",
     charges_outside:"Our a/c",
+    mt_shipdate:"", mt_txn_ref:"",
     late_reason:"Late receipt of shipping documents from CHA",
     third_party:"No",
     charges_account:"41289547389",
@@ -4848,18 +4849,27 @@ function ExportBCForm({ships, buyers}){
     NF(true,9); doc.text("Submission of Export Documents for Collection",M,y); y+=5;
     NF(false,9); doc.text("I/We submit the following export documents to be sent on collection as detailed below \u2013",M,y); y+=6;
 
-    // Exporter / Importer table
-    const eiCols=[60,RW-60];
-    RECT(M,y,eiCols[0],18); RECT(M+eiCols[0],y,eiCols[1],18);
+    // Exporter / Importer table — dynamic height
+    const eiCols=[90,RW-90];
+    NF(false,8);
+    const buyerLines=doc.splitTextToSize(f.buyer_name+(f.buyer_address?"
+"+f.buyer_address:""),eiCols[1]-3);
+    const eiH=Math.max(20,buyerLines.length*4+8);
+    RECT(M,y,eiCols[0],eiH); RECT(M+eiCols[0],y,eiCols[1],eiH);
     NF(true,8); doc.text("Exporter's (Drawer) Name & Address :",M+1,y+4);
     NF(false,8);
-    doc.text("DEVRATAN ENTERPRISES LLP",M+1,y+8);
-    doc.text("206, Indore Trade Centre, Madhumulan Square, Indore-452001, M.P.",M+1,y+12);
-    doc.text("IEC: AARFD8883D",M+1,y+16);
+    doc.text("DEVRATAN ENTERPRISES LLP",M+1,y+9);
+    const expAddr="206, Indore Trade Centre, Madhumulan Square, Indore-452001, M.P.";
+    const expAddrL=doc.splitTextToSize(expAddr,eiCols[0]-3);
+    doc.text(expAddrL,M+1,y+13);
+    doc.text("IEC: AARFD8883D",M+1,y+13+expAddrL.length*4);
     NF(true,8); doc.text("Importer's (Drawee) Name & Address :",M+eiCols[0]+1,y+4);
-    NF(false,8); doc.text(f.buyer_name,M+eiCols[0]+1,y+9,{maxWidth:eiCols[1]-2});
-    doc.text(f.buyer_address,M+eiCols[0]+1,y+14,{maxWidth:eiCols[1]-2});
-    y+=20;
+    NF(false,8);
+    const buyerName=doc.splitTextToSize(f.buyer_name,eiCols[1]-3);
+    const buyerAddr=doc.splitTextToSize(f.buyer_address||"",eiCols[1]-3);
+    doc.text(buyerName,M+eiCols[0]+1,y+9);
+    if(f.buyer_address) doc.text(buyerAddr,M+eiCols[0]+1,y+9+buyerName.length*4);
+    y+=eiH+2;
 
     // Bill Details
     NF(true,9); doc.text("Bill Details:",M,y); y+=4;
@@ -4943,14 +4953,14 @@ function ExportBCForm({ships, buyers}){
       y+=rh;
     }
 
-    // Row f: Advance Remittance Ref
+    // Row f: Advance Remittance Ref — dynamic height
     {
-      const rh=7;
-      RECT(M,y,c0,rh); RECT(M+c0,y,c1,rh); RECT(M+c0+c1,y,c2,rh); RECT(M+c0+c1+c2,y,c3,rh);
-      doc.text("f.",M+1,y+4.5);
       const lbl="Advance Remittance Ref. No. / e FIRC No. (If applicable)";
       const lls=doc.splitTextToSize(lbl,c1-2);
-      NF(true,8); doc.text(lls,M+c0+1,y+3.5);
+      const rh=Math.max(7,lls.length*4+3);
+      RECT(M,y,c0,rh); RECT(M+c0,y,c1,rh); RECT(M+c0+c1,y,c2,rh); RECT(M+c0+c1+c2,y,c3,rh);
+      doc.text("f.",M+1,y+4.5);
+      NF(true,8); doc.text(lls,M+c0+1,y+4);
       NF(false,8.5); doc.text(":",M+c0+c1+1,y+4.5);
       doc.text(f.adv_ref_no||"",M+c0+c1+c2+2,y+4.5);
       y+=rh;
@@ -4959,28 +4969,23 @@ function ExportBCForm({ships, buyers}){
 
     // Documents Submitted table
     NF(true,8.5); doc.text("Documents Submitted: (Number of Original / Copies of each document submitted)",M,y); y+=4;
-    const docCols=[22,22,22,20,18,18,18,20,20];
-    const docHdrs=["Documents","Bill of Exchange / Draft","Commercial Invoice","Transport Doc (BL, AWB etc.)","Packing List","Insurance Policy","Cert. of Origin","Test Cert.","Others"];
-    const totDocW=docCols.reduce((a,b)=>a+b,0);
-    let dx=M;
-    NF(false,6.5);
-    docCols.forEach((w,i)=>{
-      RECT(dx,y,w,10);
-      const ls=doc.splitTextToSize(docHdrs[i],w-1);
-      doc.text(ls,dx+0.5,y+(10-ls.length*3)/2+3);
-      dx+=w;
+    // Documents table — use autoTable for proper fitting
+    const docHdrsTbl=["Docs","Bill of Exch / Draft","Commercial Invoice","Transport Doc (BL/AWB)","Packing List","Insur. Policy","Cert. of Origin","Test Cert.","Others"];
+    const docKeys0=["doc_orig_bill","doc_orig_invoice","doc_orig_transport","doc_orig_packing","doc_orig_insurance","doc_orig_coo","doc_orig_test","doc_orig_others"];
+    const docKeys1=["doc_dup_bill","doc_dup_invoice","doc_dup_transport","doc_dup_packing","doc_dup_insurance","doc_dup_coo","doc_dup_test","doc_dup_others"];
+    doc.autoTable({
+      startY:y, margin:{left:M,right:M}, tableWidth:RW,
+      head:[docHdrsTbl.map(h=>({content:h,styles:{halign:"center",fontSize:6.5,cellPadding:{top:1.5,bottom:1.5,left:1,right:1}}}))],
+      body:[
+        [["Original"],...docKeys0.map(k=>f[k]||"")],
+        [["Duplicate"],...docKeys1.map(k=>f[k]||"")],
+      ],
+      styles:{fontSize:7.5,cellPadding:{top:2,bottom:2,left:2,right:2},lineColor:[80,80,80],lineWidth:0.2},
+      columnStyles:{0:{fontStyle:"bold",cellWidth:20}},
+      headStyles:{fillColor:[240,245,255],textColor:[18,52,96],fontStyle:"bold"},
+      tableLineColor:[80,80,80],tableLineWidth:0.2,
     });
-    y+=10;
-    ["Original","Duplicate"].forEach((row,ri)=>{
-      dx=M; RECT(dx,y,docCols[0],6); NF(false,7.5); doc.text(row,dx+1,y+4); dx+=docCols[0];
-      const keys=ri===0
-        ?["doc_orig_bill","doc_orig_invoice","doc_orig_transport","doc_orig_packing","doc_orig_insurance","doc_orig_coo","doc_orig_test","doc_orig_others"]
-        :["doc_dup_bill","doc_dup_invoice","doc_dup_transport","doc_dup_packing","doc_dup_insurance","doc_dup_coo","doc_dup_test","doc_dup_others"];
-      keys.forEach((k,i)=>{
-        RECT(dx,y,docCols[i+1],6); NF(false,8); doc.text(String(f[k]||""),dx+1,y+4,{maxWidth:docCols[i+1]-2}); dx+=docCols[i+1];
-      });
-      y+=6;
-    });
+    y=doc.lastAutoTable.finalY+2;
     NF(false,7.5);
     y=WRAP("A set of all the applicable documents as mentioned above has been enclosed for Bank's record.",M,y+2,RW,4);
     y+=3;
@@ -5038,9 +5043,12 @@ function ExportBCForm({ships, buyers}){
     y+=8;
 
     // Additional Information
+    y=chkPg(y,40);
     NF(true,9); doc.text("Additional Information:",M,y); y+=5;
     NF(false,8.5);
-    y=WRAP("If documents are submitted after 21 days from the date of export, reasons for delay: "+(f.late_reason||""),M+5,y,RW-5,4.5);
+    y=WRAP("4.  If Merchanting Trade: Import Leg details - Shipment Date ________________________, Txn. Ref. No. ______",M+5,y,RW-5,4.5);
+    y+=4;
+    y=WRAP("5.  If documents are submitted after 21 days from the date of export, reasons for delay: "+(f.late_reason||""),M+5,y,RW-5,4.5);
     y+=4;
     const tpChk=f.third_party==="Yes";
     doc.text("Is Remitter of Funds a Third Party:  Yes: "+(tpChk?"[X]":"[ ]")+"     No: "+(tpChk?"[ ]":"[X]"),M+5,y); y+=5;
@@ -5257,6 +5265,13 @@ function ExportBCForm({ships, buyers}){
       </FRow>
 
       <SectionHeader title="Additional Information"/>
+      {f.export_type==="Merchanting Trade"&&(
+        <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"10px 14px",marginBottom:10,fontSize:12}}>
+          <div style={{fontWeight:700,color:"#92400e",marginBottom:8}}>Merchanting Trade Details</div>
+          <FRow label="Import Leg Shipment Date"><input type="date" value={f.mt_shipdate} onChange={e=>sf("mt_shipdate",e.target.value)} style={{...iS,fontSize:12}}/></FRow>
+          <FRow label="Txn. Ref. No."><FInput value={f.mt_txn_ref} onChange={v=>sf("mt_txn_ref",v)}/></FRow>
+        </div>
+      )}
       <FRow label="Reason for delay (if > 21 days)"><FInput value={f.late_reason} onChange={v=>sf("late_reason",v)}/></FRow>
       <FRow label="Is Remitter a Third Party?">
         <div style={{display:"flex",gap:10}}>
