@@ -5118,8 +5118,6 @@ function ExportBCForm({ships, buyers}){
   };
 
   // ── FORM UI ───────────────────────────────────────────────────────────────
-  const toISO=dd=>{if(!dd||!dd.includes("."))return"";const[d,m,y]=dd.split(".");return`${y}-${m}-${d}`;};
-  const toDisplay=iso=>{if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
   const DateInput=({value,onChange})=>(
     <input type="date" value={toISO(value)}
       onChange={e=>onChange(toDisplay(e.target.value))}
