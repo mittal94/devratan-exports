@@ -1887,13 +1887,14 @@ function BCDocsModal({bc, canUpload, canDelete, onClose}){
   );
 }
 
-function DetailModal({shipment,bc,onClose,onViewDocs}){
+function DetailModal({shipment,bc,allBRCs,allIRMs,onClose,onViewDocs}){
   if(!shipment)return <span/>;
   const s=shipment,c=calcShip(s);
-  const shipBRCs=bcs.flatMap(b=>(b.brc_entries||[])).filter(b=>b.linked_invoice_no===s.invoice_no);
+  const shipBRCs=(allBRCs||[]).filter(b=>b.linked_invoice_no===s.invoice_no);
   const brcNos=shipBRCs.map(b=>b.brc_no).filter(Boolean).join(", ")||"—";
   const brcDates=shipBRCs.map(b=>b.brc_date).filter(Boolean).join(", ")||"—";
-  const rows=[["FY",getFY(s.invoice_date)],["Invoice Date",s.invoice_date],["Buyer",s.buyer_name],["Country",s.buyer_country],["Product",s.product],["Port of Loading",s.port_of_loading],["Port of Discharge",s.port_of_discharge],["SB No",s.shipping_bill_no],["SB Date",s.shipping_bill_date],["Port Code",s.port_code],["BL No",s.bl_no],["BL Date",s.bl_date],["Qty (MT)",fi(s.qty)],["Rate/MT (USD)",fi(s.rate_per_mt)],["Delivery Terms",s.delivery_terms],["Invoice Amt (USD)",fU(c.invoiceAmtUSD)],["Exchange Rate",fi(s.exchange_rate)],["Invoice Amt (INR)",fR(c.invoiceAmtINR)],["IGST (INR)",fR(s.igst)],["Gross Total (INR)",fR(c.grossTotal)],["FOB (USD)",fU(s.fob_value_usd)],["FOB (INR)",fR(c.fobValueINR)],["RODTEP (INR)",fR(s.rodtep_amount)],["RODTEP Status",s.rodtep_status],["GST Status",s.gst_status],["Bill Collection No",bc?bc.bc_no:"—"],["BC Date",bc?bc.bc_date:"—"],["BRC No(s)",brcNos],["BRC Date(s)",brcDates],["Payment Rcvd (USD)",bc?fU(bc.total_amt_usd):"—"],["Payment Rcvd (INR)",bc?fR(bc.total_amt_inr):"—"],["Balance (USD)",bc?fU(c.invoiceAmtUSD-bc.total_amt_usd):fU(c.invoiceAmtUSD)],["Remarks",s.remarks||"—"]];
+  const {paidUSD,paidINR}=calcEffectivePaid(s.invoice_no,allBRCs||[],allIRMs||[]);
+  const rows=[["FY",getFY(s.invoice_date)],["Invoice Date",s.invoice_date],["Buyer",s.buyer_name],["Country",s.buyer_country],["Product",s.product],["Port of Loading",s.port_of_loading],["Port of Discharge",s.port_of_discharge],["SB No",s.shipping_bill_no],["SB Date",s.shipping_bill_date],["Port Code",s.port_code],["BL No",s.bl_no],["BL Date",s.bl_date],["Qty (MT)",fi(s.qty)],["Rate/MT (USD)",fi(s.rate_per_mt)],["Delivery Terms",s.delivery_terms],["Invoice Amt (USD)",fU(c.invoiceAmtUSD)],["Exchange Rate",fi(s.exchange_rate)],["Invoice Amt (INR)",fR(c.invoiceAmtINR)],["IGST (INR)",fR(s.igst)],["Gross Total (INR)",fR(c.grossTotal)],["FOB (USD)",fU(s.fob_value_usd)],["FOB (INR)",fR(c.fobValueINR)],["RODTEP (INR)",fR(s.rodtep_amount)],["RODTEP Status",s.rodtep_status],["GST Status",s.gst_status],["Bill Collection No",bc?bc.bc_no:"—"],["BC Date",bc?bc.bc_date:"—"],["BRC No(s)",brcNos],["BRC Date(s)",brcDates],["Payment Rcvd (USD)",paidUSD>0?fU(paidUSD):"—"],["Payment Rcvd (INR)",paidINR>0?fR(paidINR):"—"],["Balance (USD)",fU(c.invoiceAmtUSD-paidUSD)],["Remarks",s.remarks||"—"]];
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:150,padding:12}}>
       <div style={{background:"#fff",borderRadius:14,padding:24,width:"100%",maxWidth:680,maxHeight:"93vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
@@ -3341,14 +3342,14 @@ async function exportProformaInvoiceWord(contract, buyer, piNo, validityDate, ad
 // Rule: IRM bank charges are absorbed by the FIRST invoice linked to that IRM
 // (first = earliest BRC insertion order in irm_allocations array order)
 function calcEffectivePaid(invoiceNo, allBRCs, allIRMs) {
-  // Build a map: irmId -> first invoice that uses it (by BRC array order)
+  // Build a map: irmId -> last invoice that uses it (by BRC array order)
   // allBRCs is ordered by insertion (DB order preserved in fetch)
-  const irmFirstInvoice = {};
+  const irmLastInvoice = {};
   allBRCs.forEach(brc => {
     if (!brc.linked_invoice_no) return;
     (brc.irm_allocations || []).forEach(a => {
-      if (a.irmId && !(a.irmId in irmFirstInvoice)) {
-        irmFirstInvoice[String(a.irmId)] = brc.linked_invoice_no;
+      if (a.irmId) {
+        irmLastInvoice[String(a.irmId)] = brc.linked_invoice_no;
       }
     });
   });
@@ -3362,8 +3363,8 @@ function calcEffectivePaid(invoiceNo, allBRCs, allIRMs) {
       if (!irm) return;
       const util = n(a.irmUtilAmt);
       const rate = n(irm.exchange_rate);
-      // Absorb charges if this invoice is the first linked to this IRM
-      const charges = irmFirstInvoice[String(a.irmId)] === invoiceNo
+      // Absorb charges if this invoice is the last linked to this IRM
+      const charges = irmLastInvoice[String(a.irmId)] === invoiceNo
         ? n(irm.intermediary_charges_usd || 0)
         : 0;
       paidUSD += util + charges;
@@ -7157,7 +7158,7 @@ export default function App(){
         }catch(e){alert("Error: "+e.message);}
         setSaving(false);
       }} onClose={()=>setBrcModal(null)} saving={saving}/>}
-      {viewShipId&&<DetailModal shipment={viewShip} bc={viewShip?getBC(viewShip):null} onClose={()=>setViewShipId(null)} onViewDocs={()=>setShipDocsId(viewShipId)}/>}
+      {viewShipId&&<DetailModal shipment={viewShip} bc={viewShip?getBC(viewShip):null} allBRCs={[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs]} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} onClose={()=>setViewShipId(null)} onViewDocs={()=>setShipDocsId(viewShipId)}/>}
       {showUsers&&<UserModal users={users} onClose={()=>setShowUsers(false)} onRefresh={loadAll}/>}
       {showChangePwd&&<ChangePwdModal onClose={()=>setShowChangePwd(false)}/>}
       {shareText&&<ShareModal text={shareText} onClose={()=>setShareText(null)}/>}
