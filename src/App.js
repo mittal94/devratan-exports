@@ -4852,8 +4852,7 @@ function ExportBCForm({ships, buyers}){
     // Exporter / Importer table — dynamic height
     const eiCols=[90,RW-90];
     NF(false,8);
-    const buyerLines=doc.splitTextToSize(f.buyer_name+(f.buyer_address?"
-"+f.buyer_address:""),eiCols[1]-3);
+    const buyerLines=doc.splitTextToSize((f.buyer_name+(f.buyer_address?" "+f.buyer_address:"")).trim(),eiCols[1]-3);
     const eiH=Math.max(20,buyerLines.length*4+8);
     RECT(M,y,eiCols[0],eiH); RECT(M+eiCols[0],y,eiCols[1],eiH);
     NF(true,8); doc.text("Exporter's (Drawer) Name & Address :",M+1,y+4);
