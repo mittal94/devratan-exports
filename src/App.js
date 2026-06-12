@@ -35,7 +35,10 @@ const BC_DOCS = [
 
 const r2Upload = async (folder, docKey, file) => {
   const ext = file.name.split(".").pop();
-  const key = `${folder}/${docKey}/${docKey}.${ext}`;
+  // Trim whitespace from folder/docKey to prevent %20 in R2 keys
+  const cleanFolder = String(folder||"").trim();
+  const cleanKey = String(docKey||"").trim();
+  const key = `${cleanFolder}/${cleanKey}/${cleanKey}.${ext}`;
   console.log("r2Upload: PUT", `${R2_WORKER}/${key}`, "size:", file.size);
   const res = await fetch(`${R2_WORKER}/${key}`, {
     method:"PUT", headers:{"Content-Type":file.type||"application/octet-stream"},
@@ -56,7 +59,8 @@ const r2Delete = async (key) => {
 
 const r2List = async (folder) => {
   try {
-    const listUrl = `${R2_WORKER}/list/${folder}`;
+    const cleanFolderL = String(folder||"").trim();
+    const listUrl = `${R2_WORKER}/list/${cleanFolderL}`;
     console.log("r2List: GET", listUrl);
     const res = await fetch(listUrl);
     if(!res.ok){ console.warn("r2List non-ok:", res.status, "folder:", folder); return []; }
@@ -1421,7 +1425,7 @@ function IRMDocsModal({irm, canUpload, canDelete, onClose}){
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
-  const folder=`irm/${irm.irm_no||irm.id}`;
+  const folder=`irm/${String(irm.irm_no||irm.id||"").trim()}`;
   const docs=[
     {key:"swift_advice",   label:"SWIFT / Bank Advice", accept:".pdf", maxMB:3},
     {key:"irm_copy",       label:"IRM Copy",             accept:".pdf", maxMB:3},
@@ -1518,7 +1522,7 @@ function BRCDocsModal({brc, canUpload, canDelete, onClose}){
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
-  const folder=`brc/${brc.brc_no||brc.id}`;
+  const folder=`brc/${String(brc.brc_no||brc.id||"").trim()}`;
   const docs=[
     {key:"brc_copy", label:"BRC Copy", accept:".pdf", maxMB:3},
     {key:"other",    label:"Other",    accept:".pdf", maxMB:5},
@@ -1613,7 +1617,7 @@ function ShipDocsModal({shipment, canUpload, canDelete, onClose}){
   const [uploading,setUploading]=useState({});
   const [deleting,setDeleting]=useState({});
   const fileRefs=useRef({});
-  const folder=`shipments/${shipment.invoice_no||shipment.id}`;
+  const folder=`shipments/${String(shipment.invoice_no||shipment.id||"").trim().replace(/ /g,"-")}`;
 
   const loadFiles=async()=>{
     setLoading(true);
@@ -1743,7 +1747,7 @@ function BCDocsModal({bc, canUpload, canDelete, onClose}){
   const [uploading, setUploading] = useState({});
   const [deleting, setDeleting] = useState({});
   const fileRefs = useRef({});
-  const folder = `bc/${bc.bc_no||bc.id}`;
+  const folder = `bc/${String(bc.bc_no||bc.id||"").trim()}`;
 
   const loadFiles = async () => {
     setLoading(true);
