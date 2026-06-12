@@ -36,14 +36,15 @@ const BC_DOCS = [
 const r2Upload = async (folder, docKey, file) => {
   const ext = file.name.split(".").pop();
   const key = `${folder}/${docKey}/${docKey}.${ext}`;
+  console.log("r2Upload: PUT", `${R2_WORKER}/${key}`, "size:", file.size);
   const res = await fetch(`${R2_WORKER}/${key}`, {
     method:"PUT", headers:{"Content-Type":file.type||"application/octet-stream"},
     body: file
   });
+  const respText = await res.text();
+  console.log("r2Upload response:", res.status, respText.slice(0,200));
   if(!res.ok){
-    let msg="Upload failed";
-    try{ const t=await res.text(); msg=`Upload failed (${res.status}): ${t.slice(0,200)}`; }catch(e){}
-    throw new Error(msg);
+    throw new Error(`Upload failed (${res.status}): ${respText.slice(0,200)}`);
   }
   return key;
 };
@@ -55,7 +56,9 @@ const r2Delete = async (key) => {
 
 const r2List = async (folder) => {
   try {
-    const res = await fetch(`${R2_WORKER}/list/${folder}`);
+    const listUrl = `${R2_WORKER}/list/${folder}`;
+    console.log("r2List: GET", listUrl);
+    const res = await fetch(listUrl);
     if(!res.ok){ console.warn("r2List non-ok:", res.status, "folder:", folder); return []; }
     const raw = await res.text();
     let data;
