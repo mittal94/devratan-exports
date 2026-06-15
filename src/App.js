@@ -5347,13 +5347,12 @@ function FormA2({ships}){
   const exportPDF=()=>{
     const JPDF=getPDF(); if(!JPDF) return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
-    const M=20, RW=170; // wider margins for plain A4
+    const M=20, RW=170;
     const NF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||9);doc.setTextColor(0,0,0);};
-    const TW=(t,sz)=>doc.getStringUnitWidth(String(t))*(sz||9)/doc.internal.scaleFactor;
-    const WRAP=(t,x,y,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y);return y+ls.length*(lh||4.5);};
-    const RECT=(x,y,w,h)=>{doc.setDrawColor(80,80,80);doc.setLineWidth(0.2);doc.rect(x,y,w,h);};
-    const LINE=(x1,y1,x2,y2)=>{doc.setDrawColor(80,80,80);doc.setLineWidth(0.3);doc.line(x1,y1,x2,y2);};
-    const chkPg=(y,n)=>{if(y+(n||8)>282){doc.addPage();return 20;}return y;};
+    const TW=(t,sz)=>doc.getStringUnitWidth(String(t||""))*(sz||9)/doc.internal.scaleFactor;
+    const WRAP=(t,x,y2,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y2);return y2+ls.length*(lh||4.5);};
+    const LINE=(x1,y1,x2,y2)=>{doc.setDrawColor(100,100,100);doc.setLineWidth(0.25);doc.line(x1,y1,x2,y2);};
+    const chkPg=(yPos,need)=>{if(yPos+(need||8)>282){doc.addPage();return 20;}return yPos;};
     const pdfFooter=()=>{
       const tp=doc.getNumberOfPages();
       for(let i=1;i<=tp;i++){
@@ -5364,89 +5363,82 @@ function FormA2({ships}){
       }
     };
 
-    // ── PAGE 1: APPLICATION ───────────────────────────────────────────────────
-    let y=20;
+    let y=18;
 
-    // Title block
-    NF(true,12);
-    doc.text("Form A2",M,y); y+=6;
-    NF(true,10);
-    doc.text("Application cum Declaration",M,y); y+=5;
-    NF(false,8.5);
-    doc.text("(To be completed by the applicant)",M,y); y+=5;
-    NF(true,9);
-    doc.text("Application for drawal of foreign exchange",M,y); y+=8;
-    LINE(M,y-2,M+RW,y-2);
+    // ── Title block — centred ────────────────────────────────────────────────
+    NF(true,13); doc.text("Form A2",105,y,{align:"center"}); y+=7;
+    NF(true,10); doc.text("Application cum Declaration",105,y,{align:"center"}); y+=5;
+    NF(false,9); doc.text("(To be completed by the applicant)",105,y,{align:"center"}); y+=5;
+    NF(true,9); doc.text("Application for drawal of foreign exchange",105,y,{align:"center"}); y+=7;
+    LINE(M,y,M+RW,y); y+=5;
 
-    // Applicant details
-    NF(true,9); doc.text("Details of the applicant -",M,y); y+=6;
+    // ── Details of the applicant ─────────────────────────────────────────────
+    NF(true,9); doc.text("Details of the applicant -",M,y); y+=5;
     NF(false,9);
-    doc.text("Name: "+f.applicant_name,M+5,y); y+=5;
-    const addrLines=doc.splitTextToSize("Address: "+f.applicant_address,RW-5);
+    doc.text("Name     :  "+f.applicant_name,M+5,y); y+=5;
+    const addrLines=doc.splitTextToSize("Address  :  "+f.applicant_address,RW-5);
     doc.text(addrLines,M+5,y); y+=addrLines.length*4.5+2;
-    doc.text("Account No.: "+f.account_no,M+5,y); y+=8;
-    LINE(M,y-2,M+RW,y-2);
+    doc.text("Account No.:  "+f.account_no,M+5,y); y+=6;
+    LINE(M,y,M+RW,y); y+=5;
 
-    // Foreign exchange details
-    NF(true,9); doc.text("Details of the foreign exchange required",M,y); y+=6;
+    // ── Details of the foreign exchange required ─────────────────────────────
+    NF(true,9); doc.text("Details of the foreign exchange required",M,y); y+=5;
     NF(false,9);
-    // Amount line with bold value
     doc.text("Amount (Specify currency) : ",M+5,y);
-    const amtLblW=TW("Amount (Specify currency) : ",9);
-    NF(true,9); doc.text(f.amount_ccy+" "+f.amount,M+5+amtLblW,y);
+    NF(true,9); doc.text(f.amount_ccy+" "+f.amount,M+5+TW("Amount (Specify currency) : ",9),y);
     NF(false,9); y+=5;
-    y=WRAP("Purpose: "+f.purpose+(f.purpose_code?" ("+f.purpose_code+")":""),M+5,y,RW-5,4.5);
+    y=WRAP("Purpose : "+f.purpose+(f.purpose_code?" ("+f.purpose_code+")":""),M+5,y,RW-5,4.5);
     y+=2;
-    doc.text("CHARGES: "+(f.charges||"OUR"),M+5,y); y+=8;
-    LINE(M,y-2,M+RW,y-2);
+    // Charges in BOLD
+    doc.text("CHARGES : ",M+5,y);
+    NF(true,9); doc.text(f.charges||"OUR",M+5+TW("CHARGES : ",9),y);
+    NF(false,9); y+=6;
+    LINE(M,y,M+RW,y); y+=5;
 
-    // Authorisation
-    NF(false,9);
+    // ── Authorisation ────────────────────────────────────────────────────────
     y=WRAP("I authorise you to debit my Saving Bank / Current / RFC / EEFC Account No. "+f.account_no+" together with your charges and",M,y,RW,4.5);
-    y+=5;
+    y+=4;
 
-    // Options a/b/c/d — with checkmarks
+    // Options a/b/c/d
     const opts=[
-      {key:"draft",   label:"a) Issue a draft", sub:"Beneficiary's Name: "+(f.remittance_type==="draft"?f.beneficiary_name:"___________________")+"    Address: "+(f.remittance_type==="draft"?f.beneficiary_address:"________________________________")},
-      {key:"direct",  label:"b) Effect the foreign exchange remittance directly -", sub:null},
-      {key:"tc",      label:"c) Issue travellers cheques for", sub:f.remittance_type==="tc"?f.amount+" "+f.amount_ccy:"_____________________________"},
-      {key:"notes",   label:"d) Issue foreign currency notes for", sub:f.remittance_type==="notes"?f.amount+" "+f.amount_ccy:"_________________________"},
+      {key:"draft",  label:"a) Issue a draft"},
+      {key:"direct", label:"b) Effect the foreign exchange remittance directly -"},
+      {key:"tc",     label:"c) Issue travellers cheques for"},
+      {key:"notes",  label:"d) Issue foreign currency notes for"},
     ];
     opts.forEach(opt=>{
-      const selected=f.remittance_type===opt.key;
-      NF(selected,9);
-      const prefix=selected?"* ":"  ";
-      if(opt.sub===null){
-        doc.text(prefix+opt.label,M+5,y); y+=5;
-        // Show beneficiary details for direct remittance
-        if(selected){
-          NF(false,9);
-          doc.text("Beneficiary's Name: "+f.beneficiary_name,M+10,y); y+=5;
-          y=WRAP("Name and address of the Bank: "+f.bank_name+(f.bank_address?", "+f.bank_address:""),M+10,y,RW-10,4.5);
-          y+=1;
-          doc.text("Account No.: "+f.account_number+(f.swift_code?"   SWIFT: "+f.swift_code:""),M+10,y); y+=5;
-        } else {
-          NF(false,9);
-          doc.text("Beneficiary's Name: ___________________",M+10,y); y+=5;
-          doc.text("Name and address of the Bank: ___________________________________________",M+10,y); y+=5;
-          doc.text("Account No.: ___________________   SWIFT: ___________________",M+10,y); y+=5;
-        }
+      const sel=f.remittance_type===opt.key;
+      NF(false,9);
+      const pfx=sel?"[*] ":"[ ] ";
+      y=chkPg(y,6);
+      if(opt.key==="draft"){
+        doc.text(pfx+opt.label,M+5,y); y+=4.5;
+        NF(false,9);
+        doc.text("Beneficiary Name: "+(sel?f.beneficiary_name:"_______________________"),M+12,y); y+=4.5;
+        doc.text("Address: "+(sel?f.beneficiary_address:"_________________________________________________"),M+12,y); y+=4.5;
+      } else if(opt.key==="direct"){
+        doc.text(pfx+opt.label,M+5,y); y+=4.5;
+        NF(false,9);
+        doc.text("Beneficiary Name: "+(sel?f.beneficiary_name:"_______________________"),M+12,y); y+=4.5;
+        const bankLine="Name and address of Bank: "+(sel?(f.bank_name+(f.bank_address?", "+f.bank_address:"")):"_________________________________________________");
+        y=WRAP(bankLine,M+12,y,RW-12,4.5); y+=1;
+        doc.text("Account No.: "+(sel?f.account_number:"___________________")+"     SWIFT: "+(sel?f.swift_code:"___________________"),M+12,y); y+=4.5;
+      } else if(opt.key==="tc"){
+        doc.text(pfx+opt.label+" "+(sel?f.amount_ccy+" "+f.amount:"_____________________"),M+5,y); y+=4.5;
       } else {
-        doc.text(prefix+opt.label,M+5,y);
-        NF(false,9); doc.text(String(opt.sub||""),M+5+TW(prefix+opt.label,selected?9:9)+2,y);
-        y+=5;
+        doc.text(pfx+opt.label+" "+(sel?f.amount_ccy+" "+f.amount:"_____________________"),M+5,y); y+=4.5;
       }
     });
     y+=2;
-    NF(false,7.5); doc.text("(Strike out whichever is not applicable)",M,y); y+=8;
-    LINE(M,y-2,M+RW,y-2);
+    NF(false,7.5); doc.text("(Strike out whichever is not applicable)",M,y); y+=6;
+    LINE(M,y,M+RW,y); y+=5;
 
-    // Signature block
-    NF(false,9);
-    doc.text("Signature: ________________________________",M,y); y+=8;
-    LINE(M,y-2,M+RW,y-2);
+    // ── Signature block ──────────────────────────────────────────────────────
+    y=chkPg(y,10);
+    NF(false,9); doc.text("Signature: ________________________________",M,y); y+=6;
+    LINE(M,y,M+RW,y); y+=5;
 
-    // Declaration
+    // ── Declaration ──────────────────────────────────────────────────────────
     NF(true,9); doc.text("Declaration",M,y); y+=5;
     NF(false,8.5); doc.text("(Under FEMA 1999)",M,y); y+=6;
     NF(false,9);
@@ -5461,20 +5453,7 @@ function FormA2({ships}){
     doc.text("Signature: ________________________________",M,y);
     doc.text("Date: "+f.date,M+RW-30,y); y+=6;
     doc.text("Name: "+f.declarant_name,M,y); y+=8;
-    LINE(M,y-2,M+RW,y-2);
-
-    // AD / Bank section (to be filled by bank)
-    NF(true,8.5); doc.text("(To be filled in by Authorised Dealer)",M,y); y+=6;
-    NF(false,8.5);
-    doc.text("AD Code No.: ________________________________",M,y); y+=5;
-    doc.text("Form No.: ________________________________",M,y); y+=5;
-    doc.text("Currency: ________________    Amount: ________________    Equivalent to Rs.: _______________",M,y); y+=8;
-    LINE(M,y-2,M+RW,y-2);
-
-    // Purpose code note
-    NF(false,7.5);
-    y=WRAP("ADs should put a tick (\u2713) against an appropriate purpose code. (In case of doubt/difficulty, consult customer/RBI.)",M,y,RW,3.8);
-    y+=4;
+    LINE(M,y,M+RW,y);
 
     // ── Purpose Code Table ────────────────────────────────────────────────────
     const purposeCodes=[
