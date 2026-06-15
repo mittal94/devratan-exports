@@ -5726,7 +5726,7 @@ function EPCForm({ships}){
   const getFY=()=>{const now=new Date();const yr=now.getFullYear();const m=now.getMonth();return m>=3?`${yr}-${String(yr+1).slice(2)}`:`${yr-1}-${String(yr).slice(2)}`;};
 
   const [f,setF]=useState({
-    ref_no:"DEV/"+getFY()+"/EPC/",
+    ref_serial:"",
     date:today,
     order_no:"", order_date:"",
     cif_value_usd:"", fob_value_usd:"",
@@ -5734,7 +5734,7 @@ function EPCForm({ships}){
     margin_pct:"10",
     epc_availed:"0.00",
     epc_release:"",
-    uin_no:"EPMIES210326008030", uin_date:"21.03.2026",
+    uin_no:"EPMIES150626012081", uin_date:"15.06.2026",
     hsn:"10063019",
     epc_account:"41269117338",
     cc_account:"41289547389",
@@ -5781,7 +5781,8 @@ function EPCForm({ships}){
 
     // Ref + Date right aligned
     NF(false,9);
-    doc.text("Ref No: "+f.ref_no,M,y);
+    const refNo="DEV/"+getFY()+"/EPC/"+(f.ref_serial||"__");
+    doc.text("Ref No: "+refNo,M,y);
     doc.text("Date: "+f.date,M+RW-TW("Date: "+f.date,9),y);
     y+=7;
 
@@ -5794,7 +5795,7 @@ function EPCForm({ships}){
     // Subject line bold
     NF(true,9);
     doc.text("Sub: EPC Limit A/c. No: "+f.epc_account,M,y); y+=4.5;
-    doc.text("     UIN No. "+f.uin_no+" Dt. "+f.uin_date,M,y); y+=7;
+    doc.text("UIN No. "+f.uin_no+" Dt. "+f.uin_date,105,y,{align:"center"}); y+=7;
 
     NF(false,9); doc.text("Dear Sir,",M,y); y+=6;
 
@@ -5853,7 +5854,7 @@ function EPCForm({ships}){
     doc.setFont("helvetica","bold"); doc.setTextColor(220,220,220);
     doc.text("Page 1 of 1",M+RW-2,293,{align:"right"});
 
-    doc.save("EPC_Release_Request_"+f.ref_no.replace(/\//g,"-")+".pdf");
+    doc.save("EPC_Release_Request_"+refNo.replace(/\//g,"-")+".pdf");
   };
 
   const DateInput=({value,onChange})=>(
@@ -5866,16 +5867,44 @@ function EPCForm({ships}){
       <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>EPC Limit A/c No: 41269117338 · UIN: EPMIES210326008030</p>
 
       <SectionHeader title="Letter Details"/>
-      <FRow label="Ref No" required><FInput value={f.ref_no} onChange={v=>sf("ref_no",v)}/></FRow>
+      <FRow label="Ref No" required>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:12,color:"#64748b",fontWeight:600,whiteSpace:"nowrap",background:"#f1f5f9",padding:"7px 10px",borderRadius:7,border:"1px solid #e2e8f0"}}>
+            {"DEV/"+getFY()+"/EPC/"}
+          </span>
+          <input value={f.ref_serial} onChange={e=>sf("ref_serial",e.target.value)}
+            placeholder="02" maxLength={4}
+            style={{...iS,width:80,fontSize:13,fontWeight:600}}/>
+        </div>
+      </FRow>
       <FRow label="Date" required><DateInput value={f.date} onChange={v=>sf("date",v)}/></FRow>
-      <FRow label="UIN No"><FInput value={f.uin_no} onChange={v=>sf("uin_no",v)}/></FRow>
-      <FRow label="UIN Date"><DateInput value={f.uin_date} onChange={v=>sf("uin_date",v)}/></FRow>
+      <FRow label="UIN No">
+        <div style={{...iS,background:"#f1f5f9",color:"#64748b",fontSize:12,display:"flex",alignItems:"center"}}>
+          {f.uin_no} <span style={{marginLeft:8,fontSize:10,color:"#94a3b8"}}>Fixed till 31-03-2027</span>
+        </div>
+      </FRow>
+      <FRow label="UIN Date">
+        <div style={{...iS,background:"#f1f5f9",color:"#64748b",fontSize:12,display:"flex",alignItems:"center"}}>
+          {f.uin_date} <span style={{marginLeft:8,fontSize:10,color:"#94a3b8"}}>Fixed till 31-03-2027</span>
+        </div>
+      </FRow>
 
       <SectionHeader title="Export Order Details"/>
       <FRow label="Order No" required><FInput value={f.order_no} onChange={v=>sf("order_no",v)} placeholder="e.g. DEV-26/27-12"/></FRow>
       <FRow label="Order Date" required><DateInput value={f.order_date} onChange={v=>sf("order_date",v)}/></FRow>
-      <FRow label="CIF Value (USD)" required><FInput value={f.cif_value_usd} onChange={v=>sf("cif_value_usd",v)} placeholder="e.g. 208290.00"/></FRow>
-      <FRow label="FOB Value (USD)" required><FInput value={f.fob_value_usd} onChange={v=>sf("fob_value_usd",v)} placeholder="e.g. 187461.00"/></FRow>
+      <FRow label="CIF Value (USD)" required><FInput value={f.cif_value_usd} onChange={v=>{sf("cif_value_usd",v);if(v&&!f.fob_value_usd)sf("fob_value_usd",String(Math.round(n(v)*0.9*100)/100));}}/></FRow>
+      <FRow label="FOB Value (USD)" required>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <FInput value={f.fob_value_usd} onChange={v=>sf("fob_value_usd",v)} placeholder="Auto-filled at 90% of CIF"/>
+          {f.cif_value_usd&&<button type="button" onClick={()=>sf("fob_value_usd",String(Math.round(n(f.cif_value_usd)*0.9*100)/100))}
+            style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>
+            = 90% of CIF
+          </button>}
+        </div>
+        {f.cif_value_usd&&!f.fob_value_usd&&<div style={{fontSize:10,color:"#0369a1",marginTop:3}}>
+          Suggested: USD {Math.round(n(f.cif_value_usd)*0.9*100)/100} (90% of CIF)
+        </div>}
+      </FRow>
       <FRow label="Exchange Rate (₹/USD)" required><FInput value={f.exchange_rate} onChange={v=>sf("exchange_rate",v)} placeholder="e.g. 85"/></FRow>
       <FRow label="Margin %"><FInput value={f.margin_pct} onChange={v=>sf("margin_pct",v)}/></FRow>
       <FRow label="HSN Code"><FInput value={f.hsn} onChange={v=>sf("hsn",v)}/></FRow>
