@@ -5731,7 +5731,7 @@ function EPCForm({ships}){
     order_no:"", order_date:"",
     cif_value_usd:"", fob_value_usd:"",
     exchange_rate:"85",
-    margin_pct:"10",
+
     epc_availed:"0.00",
     epc_release:"",
     uin_no:"EPMIES150626012081", uin_date:"15.06.2026",
@@ -5743,7 +5743,7 @@ function EPCForm({ships}){
 
   // Auto calculations
   const fobINR   = Math.round(n(f.fob_value_usd)*n(f.exchange_rate));
-  const margin   = Math.round(fobINR*(n(f.margin_pct)/100));
+  const margin   = Math.round(fobINR*0.10); // Fixed at 10%
   const eligible = fobINR - margin;
   const epcAvailed = n(f.epc_availed);
   const epcRelease = n(f.epc_release);
@@ -5808,7 +5808,7 @@ function EPCForm({ships}){
       ["CIF VALUE OF ORDER", f.cif_value_usd?"USD "+Number(f.cif_value_usd).toLocaleString("en-IN",{minimumFractionDigits:2}):""],
       ["FOB VALUE", f.fob_value_usd?"USD "+Number(f.fob_value_usd).toLocaleString("en-IN",{minimumFractionDigits:2}):""],
       ["FOB VALUE (IN INR) @ "+f.exchange_rate, fobINR?"INR  "+fobINR.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
-      ["LESS: "+f.margin_pct+"% MARGIN", margin?"INR   "+margin.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
+      ["LESS: 10% MARGIN", margin?"INR   "+margin.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
       ["ELIGIBLE VALUE", eligible?"INR  "+eligible.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
       ["EPC AVAILED TILL DATE", "INR   "+Number(epcAvailed).toLocaleString("en-IN",{minimumFractionDigits:2})],
       ["EPC RELEASE TODAY", epcRelease?"INR  "+epcRelease.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
@@ -5892,7 +5892,7 @@ function EPCForm({ships}){
       <SectionHeader title="Export Order Details"/>
       <FRow label="Order No" required><FInput value={f.order_no} onChange={v=>sf("order_no",v)} placeholder="e.g. DEV-26/27-12"/></FRow>
       <FRow label="Order Date" required><DateInput value={f.order_date} onChange={v=>sf("order_date",v)}/></FRow>
-      <FRow label="CIF Value (USD)" required><FInput value={f.cif_value_usd} onChange={v=>{sf("cif_value_usd",v);if(v&&!f.fob_value_usd)sf("fob_value_usd",String(Math.round(n(v)*0.9*100)/100));}}/></FRow>
+      <FRow label="CIF Value (USD)" required><FInput value={f.cif_value_usd} onChange={v=>{sf("cif_value_usd",v);if(v)sf("fob_value_usd",String(Math.round(n(v)*0.9*100)/100));}}/></FRow>
       <FRow label="FOB Value (USD)" required>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           <FInput value={f.fob_value_usd} onChange={v=>sf("fob_value_usd",v)} placeholder="Auto-filled at 90% of CIF"/>
@@ -5906,7 +5906,7 @@ function EPCForm({ships}){
         </div>}
       </FRow>
       <FRow label="Exchange Rate (₹/USD)" required><FInput value={f.exchange_rate} onChange={v=>sf("exchange_rate",v)} placeholder="e.g. 85"/></FRow>
-      <FRow label="Margin %"><FInput value={f.margin_pct} onChange={v=>sf("margin_pct",v)}/></FRow>
+      <FRow label="Margin"><div style={{...iS,background:"#f1f5f9",color:"#64748b",fontSize:12,display:"flex",alignItems:"center"}}>10% (Fixed)</div></FRow>
       <FRow label="HSN Code"><FInput value={f.hsn} onChange={v=>sf("hsn",v)}/></FRow>
 
       {/* Auto-calculated summary */}
@@ -5915,7 +5915,7 @@ function EPCForm({ships}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12}}>
           {[
             ["FOB Value (INR)",fobINR?"₹"+fobINR.toLocaleString("en-IN"):"—"],
-            ["Less: "+f.margin_pct+"% Margin",margin?"₹"+margin.toLocaleString("en-IN"):"—"],
+            ["Less: 10% Margin",margin?"₹"+margin.toLocaleString("en-IN"):"—"],
             ["Eligible Value","₹"+(eligible>0?eligible.toLocaleString("en-IN"):"0")],
             ["Balance after Release",balance>=0?"₹"+balance.toLocaleString("en-IN"):<span style={{color:"#dc2626"}}>{"₹"+balance.toLocaleString("en-IN")+" (Exceeds eligible)"}</span>],
           ].map(([l,v])=>(
