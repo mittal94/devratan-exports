@@ -5446,11 +5446,13 @@ function FormA2({ships}){
         doc.text("Address: "+(sel?f.beneficiary_address:"_________________________________________________"),M+12,y); y+=4.5;
       } else if(opt.key==="direct"){
         doc.text(pfx+opt.label,M+5,y); y+=4.5;
-        NF(false,9);
+        // All details under direct remittance in BOLD
+        NF(true,9);
         doc.text("Beneficiary Name: "+(sel?f.beneficiary_name:"_______________________"),M+12,y); y+=4.5;
         const bankLine="Name and address of Bank: "+(sel?(f.bank_name+(f.bank_address?", "+f.bank_address:"")):"_________________________________________________");
         y=WRAP(bankLine,M+12,y,RW-12,4.5); y+=1;
         doc.text("Account No.: "+(sel?f.account_number:"___________________")+"     SWIFT: "+(sel?f.swift_code:"___________________"),M+12,y); y+=4.5;
+        NF(false,9);
       } else if(opt.key==="tc"){
         doc.text(pfx+opt.label+" "+(sel?f.amount_ccy+" "+f.amount:"_____________________"),M+5,y); y+=4.5;
       } else {
@@ -5467,159 +5469,28 @@ function FormA2({ships}){
     LINE(M,y,M+RW,y); y+=5;
 
     // ── Declaration ──────────────────────────────────────────────────────────
-    NF(true,9); doc.text("Declaration",M,y); y+=5;
-    NF(false,8.5); doc.text("(Under FEMA 1999)",M,y); y+=6;
-    NF(false,9);
-    doc.text("I, "+f.applicant_name+" declare that -",M,y); y+=6;
-    y=WRAP("The total amount of foreign exchange purchased from or remitted through, all sources in India during this calendar year including this application is within "+f.amount_ccy+" the annual limit prescribed by Reserve Bank of India for the said purpose.",M+5,y,RW-5,4.5);
+    y=chkPg(y,45);
+    NF(true,10); doc.text("Declaration",M,y); y+=5;
+    NF(false,9); doc.text("(Under FEMA 1999)",M,y); y+=5;
+    NF(false,9); doc.text("I, "+f.applicant_name+" declare that –",M,y); y+=6;
+    // Bullet 1
+    NF(false,9); doc.text("-",M+4,y);
+    y=WRAP("The total amount of foreign exchange purchased from or remitted through, all sources in India during this calendar year including this application is within the annual limit prescribed by Reserve Bank of India for the said purpose.",M+10,y,RW-10,4.5);
+    y+=3;
+    // Bullet 2
+    NF(false,9); doc.text("-",M+4,y);
+    y=WRAP("Foreign exchange purchased from you is for the purpose indicated above.",M+10,y,RW-10,4.5);
     y+=4;
-    doc.text("Foreign exchange purchased from you is for the purpose indicated above.",M+5,y); y+=5;
-    NF(false,7.5); doc.text("(Strike out whichever is not applicable)",M,y); y+=8;
+    NF(false,8); doc.text("(Strike out whichever is not applicable)",M,y); y+=10;
 
     // Sign / Date / Name
     NF(false,9);
     doc.text("Signature: ________________________________",M,y);
-    doc.text("Date: "+f.date,M+RW-30,y); y+=6;
+    doc.text("Date: "+f.date,M+RW-TW("Date: "+f.date,9),y); y+=6;
     doc.text("Name: "+f.declarant_name,M,y); y+=8;
-    LINE(M,y,M+RW,y);
+    LINE(M,y,M+RW,y); y+=3;
 
-    // ── Purpose Code Table ────────────────────────────────────────────────────
-    const purposeCodes=[
-      ["Capital Account Transactions (00)","",""],
-      ["S0001","Indian investment abroad in equity capital (shares)",""],
-      ["S0002","Indian investment abroad in debt securities",""],
-      ["S0003","Indian investment abroad in branches",""],
-      ["S0004","Indian investment abroad in subsidiaries and associates",""],
-      ["S0005","Indian investment abroad in real estate",""],
-      ["S0006","Repatriation of Foreign Direct Investment in India - in equity shares",""],
-      ["S0007","Repatriation of Foreign Direct Investment in India - in debt securities",""],
-      ["S0008","Repatriation of Foreign Direct Investment in India in real estate",""],
-      ["S0009","Repatriation of Foreign Portfolio Investment in India in equity shares",""],
-      ["S0010","Repatriation of Foreign Portfolio Investment in India in debt securities",""],
-      ["S0011","Loans extended to Non-Residents",""],
-      ["S0012","Repayment of long and medium-term loans with original maturity above one year received from Non-Residents.",""],
-      ["S0013","Repayment of short-term loans with original maturity up to one year received from Non-Residents.",""],
-      ["S0014","Repatriation of Non-Resident Deposits (FCNRB/NRERA etc)",""],
-      ["S0015","Repayment of loans & overdrafts taken by ADs on their own account.",""],
-      ["S0016","Sale of a foreign currency against another foreign currency",""],
-      ["S0017","Purchase of intangible assets like patents, copyrights, trade marks etc.",""],
-      ["S0018","Other capital payments not included elsewhere",""],
-      ["Transportation (02)","",""],
-      ["S0201","Payments for surplus freight/passenger fare by foreign shipping companies operating in India.",""],
-      ["S0202","Payment for operating expenses of Indian shipping companies operating abroad.",""],
-      ["S0203","Freight on imports - Shipping companies",""],
-      ["S0204","Freight on exports - Shipping companies",""],
-      ["S0205","Operational leasing (with crew) - Shipping companies",""],
-      ["S0206","Booking of passages abroad - Shipping companies",""],
-      ["S0207","Payments for surplus freight/passenger fare by foreign Airlines companies operating in India.",""],
-      ["S0208","Operating expenses of Indian Airlines companies operating abroad",""],
-      ["S0209","Freight on imports - Airlines companies",""],
-      ["S0210","Freight on exports - Airlines companies",""],
-      ["S0211","Operational leasing (with crew) - Airlines companies",""],
-      ["S0212","Booking of passages abroad - Airlines companies",""],
-      ["S0213","Payments on account of stevedoring, demurrage, port handling charges etc.",""],
-      ["Travel (03)","",""],
-      ["S0301","Remittance towards Business travel.",""],
-      ["S0302","Travel under basic travel quota (BTQ)",""],
-      ["S0303","Travel for pilgrimage",""],
-      ["S0304","Travel for medical treatment",""],
-      ["S0305","Travel for education (including fees, hostel expenses etc.)",""],
-      ["S0306","Other travel (international credit cards)",""],
-      ["Communication Services (04)","",""],
-      ["S0401","Postal services",""],
-      ["S0402","Courier services",""],
-      ["S0403","Telecommunication services",""],
-      ["S0404","Satellite services",""],
-      ["Construction Services (05)","",""],
-      ["S0501","Construction of projects abroad by Indian companies including import of goods at project site",""],
-      ["S0502","Payments for cost of construction etc. of projects executed by foreign companies in India.",""],
-      ["Insurance Services (06)","",""],
-      ["S0601","Payments for Life insurance premium",""],
-      ["S0602","Freight insurance - relating to import & export of goods",""],
-      ["S0603","Other general insurance premium",""],
-      ["S0604","Reinsurance premium",""],
-      ["S0605","Auxiliary services (commission on insurance)",""],
-      ["S0606","Settlement of claims",""],
-      ["Financial Services (07)","",""],
-      ["S0701","Financial intermediation except investment banking - Bank charges, collection charges, LC charges, cancellation of forward contracts, commission on financial leasing etc.",""],
-      ["S0702","Investment banking - brokerage, underwriting commission etc.",""],
-      ["S0703","Auxiliary services - charges on operation & regulatory fees, custodial services, depository services etc.",""],
-      ["Computer and Information Services (08)","",""],
-      ["S0801","Hardware consultancy/implementation",""],
-      ["S0802","Software consultancy/implementation",""],
-      ["S0803","Data base, data processing charges",""],
-      ["S0804","Repair and maintenance of computer and software",""],
-      ["S0805","News agency services",""],
-      ["S0806","Other information services - Subscription to newspapers, periodicals",""],
-      ["Royalties and License Fees (09)","",""],
-      ["S0901","Franchises services - patents, copyrights, trade marks, industrial processes, franchises etc.",""],
-      ["S0902","Payment for use, through licensing arrangements, of produced originals or prototypes (such as manuscripts and films)",""],
-      ["Other Business Services (10)","",""],
-      ["S1001","Merchanting services - net payments (from Sale & purchase of goods without crossing the border).",""],
-      ["S1002","Trade related services - commission on exports / imports",""],
-      ["S1003","Operational leasing services (other than financial leasing) without operating crew, including charter hire",""],
-      ["S1004","Legal services",""],
-      ["S1005","Accounting, auditing, book keeping and tax consulting services",""],
-      ["S1006","Business and management consultancy and public relations services",""],
-      ["S1007","Advertising, trade fair, market research and public opinion polling service",""],
-      ["S1008","Research & Development services",""],
-      ["S1009","Architectural, engineering and other technical services",""],
-      ["S1010","Agricultural, mining and on-site processing services",""],
-      ["S1011","Payments for maintenance of offices abroad",""],
-      ["S1012","Distribution services",""],
-      ["S1013","Environmental services",""],
-      ["S1019","Other services not included elsewhere",""],
-      ["Personal, Cultural and Recreational Services (11)","",""],
-      ["S1101","Audio-visual and related services",""],
-      ["S1102","Personal, cultural services such as those related to museums, libraries, archives and sporting activities",""],
-      ["Government n.i.e. (12)","",""],
-      ["S1201","Maintenance of Indian embassies abroad",""],
-      ["S1202","Remittances by foreign embassies in India",""],
-      ["Transfers (13)","",""],
-      ["S1301","Remittance by non-residents towards family maintenance and savings",""],
-      ["S1302","Remittance towards personal gifts and donations",""],
-      ["S1303","Remittance towards donations to religious and charitable institutions abroad",""],
-      ["S1304","Remittance towards grants and donations to other governments and charitable institutions established by the governments.",""],
-      ["S1305","Contributions/donations by the Government to international institutions",""],
-      ["S1306","Remittance towards payment / refund of taxes.",""],
-      ["Income (14)","",""],
-      ["S1401","Compensation of employees",""],
-      ["S1402","Remittance towards interest on Non-Resident deposits (FCNRB/NRERA/NRNRD/NRSR etc.)",""],
-      ["S1403","Remittance towards interest on loans from Non-Residents (ST/MT/LT loans)",""],
-      ["S1404","Remittance of interest on debt securities - debentures/bonds/FRNs etc.",""],
-      ["S1405","Remittance towards interest payment by ADs on their own account",""],
-      ["S1406","Repatriation of profits",""],
-      ["S1407","Payment/repatriation of dividends",""],
-      ["Others (15)","",""],
-      ["S1501","Refunds/rebates/reduction in invoice value on account of exports",""],
-      ["S1502","Reversal of wrong entries, refunds of amount remitted for non exports",""],
-      ["S1503","Payments by residents for international bidding",""],
-      ["S1504","Notional sales when export bills negotiated/purchased/discounted are dishonoured/crystallized/cancelled",""],
-    ];
-
-    // Build autoTable body — category rows as headers, code rows as data
-    const tableRows=[];
-    purposeCodes.forEach(([code,desc])=>{
-      const isCategory=!code.startsWith("S");
-      const isSel=code===f.purpose_code;
-      tableRows.push({code,desc,isCategory,isSel});
-    });
-
-    doc.autoTable({
-      startY:y, margin:{left:M,right:M}, tableWidth:RW,
-      body:tableRows.map(r=>{
-        if(r.isCategory) return [{content:r.code,colSpan:3,styles:{fontStyle:"bold",fillColor:[220,235,250],textColor:[18,52,96],fontSize:8}}];
-        return[
-          {content:r.isSel?"\u2713":"",styles:{halign:"center",fontStyle:"bold",textColor:[0,100,0],fontSize:10}},
-          {content:r.code,styles:{fontStyle:r.isSel?"bold":"normal",textColor:r.isSel?[0,100,0]:[0,0,0],fontSize:7.5}},
-          {content:r.desc,styles:{fontStyle:r.isSel?"bold":"normal",textColor:r.isSel?[0,100,0]:[0,0,0],fontSize:7.5}},
-        ];
-      }),
-      styles:{cellPadding:{top:1.5,bottom:1.5,left:2,right:2},lineColor:[160,160,160],lineWidth:0.15},
-      columnStyles:{0:{cellWidth:8,halign:"center"},1:{cellWidth:18},2:{cellWidth:RW-26}},
-      tableLineColor:[120,120,120],tableLineWidth:0.2,
-    });
-
+    // ── END — no purpose code table ──────────────────────────────────────────
     pdfFooter();
     doc.save("SBI_Form_A2.pdf");
   };
