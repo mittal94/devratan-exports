@@ -1965,7 +1965,7 @@ function ProfitabilityContent({fy,fyProfits,ships,canEdit,canDelete,openAddProfi
   );
 }
 
-function ProfitFormModal({fy,editId,form,calc,fyShips,setF,onSelectInvoice,onSave,onClose,saving}){
+function ProfitFormModal({fy,editId,fyProfits,form,calc,fyShips,setF,onSelectInvoice,onSave,onClose,saving}){
   const fld=(k,l)=>(<div key={k}><label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{l}</label><input type="number" value={form[k]||""} onChange={e=>setF(k,e.target.value)} style={iS} step="any"/></div>);
   const ro=(l,v)=>(<div key={l}><label style={{fontSize:11.5,fontWeight:600,color:"#0369a1",display:"block",marginBottom:3}}>{l}</label><input readOnly value={v} style={cS}/></div>);
   return(
@@ -1978,7 +1978,7 @@ function ProfitFormModal({fy,editId,form,calc,fyShips,setF,onSelectInvoice,onSav
           <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>Invoice No *</label>
           <select value={form.invoice_no||""} onChange={e=>onSelectInvoice(e.target.value)} style={{...iS,borderColor:form.invoice_no?"#e2e8f0":"#dc2626"}}>
             <option value="">Select Invoice</option>
-            {fyShips.map(s=><option key={s.id}>{s.invoice_no}</option>)}
+            {fyShips.filter(s=>!fyProfits.some(p=>p.invoice_no===s.invoice_no&&p.id!==editId)).map(s=><option key={s.id}>{s.invoice_no}</option>)}
           </select>
           {!form.invoice_no&&<p style={{color:"#dc2626",fontSize:11,margin:"3px 0 0"}}>Mandatory</p>}
         </div>
@@ -7138,7 +7138,7 @@ export default function App(){
         </div>
       )}
 
-      {showProfit&&<ProfitFormModal fy={fy} editId={editProfitId} form={profitForm} calc={profitCalc} fyShips={fyShips} setF={setPF} onSelectInvoice={selectProfitInv} onSave={saveProfit} onClose={()=>setShowProfit(false)} saving={saving}/>}
+      {showProfit&&<ProfitFormModal fy={fy} editId={editProfitId} fyProfits={fyProfits} form={profitForm} calc={profitCalc} fyShips={fyShips} setF={setPF} onSelectInvoice={selectProfitInv} onSave={saveProfit} onClose={()=>setShowProfit(false)} saving={saving}/>}
       {showBC&&<BCModal bc={editBC} allShips={ships} allBCs={bcs} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} allBRCs={[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs]} onSave={saveBC} onClose={()=>{setShowBC(false);setEditBC(null);}} saving={saving}/>}
       {irmModal&&<IRMModal irm={irmModal.irm} allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]} onSave={async(f)=>{
         setSaving(true);
