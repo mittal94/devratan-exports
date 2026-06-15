@@ -4184,7 +4184,7 @@ function BankingFormsTab({ships, buyers, bcs}){
     {id:"advance",  label:"SBI Advance Payment Form",         icon:"💵"},
     {id:"bc_form",  label:"SBI Export Bill Collection Form",  icon:"📤"},
     {id:"a2",       label:"SBI Form A-2",                     icon:"📋"},
-    {id:"freight",  label:"SBI Freight Payment Form",         icon:"🚢"},
+    {id:"epc",      label:"EPC Release Request Letter",       icon:"📋"},
   ];
   const [activeForm, setActiveForm] = useState("advance");
 
@@ -4212,7 +4212,7 @@ function BankingFormsTab({ships, buyers, bcs}){
       {activeForm==="advance"  && <AdvancePaymentForm ships={ships} buyers={buyers}/>}
       {activeForm==="bc_form"  && <ExportBCForm ships={ships} buyers={buyers}/>}
       {activeForm==="a2"       && <FormA2 ships={ships}/>}
-      {activeForm==="freight"  && <FreightPaymentForm ships={ships}/>}
+      {activeForm==="epc"      && <EPCForm ships={ships}/>}
     </div>
   );
 }
@@ -5702,226 +5702,226 @@ function FormA2({ships}){
 
 
 
-function FreightPaymentForm({ships}){
+function EPCForm({ships}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
+  const toDisplay=iso=>{if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
+  const toISO=dd=>{if(!dd||!dd.includes("."))return"";const[d,m,y]=dd.split(".");return`${y}-${m}-${d}`;};
+  const numWords=amt=>{
+    if(!amt||isNaN(Number(amt)))return"";
+    const num=Math.round(Number(amt));
+    const ones=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+    const tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+    const toWords=n=>{
+      if(n===0)return"";
+      if(n<20)return ones[n]+" ";
+      if(n<100)return tens[Math.floor(n/10)]+" "+(n%10?ones[n%10]+" ":"");
+      if(n<1000)return ones[Math.floor(n/100)]+" Hundred "+(n%100?toWords(n%100):"");
+      if(n<100000)return toWords(Math.floor(n/1000))+"Thousand "+toWords(n%1000);
+      if(n<10000000)return toWords(Math.floor(n/100000))+"Lac "+toWords(n%100000);
+      return toWords(Math.floor(n/10000000))+"Crore "+toWords(n%10000000);
+    };
+    return toWords(num).trim()+" Only";
+  };
+
+  const getFY=()=>{const now=new Date();const yr=now.getFullYear();const m=now.getMonth();return m>=3?`${yr}-${String(yr+1).slice(2)}`:`${yr-1}-${String(yr).slice(2)}`;};
+
   const [f,setF]=useState({
+    ref_no:"DEV/"+getFY()+"/EPC/",
     date:today,
-    goods_description:"EXPORT OCEAN FREIGHT PAYMENT",
-    invoice_no:"", invoice_date:"",
-    amount_ccy:"USD", amount:"",
-    supplier_name:"", supplier_address:"",
-    expected_date:"",
-    invoice_amount:"", payment_term:"IMMEDIATE", remittance_amount:"",
-    beneficiary_name:"", beneficiary_address:"", beneficiary_account:"",
-    bank_name:"", bank_address:"", bank_account:"", bank_swift:"",
-    intermediary_bank:"N.A.", intermediary_swift:"",
-    debit_account:"41289547389",
-    sb_no:"", sb_date:"",
-    deduction_amount:"", deduction_reason:"credits available with the beneficiary",
-    place:"Indore",
+    order_no:"", order_date:"",
+    cif_value_usd:"", fob_value_usd:"",
+    exchange_rate:"85",
+    margin_pct:"10",
+    epc_availed:"0.00",
+    epc_release:"",
+    uin_no:"EPMIES210326008030", uin_date:"21.03.2026",
+    hsn:"10063019",
+    epc_account:"41269117338",
+    cc_account:"41289547389",
   });
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+
+  // Auto calculations
+  const fobINR   = Math.round(n(f.fob_value_usd)*n(f.exchange_rate));
+  const margin   = Math.round(fobINR*(n(f.margin_pct)/100));
+  const eligible = fobINR - margin;
+  const epcAvailed = n(f.epc_availed);
+  const epcRelease = n(f.epc_release);
+  const balance  = eligible - epcAvailed - epcRelease;
 
   const exportPDF=()=>{
     const JPDF=getPDF(); if(!JPDF) return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
-    const M=15,pw=180,navy=[18,52,96],steel=[70,130,180],lgray=[235,243,252],gold=[162,120,50],white=[255,255,255],dgray=[180,192,208];
-    let y=bankingPdfHeader(doc,"FREIGHT PAYMENT",`Date: ${f.date}`);
-    doc.setFontSize(10); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-    doc.text("Annexure-B",M,y+4); y+=10;
-    doc.setFontSize(8.5); doc.setFont(undefined,"normal"); doc.setTextColor(30,30,30);
-    doc.text(`Date: ${f.date}`,M+pw-40,y,{align:"right"}); y+=6;
-    doc.text("To,",M,y); y+=5;
-    doc.text("The Assistant General Manager, State Bank of India",M,y); y+=5;
-    doc.text("SBI KHEL Prashal, Y.N. Road, Indore",M,y); y+=5;
-    doc.text("Madam / Dear Sir,",M,y); y+=7;
-    doc.setFont(undefined,"bold");
-    doc.text("Subject: Undertaking-cum-Declaration for processing of outward remittance",M,y,{maxWidth:pw}); y+=8;
-    doc.setFont(undefined,"normal");
-    doc.text(`I/We, Devratan Enterprises LLP, having registered office at Off No 206, 2nd Floor, Indore Trade Center, Indore-452001, hereby request you to process the import payment by debit to Account No. ${f.debit_account}.`,M,y,{maxWidth:pw}); y+=14;
-    doc.setFont(undefined,"bold"); doc.text("Details of Import:",M,y); y+=6;
-    doc.setFont(undefined,"normal");
-    doc.text(`a) Description of Goods/Services: ${f.goods_description}`,M,y,{maxWidth:pw}); y+=5;
-    doc.text(`b) Invoice Number & Date: ${f.invoice_no} dated ${f.invoice_date}`,M,y,{maxWidth:pw}); y+=5;
-    doc.text(`c) Currency & Amount: ${f.amount_ccy} ${f.amount}`,M,y); y+=5;
-    doc.text(`d) Supplier's Name and Address: ${f.supplier_name}`,M,y,{maxWidth:pw}); y+=5;
-    doc.text(`e) Expected date of receipt: ${f.expected_date}`,M,y); y+=8;
-    doc.autoTable({
-      startY:y,margin:{left:M,right:M},tableWidth:pw,
-      body:[
-        ["Beneficiary/Seller's Invoice No.",`${f.invoice_no} dated ${f.invoice_date}`],
-        ["Invoice Amount",`${f.amount_ccy} ${f.invoice_amount}`],
-        ["Payment Term",f.payment_term],
-        ["Amount of Remittance",`${f.amount_ccy} ${f.remittance_amount}`],
-      ],
-      styles:{fontSize:8.5,cellPadding:{top:3,bottom:3,left:5,right:5},lineColor:dgray,lineWidth:0.3},
-      columnStyles:{0:{cellWidth:70,fillColor:lgray,fontStyle:"bold",textColor:navy}},
-      tableLineColor:gold,tableLineWidth:0.4,
-    });
-    y=doc.lastAutoTable.finalY+4;
-    doc.autoTable({
-      startY:y,margin:{left:M,right:M},tableWidth:pw,
-      body:[
-        [{content:"(1) Beneficiary Details",colSpan:2,styles:{fontStyle:"bold",fillColor:[220,235,250],textColor:navy,fontSize:8.5}}],
-        ["Name",f.beneficiary_name],
-        ["Address",f.beneficiary_address],
-        ["Account Number",f.beneficiary_account],
-        [{content:"(2) Account with Institution",colSpan:2,styles:{fontStyle:"bold",fillColor:[220,235,250],textColor:navy,fontSize:8.5}}],
-        ["Bank Name",f.bank_name],
-        ["Address",f.bank_address],
-        ["Account Number",f.bank_account],
-        ["SWIFT Code",f.bank_swift],
-        [{content:"(3) Intermediary Bank",colSpan:2,styles:{fontStyle:"bold",fillColor:[220,235,250],textColor:navy,fontSize:8.5}}],
-        ["Intermediary Bank",f.intermediary_bank],
-        ["SWIFT Code",f.intermediary_swift||"N.A."],
-      ],
-      styles:{fontSize:8.5,cellPadding:{top:3,bottom:3,left:5,right:5},lineColor:dgray,lineWidth:0.3},
-      columnStyles:{0:{cellWidth:70,fillColor:lgray}},
-      tableLineColor:steel,tableLineWidth:0.4,
-    });
-    y=doc.lastAutoTable.finalY+5;
-    if(y>260){doc.addPage();bankingPdfHeader(doc,"FREIGHT PAYMENT (cont.)","");y=52;}
-    doc.setFontSize(8.5); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-    doc.text("Undertaking & Declaration:",M,y); y+=6;
-    doc.setFont(undefined,"normal"); doc.setTextColor(30,30,30);
-    doc.text(`THE SUFFICIENT BALANCE / D.P. ARE AVAILABLE IN OUR A/C NO. ${f.debit_account} AND THE BANK IS AUTHORIZED TO DEBIT THE SAID A/C FOR REMITTING THE FUNDS BY SWIFT MODE.`,M,y,{maxWidth:pw}); y+=10;
-    const declarations = [
-      "We confirm that the transaction does not involve countries under US OFAC / EU / UN comprehensive / targeted sanctions.",
-      "We confirm that no third party remittance is involved in said transaction.",
-      "We confirm that the transaction does not involve Merchanting Trade Transaction.",
-      `We confirm that we have not made payment of this freight amount of ${f.amount_ccy} ${f.remittance_amount} from any other bank under the Shipping Bill No. ${f.sb_no} dated ${f.sb_date}.`,
+    const M=20, RW=170;
+    const navy=[18,52,96], steel=[70,130,180], ltblue=[220,235,250], gold=[162,120,50], white=[255,255,255];
+    const seller=COMPANIES.devratan;
+
+    const NF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||9);doc.setTextColor(0,0,0);};
+    const TW=(t,sz)=>doc.getStringUnitWidth(String(t))*(sz||9)/doc.internal.scaleFactor;
+    const WRAP=(t,x,y,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y);return y+ls.length*(lh||4.5);};
+    const RECT=(x,y,w,h)=>{doc.setDrawColor(80,80,80);doc.setLineWidth(0.2);doc.rect(x,y,w,h);};
+
+    // Header
+    doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
+    try{if(LOGO_B64)doc.addImage(LOGO_B64,"PNG",10,3,38,38);}catch(e){}
+    doc.setDrawColor(...steel); doc.setLineWidth(0.4); doc.line(52,6,52,40);
+    doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+    doc.text(seller.name,57,13);
+    const cnW=TW(seller.name,12);
+    doc.setDrawColor(...gold); doc.setLineWidth(0.6); doc.line(57,14.5,57+cnW,14.5);
+    doc.setFontSize(7); doc.setFont("helvetica","italic"); doc.setTextColor(...steel);
+    doc.text(seller.tagline||"",57,18.5);
+    doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0); doc.setFontSize(6.5);
+    doc.text(seller.address,57,23);
+    doc.text((seller.phone||"")+(seller.email?"  |  "+seller.email:""),57,27.5);
+    if(seller.gstin) doc.text(seller.gstin,57,32);
+    doc.setTextColor(0,0,0);
+
+    let y=50;
+
+    // Ref + Date right aligned
+    NF(false,9);
+    doc.text("Ref No: "+f.ref_no,M,y);
+    doc.text("Date: "+f.date,M+RW-TW("Date: "+f.date,9),y);
+    y+=7;
+
+    // Address
+    doc.text("To,",M,y); y+=4.5;
+    doc.text("The Manager,",M,y); y+=4.5;
+    doc.text("State Bank of India,",M,y); y+=4.5;
+    doc.text("IFB Branch Indore (MP)",M,y); y+=7;
+
+    // Subject line bold
+    NF(true,9);
+    doc.text("Sub: EPC Limit A/c. No: "+f.epc_account,M,y); y+=4.5;
+    doc.text("     UIN No. "+f.uin_no+" Dt. "+f.uin_date,M,y); y+=7;
+
+    NF(false,9); doc.text("Dear Sir,",M,y); y+=6;
+
+    // Opening line
+    const openLine="With reference to above, we would like to inform you that we are submitting one export order No. "+f.order_no+" Dt. "+f.order_date;
+    y=WRAP(openLine,M,y,RW,4.5); y+=5;
+
+    // Calculation table
+    const tblRows=[
+      ["CIF VALUE OF ORDER", f.cif_value_usd?"USD "+Number(f.cif_value_usd).toLocaleString("en-IN",{minimumFractionDigits:2}):""],
+      ["FOB VALUE", f.fob_value_usd?"USD "+Number(f.fob_value_usd).toLocaleString("en-IN",{minimumFractionDigits:2}):""],
+      ["FOB VALUE (IN INR) @ "+f.exchange_rate, fobINR?"INR  "+fobINR.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
+      ["LESS: "+f.margin_pct+"% MARGIN", margin?"INR   "+margin.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
+      ["ELIGIBLE VALUE", eligible?"INR  "+eligible.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
+      ["EPC AVAILED TILL DATE", "INR   "+Number(epcAvailed).toLocaleString("en-IN",{minimumFractionDigits:2})],
+      ["EPC RELEASE TODAY", epcRelease?"INR  "+epcRelease.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
+      ["BALANCE OF ELIGIBLE VALUE", balance?"INR  "+balance.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
     ];
-    declarations.forEach(d=>{doc.text("- "+d,M,y,{maxWidth:pw}); y+=8;});
-    if(f.deduction_amount){
-      doc.text(`- The Invoice amount is ${f.amount_ccy} ${f.invoice_amount}, from which we have deducted an amount of ${f.amount_ccy} ${f.deduction_amount} towards ${f.deduction_reason} and the balance payment of ${f.amount_ccy} ${f.remittance_amount} is being done now.`,M,y,{maxWidth:pw}); y+=10;
-    }
-    doc.text("Yours faithfully,",M,y); y+=10;
-    doc.setFont(undefined,"bold"); doc.text("For DEVRATAN ENTERPRISES LLP",M,y); y+=8;
-    doc.text("Authorised Signatory",M,y);
-    bankingPdfFooter(doc);
-    doc.save("SBI_Freight_Payment_Form.pdf");
+    const cW=[RW*0.55, RW*0.45];
+    tblRows.forEach(([lbl,val],i)=>{
+      const isTotal=["ELIGIBLE VALUE","EPC RELEASE TODAY","BALANCE OF ELIGIBLE VALUE"].includes(lbl);
+      const rh=7;
+      RECT(M,y,cW[0],rh); RECT(M+cW[0],y,cW[1],rh);
+      NF(isTotal,8.5); doc.text(lbl,M+2,y+4.5);
+      NF(isTotal,8.5); doc.text(String(val||""),M+cW[0]+2,y+4.5,{maxWidth:cW[1]-4});
+      y+=rh;
+    });
+    y+=5;
+
+    // Release instruction line
+    NF(false,9);
+    const releaseLine="Release today INR: "+numWords(epcRelease)+" from EPC A/c. No "+f.epc_account+" to CC A/c. No "+f.cc_account+".";
+    y=WRAP(releaseLine,M,y,RW,4.5); y+=4;
+
+    // HSN
+    NF(false,9); doc.text("PRODUCT HSN CODE: "+f.hsn,M,y); y+=7;
+
+    // Undertakings
+    const ut1="We undertake that Our product is eligible for interest subvention scheme and we are not eligible to get any benefit or availed any benefit under PLI scheme.";
+    y=WRAP(ut1,M,y,RW,4.5); y+=4;
+
+    const ut2="We undertake that we shall abide by the rules and regulations for release of EPC and will hold the responsibility for any wrong information furnished by us and also for any delay in liquidation of the same. We undertake that we have not availed EPC against the same contract with other bank. We undertake that there is no order against which we have availed EPC and which are overdue for shipment and all orders are shipped as per contracted basis.";
+    y=WRAP(ut2,M,y,RW,4.5); y+=10;
+
+    // Signature block
+    NF(false,9); doc.text("Date: "+f.date,M,y);
+    NF(true,9); doc.text("For "+seller.name,M+RW-TW("For "+seller.name,9),y); y+=5;
+    NF(false,9); doc.text("Place: INDORE",M,y);
+    doc.text("Authorised Signatory",M+RW-TW("Authorised Signatory",9),y); y+=6;
+    NF(false,8); doc.text("(Please affix Company/Firm Stamp)",M+RW-TW("(Please affix Company/Firm Stamp)",8),y);
+
+    // Footer
+    doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
+    doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...white);
+    doc.text(seller.name+"  |  "+seller.phone+"  |  "+seller.email,105,293,{align:"center"});
+    doc.setFont("helvetica","bold"); doc.setTextColor(220,220,220);
+    doc.text("Page 1 of 1",M+RW-2,293,{align:"right"});
+
+    doc.save("EPC_Release_Request_"+f.ref_no.replace(/\//g,"-")+".pdf");
   };
 
-  const exportWord=async()=>{
-    const docx=getDocx(); if(!docx) return;
-    const {Document,Packer,Paragraph,TextRun,AlignmentType,Header,Footer} = docx;
-    const p=(text,opts={})=>new Paragraph({spacing:{before:opts.before||60,after:opts.after||60},alignment:opts.align||AlignmentType.LEFT,children:[new TextRun({text:String(text||""),bold:!!opts.bold,size:opts.size||18,font:"Arial",color:opts.color||"111111"})]});
-    const doc2=new Document({sections:[{properties:{page:{size:{width:11906,height:16838},margin:{top:900,right:900,bottom:1000,left:900}}},headers:{default:new Header({children:[p("DEVRATAN ENTERPRISES LLP   |   SBI FREIGHT PAYMENT UNDERTAKING",{size:15,color:"123458"})]})},footers:{default:new Footer({children:[p("Off No 206, 2nd Floor, Indore Trade Center, Indore MP 452001   |   +91-9111282828   |   akshay@devratan.com",{size:14,color:"555555",align:AlignmentType.CENTER})]})},children:[
-      p("Annexure-B",{bold:true,after:60}),
-      p(`Date: ${f.date}`,{after:80}),
-      p("To, The Assistant General Manager, State Bank Of India, SBI KHEL Prashal, Y.N Road, Indore",{after:80}),
-      p("Madam / Dear Sir,",{after:80}),
-      p("Subject: Undertaking-cum-Declaration for processing of outward remittance",{bold:true,after:80}),
-      p(`I/We, Devratan Enterprises LLP, having registered office at Off No 206, 2nd Floor, Indore Trade Center, Indore-452001, hereby request you to process the import payment by debit to Account No. ${f.debit_account}.`,{after:120}),
-      p("Details of Import:",{bold:true,after:80}),
-      p(`a) Description: ${f.goods_description}`,{after:60}),
-      p(`b) Invoice No. & Date: ${f.invoice_no} dated ${f.invoice_date}`,{after:60}),
-      p(`c) Currency & Amount: ${f.amount_ccy} ${f.amount}`,{after:60}),
-      p(`d) Supplier: ${f.supplier_name}`,{after:60}),
-      p(`e) Expected Date: ${f.expected_date}`,{after:120}),
-      p(`Invoice Amount: ${f.amount_ccy} ${f.invoice_amount}     Payment Term: ${f.payment_term}     Amount of Remittance: ${f.amount_ccy} ${f.remittance_amount}`,{after:120}),
-      p("(1) Beneficiary Details:",{bold:true,after:80}),
-      p(`Name: ${f.beneficiary_name}     A/c: ${f.beneficiary_account}`,{after:60}),
-      p(`Address: ${f.beneficiary_address}`,{after:120}),
-      p("(2) Account with Institution:",{bold:true,after:80}),
-      p(`${f.bank_name}     ${f.bank_address}`,{after:60}),
-      p(`A/c: ${f.bank_account}     SWIFT: ${f.bank_swift}`,{after:120}),
-      p("(3) Intermediary Bank: "+f.intermediary_bank+"     SWIFT: "+(f.intermediary_swift||"N.A."),{after:120}),
-      p(`THE SUFFICIENT BALANCE/D.P. ARE AVAILABLE IN OUR A/C NO. ${f.debit_account} AND THE BANK IS AUTHORIZED TO DEBIT THE SAID A/C FOR REMITTING THE FUNDS BY SWIFT MODE.`,{bold:true,after:120}),
-      p(`- We confirm that the transaction does not involve countries under US OFAC/EU/UN sanctions.`,{after:60}),
-      p(`- We confirm that no third party remittance is involved.`,{after:60}),
-      p(`- We confirm that we have not made payment of ${f.amount_ccy} ${f.remittance_amount} from any other bank under SB No. ${f.sb_no} dated ${f.sb_date}.`,{after:60}),
-      ...(f.deduction_amount?[p(`- Invoice amount ${f.amount_ccy} ${f.invoice_amount}, deduction ${f.amount_ccy} ${f.deduction_amount} towards ${f.deduction_reason}, balance payment ${f.amount_ccy} ${f.remittance_amount}.`,{after:120})]: []),
-      p("Yours faithfully,",{after:160}),
-      p("For DEVRATAN ENTERPRISES LLP",{bold:true,after:60}),
-      p("Authorised Signatory",{bold:true}),
-    ]}]});
-    const blob=await Packer.toBlob(doc2);
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a"); a.href=url; a.download="SBI_Freight_Payment_Form.docx";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  };
+  const DateInput=({value,onChange})=>(
+    <input type="date" value={toISO(value)} onChange={e=>onChange(toDisplay(e.target.value))} style={{...iS,fontSize:12}}/>
+  );
 
   return(
     <div style={{background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
-      <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>🚢 Annexure-B — Freight Payment Undertaking</h3>
-      <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>Undertaking-cum-Declaration for processing of outward remittance</p>
-      <SectionHeader title="Basic Details"/>
-      <FRow label="Date"><FInput value={f.date} onChange={v=>sf("date",v)}/></FRow>
-      <FRow label="Debit Account No."><FInput value={f.debit_account} onChange={v=>sf("debit_account",v)}/></FRow>
-      <SectionHeader title="Import Details"/>
-      <FRow label="Description of Goods/Services" required><FInput value={f.goods_description} onChange={v=>sf("goods_description",v)}/></FRow>
-      <FRow label="Invoice Number" required><FInput value={f.invoice_no} onChange={v=>sf("invoice_no",v)}/></FRow>
-      <FRow label="Invoice Date"><FInput value={f.invoice_date} onChange={v=>sf("invoice_date",v)} placeholder="e.g. 06.06.2026"/></FRow>
-      <FRow label="Currency"><select value={f.amount_ccy} onChange={e=>sf("amount_ccy",e.target.value)} style={iS}>{["USD","EUR","GBP"].map(c=><option key={c}>{c}</option>)}</select></FRow>
-      <FRow label="Amount" required><FInput value={f.amount} onChange={v=>sf("amount",v)} placeholder="e.g. 2187.00"/></FRow>
-      <FRow label="Supplier Name" required><FInput value={f.supplier_name} onChange={v=>sf("supplier_name",v)}/></FRow>
-      <FRow label="Supplier Address"><FTextarea value={f.supplier_address} onChange={v=>sf("supplier_address",v)}/></FRow>
-      <FRow label="Expected Date"><FInput value={f.expected_date} onChange={v=>sf("expected_date",v)} placeholder="e.g. 01.06.2026"/></FRow>
-      <SectionHeader title="Payment Details"/>
-      <FRow label="Invoice Amount"><FInput value={f.invoice_amount} onChange={v=>sf("invoice_amount",v)}/></FRow>
-      <FRow label="Payment Term"><FInput value={f.payment_term} onChange={v=>sf("payment_term",v)}/></FRow>
-      <FRow label="Amount of Remittance" required><FInput value={f.remittance_amount} onChange={v=>sf("remittance_amount",v)}/></FRow>
-      <FRow label="Deduction Amount (if any)"><FInput value={f.deduction_amount} onChange={v=>sf("deduction_amount",v)} placeholder="Leave blank if none"/></FRow>
-      <FRow label="Deduction Reason"><FInput value={f.deduction_reason} onChange={v=>sf("deduction_reason",v)}/></FRow>
-      <SectionHeader title="Beneficiary Details"/>
-      <FRow label="Beneficiary Name" required><FInput value={f.beneficiary_name} onChange={v=>sf("beneficiary_name",v)}/></FRow>
-      <FRow label="Beneficiary Address"><FTextarea value={f.beneficiary_address} onChange={v=>sf("beneficiary_address",v)}/></FRow>
-      <FRow label="Beneficiary Account No." required><FInput value={f.beneficiary_account} onChange={v=>sf("beneficiary_account",v)}/></FRow>
-      <SectionHeader title="Beneficiary's Bank Details"/>
-      <FRow label="Bank Name" required><FInput value={f.bank_name} onChange={v=>sf("bank_name",v)}/></FRow>
-      <FRow label="Bank Address"><FTextarea value={f.bank_address} onChange={v=>sf("bank_address",v)}/></FRow>
-      <FRow label="Bank Account No."><FInput value={f.bank_account} onChange={v=>sf("bank_account",v)}/></FRow>
-      <FRow label="SWIFT Code" required><FInput value={f.bank_swift} onChange={v=>sf("bank_swift",v)}/></FRow>
-      <FRow label="Intermediary Bank"><FInput value={f.intermediary_bank} onChange={v=>sf("intermediary_bank",v)}/></FRow>
-      <FRow label="Intermediary SWIFT"><FInput value={f.intermediary_swift} onChange={v=>sf("intermediary_swift",v)}/></FRow>
-      <SectionHeader title="Shipping Bill Reference"/>
-      <FRow label="Shipping Bill No." required><FInput value={f.sb_no} onChange={v=>sf("sb_no",v)}/></FRow>
-      <FRow label="Shipping Bill Date"><FInput value={f.sb_date} onChange={v=>sf("sb_date",v)} placeholder="e.g. 19.05.2026"/></FRow>
-      <FRow label="Place"><FInput value={f.place} onChange={v=>sf("place",v)}/></FRow>
-      <ExportButtons onPDF={exportPDF} onWord={exportWord}/>
+      <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>📋 EPC Release Request Letter</h3>
+      <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>EPC Limit A/c No: 41269117338 · UIN: EPMIES210326008030</p>
+
+      <SectionHeader title="Letter Details"/>
+      <FRow label="Ref No" required><FInput value={f.ref_no} onChange={v=>sf("ref_no",v)}/></FRow>
+      <FRow label="Date" required><DateInput value={f.date} onChange={v=>sf("date",v)}/></FRow>
+      <FRow label="UIN No"><FInput value={f.uin_no} onChange={v=>sf("uin_no",v)}/></FRow>
+      <FRow label="UIN Date"><DateInput value={f.uin_date} onChange={v=>sf("uin_date",v)}/></FRow>
+
+      <SectionHeader title="Export Order Details"/>
+      <FRow label="Order No" required><FInput value={f.order_no} onChange={v=>sf("order_no",v)} placeholder="e.g. DEV-26/27-12"/></FRow>
+      <FRow label="Order Date" required><DateInput value={f.order_date} onChange={v=>sf("order_date",v)}/></FRow>
+      <FRow label="CIF Value (USD)" required><FInput value={f.cif_value_usd} onChange={v=>sf("cif_value_usd",v)} placeholder="e.g. 208290.00"/></FRow>
+      <FRow label="FOB Value (USD)" required><FInput value={f.fob_value_usd} onChange={v=>sf("fob_value_usd",v)} placeholder="e.g. 187461.00"/></FRow>
+      <FRow label="Exchange Rate (₹/USD)" required><FInput value={f.exchange_rate} onChange={v=>sf("exchange_rate",v)} placeholder="e.g. 85"/></FRow>
+      <FRow label="Margin %"><FInput value={f.margin_pct} onChange={v=>sf("margin_pct",v)}/></FRow>
+      <FRow label="HSN Code"><FInput value={f.hsn} onChange={v=>sf("hsn",v)}/></FRow>
+
+      {/* Auto-calculated summary */}
+      <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:10,padding:14,marginBottom:14}}>
+        <div style={{fontWeight:700,color:"#15803d",fontSize:13,marginBottom:10}}>📊 Auto Calculated Values</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12}}>
+          {[
+            ["FOB Value (INR)",fobINR?"₹"+fobINR.toLocaleString("en-IN"):"—"],
+            ["Less: "+f.margin_pct+"% Margin",margin?"₹"+margin.toLocaleString("en-IN"):"—"],
+            ["Eligible Value","₹"+(eligible>0?eligible.toLocaleString("en-IN"):"0")],
+            ["Balance after Release",balance>=0?"₹"+balance.toLocaleString("en-IN"):<span style={{color:"#dc2626"}}>{"₹"+balance.toLocaleString("en-IN")+" (Exceeds eligible)"}</span>],
+          ].map(([l,v])=>(
+            <div key={l} style={{background:"#fff",borderRadius:6,padding:"6px 10px"}}>
+              <div style={{fontSize:10,color:"#64748b"}}>{l}</div>
+              <div style={{fontWeight:700,color:"#1e3a5f"}}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <SectionHeader title="EPC Details"/>
+      <FRow label="EPC Availed Till Date (₹)"><FInput value={f.epc_availed} onChange={v=>sf("epc_availed",v)} placeholder="0.00"/></FRow>
+      <FRow label="EPC Release Today (₹)" required><FInput value={f.epc_release} onChange={v=>sf("epc_release",v)} placeholder="e.g. 7500000"/></FRow>
+      {f.epc_release&&<div style={{marginBottom:10,padding:"6px 12px",background:"#eff6ff",borderRadius:6,fontSize:11,color:"#1d4ed8"}}>
+        Amount in words: <strong>{numWords(f.epc_release)}</strong>
+      </div>}
+      <FRow label="EPC Account No"><FInput value={f.epc_account} onChange={v=>sf("epc_account",v)}/></FRow>
+      <FRow label="CC Account No"><FInput value={f.cc_account} onChange={v=>sf("cc_account",v)}/></FRow>
+
+      <div style={{marginTop:14,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
+        📄 PDF: Single page with company header · Calculation table · Undertakings · Signature block
+      </div>
+      <div style={{display:"flex",gap:10,marginTop:12,justifyContent:"flex-end"}}>
+        <button onClick={exportPDF}
+          style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",
+                  borderRadius:8,padding:"8px 20px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+          📄 Export PDF
+        </button>
+      </div>
     </div>
   );
 }
 
 
-// ─── Banking Forms ────────────────────────────────────────────────────────────
-function bankingPdfHeader(doc, title, subtitle) {
-  const M=15, pw=180;
-  const navy=[18,52,96], steel=[70,130,180], ltblue=[220,235,250], gold=[162,120,50], white=[255,255,255];
-  const seller = COMPANIES.devratan;
-  doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
-  try{if(LOGO_B64)doc.addImage(LOGO_B64,"PNG",10,3,38,38);}catch(e){}
-  doc.setDrawColor(...steel); doc.setLineWidth(0.4); doc.line(52,6,52,40);
-  doc.setFontSize(12); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-  doc.text(seller.name,57,13);
-  const cnW=doc.getTextWidth(seller.name);
-  doc.setDrawColor(...gold); doc.setLineWidth(0.6); doc.line(57,14.5,57+cnW,14.5);
-  doc.setFontSize(7); doc.setFont(undefined,"italic"); doc.setTextColor(...steel);
-  doc.text(seller.tagline||"",57,18.5);
-  doc.setFont(undefined,"normal"); doc.setTextColor(...navy); doc.setFontSize(6.5);
-  doc.text(seller.address,57,23);
-  doc.text((seller.phone||"")+(seller.email?"   |   "+seller.email:""),57,27.5);
-  if(seller.gstin) doc.text(seller.gstin,57,32);
-  doc.setFontSize(14); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-  doc.text(title,210-M,12,{align:"right"});
-  if(subtitle){doc.setFontSize(8);doc.setFont(undefined,"normal");doc.setTextColor(...steel);doc.text(subtitle,210-M,19,{align:"right"});}
-  return 52;
-}
-function bankingPdfFooter(doc){
-  const navy=[18,52,96],gold=[162,120,50],white=[255,255,255];
-  const M=15,pw=180,seller=COMPANIES.devratan;
-  const tp=doc.getNumberOfPages();
-  for(let i=1;i<=tp;i++){
-    doc.setPage(i);
-    doc.setFillColor(...navy); doc.rect(0,290,210,7,"F");
-    doc.setFontSize(6.5); doc.setFont(undefined,"normal"); doc.setTextColor(...white);
-    doc.text(seller.name+"   |   "+seller.phone+"   |   "+seller.email,105,294,{align:"center"});
-    doc.setFillColor(...gold); doc.roundedRect(M+pw-18,283,18,7,1.5,1.5,"F");
-    doc.setFontSize(7); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-    doc.text(i+" / "+tp,M+pw-9,287.2,{align:"center"});
-  }
-}
 
 export default function App(){
   const [session,setSession]=useState(()=>{
