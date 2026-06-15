@@ -4302,6 +4302,15 @@ function AdvancePaymentForm({ships, buyers}){
   };
 
   const exportPDF=()=>{
+    const missing=[];
+    if(!f.fcy_amount) missing.push("Amount in FCY");
+    if(!f.remitter_name) missing.push("Name of Remitter");
+    if(!f.description) missing.push("Description of Goods & Qty");
+    if(!f.pi_no) missing.push("Proforma Invoice / PO No.");
+    if(!f.port_loading) missing.push("Port of Loading");
+    if(!f.port_discharge) missing.push("Port of Discharge");
+    if(!f.country_dest) missing.push("Country of Destination");
+    if(missing.length){alert("Please fill mandatory fields before exporting PDF:\n• "+missing.join("\n• "));return;}
     const JPDF=getPDF(); if(!JPDF) return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const M=15, RW=180;
@@ -4800,6 +4809,13 @@ function ExportBCForm({ships, buyers}){
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
 
   const exportPDF=()=>{
+    const missing=[];
+    if(!f.buyer_name) missing.push("Buyer / Importer Name");
+    if(!f.bill_amount) missing.push("Bill Amount");
+    if(!f.invoice_no) missing.push("Invoice No.");
+    if(!f.invoice_date) missing.push("Invoice Date");
+    if(!f.sb_no) missing.push("Shipping Bill No.");
+    if(missing.length){alert("Please fill mandatory fields before exporting PDF:\n• "+missing.join("\n• "));return;}
     const JPDF=getPDF(); if(!JPDF) return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const M=15, RW=180;
@@ -5345,6 +5361,18 @@ function FormA2({ships}){
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
 
   const exportPDF=()=>{
+    const missing=[];
+    if(!f.amount) missing.push("Amount in FCY");
+    if(!f.purpose) missing.push("Purpose");
+    if(f.remittance_type==="direct"||f.remittance_type==="draft"){
+      if(!f.beneficiary_name) missing.push("Beneficiary Name");
+      if(f.remittance_type==="direct"){
+        if(!f.bank_name) missing.push("Bank Name");
+        if(!f.account_number) missing.push("Account Number");
+        if(!f.swift_code) missing.push("SWIFT Code");
+      }
+    }
+    if(missing.length){alert("Please fill mandatory fields before exporting PDF:\n\u2022 "+missing.join("\n\u2022 "));return;}
     const JPDF=getPDF(); if(!JPDF) return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const M=20, RW=170;
@@ -5657,7 +5685,7 @@ function FormA2({ships}){
             <FRow label="Bank Name" required><FInput value={f.bank_name} onChange={v=>sf("bank_name",v)}/></FRow>
             <FRow label="Bank Address"><FTextarea value={f.bank_address} onChange={v=>sf("bank_address",v)}/></FRow>
             <FRow label="Account Number" required><FInput value={f.account_number} onChange={v=>sf("account_number",v)}/></FRow>
-            <FRow label="SWIFT Code"><FInput value={f.swift_code} onChange={v=>sf("swift_code",v)}/></FRow>
+            <FRow label="SWIFT Code" required><FInput value={f.swift_code} onChange={v=>sf("swift_code",v)} placeholder="e.g. SBININBB"/>{!f.swift_code&&<p style={{color:"#dc2626",fontSize:11,margin:"3px 0 0"}}>Mandatory</p>}</FRow>
           </>}
         </>
       )}
@@ -5729,6 +5757,15 @@ function EPCForm({ships}){
   const balance  = eligible - epcAvailed - epcRelease;
 
   const exportPDF=()=>{
+    const missing=[];
+    if(!f.ref_serial) missing.push("Ref No (serial number)");
+    if(!f.order_no) missing.push("Export Order No.");
+    if(!f.order_date) missing.push("Order Date");
+    if(!f.cif_value_usd) missing.push("CIF Value (USD)");
+    if(!f.fob_value_usd) missing.push("FOB Value (USD)");
+    if(!f.exchange_rate) missing.push("Exchange Rate");
+    if(!f.epc_release) missing.push("EPC Release Today");
+    if(missing.length){alert("Please fill mandatory fields before exporting PDF:\n• "+missing.join("\n• "));return;}
     const JPDF=getPDF(); if(!JPDF) return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const M=20, RW=170;
