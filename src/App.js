@@ -4185,6 +4185,7 @@ function BankingFormsTab({ships, buyers, bcs}){
     {id:"bc_form",  label:"SBI Export Bill Collection Form",  icon:"📤"},
     {id:"a2",       label:"SBI Form A-2",                     icon:"📋"},
     {id:"epc",      label:"EPC Release Request Letter",       icon:"📋"},
+    {id:"ibl",      label:"IBL Collection Form",              icon:"🏦"},
   ];
   const [activeForm, setActiveForm] = useState("advance");
 
@@ -4213,6 +4214,7 @@ function BankingFormsTab({ships, buyers, bcs}){
       {activeForm==="bc_form"  && <ExportBCForm ships={ships} buyers={buyers}/>}
       {activeForm==="a2"       && <FormA2 ships={ships}/>}
       {activeForm==="epc"      && <EPCForm ships={ships}/>}
+      {activeForm==="ibl"      && <IBLForm ships={ships} buyers={buyers}/>}
     </div>
   );
 }
@@ -5579,6 +5581,268 @@ function FormA2({ships}){
 }
 
 
+
+function IBLForm({ships, buyers}){
+  const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
+  const toDisplay=iso=>{if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
+  const toISO=dd=>{if(!dd||!dd.includes("."))return"";const[d,m,y]=dd.split(".");return`${y}-${m}-${d}`;};
+  const DateInput=({value,onChange})=>(
+    <input type="date" value={toISO(value)} onChange={e=>onChange(toDisplay(e.target.value))} style={{...iS,fontSize:12}}/>
+  );
+
+  const [f,setF]=useState({
+    date:today,
+    branch:"",
+    iec_code:"AARFD8883D",
+    exporter_name:"DEVRATAN ENTERPRISES LLP",
+    exporter_address:"Off No 206, 2nd Floor, Indore Trade Center, Madhumilan Square, Indore MP 452001",
+    consignee_name:"",
+    consignee_address:"",
+    sb_no:"", sb_date:"",
+    port_loading_code:"",
+    ccy:"USD", amount:"",
+    ad_code:"",
+    invoice_no:"", invoice_date:"",
+    goods_description:"RICE",
+    destination:"",
+    buyer_name:"", buyer_country:"",
+    agency_commission:"",
+    remittances:[],
+  });
+  const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+
+  // Remittance entries (IRM/FIRC)
+  const addRemittance=()=>setF(p=>({...p,remittances:[...p.remittances,{ref_no:"",ccy:"USD",amount:""}]}));
+  const updRemit=(i,k,v)=>setF(p=>{const arr=[...p.remittances];arr[i]={...arr[i],[k]:v};return{...p,remittances:arr};});
+  const delRemit=(i)=>setF(p=>({...p,remittances:p.remittances.filter((_,j)=>j!==i)}));
+
+  // Auto-fill from shipment
+  const onSelectShip=(inv)=>{
+    if(!inv)return;
+    const s=ships.find(s=>s.invoice_no===inv);
+    if(!s)return;
+    setF(p=>({...p,
+      invoice_no:s.invoice_no,
+      invoice_date:s.invoice_date||"",
+      sb_no:s.shipping_bill_no||"",
+      sb_date:s.shipping_bill_date||"",
+      port_loading_code:s.port_code||"",
+      ccy:"USD",
+      amount:String(s.fob_value_usd||""),
+      goods_description:s.product||"RICE",
+      destination:s.buyer_country||"",
+      consignee_name:s.buyer_name||"",
+    }));
+  };
+
+  const exportPDF=()=>{
+    const missing=[];
+    if(!f.sb_no) missing.push("Shipping Bill Number");
+    if(!f.sb_date) missing.push("Shipping Bill Date");
+    if(!f.amount) missing.push("Currency & Amount");
+    if(!f.invoice_no) missing.push("Invoice Number");
+    if(!f.invoice_date) missing.push("Invoice Date");
+    if(!f.consignee_name) missing.push("Consignee Name");
+    if(!f.destination) missing.push("Destination of Goods");
+    if(missing.length){alert("Please fill mandatory fields before exporting PDF:\n\u2022 "+missing.join("\n\u2022 "));return;}
+
+    const JPDF=getPDF(); if(!JPDF) return;
+    const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    const M=20, RW=170;
+    const navy=[18,52,96], steel=[70,130,180], ltblue=[220,235,250], gold=[162,120,50], white=[255,255,255];
+    const seller=COMPANIES.devratan;
+
+    const NF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||9);doc.setTextColor(0,0,0);};
+    const TW=(t,sz)=>doc.getStringUnitWidth(String(t||""))*(sz||9)/doc.internal.scaleFactor;
+    const WRAP=(t,x,y,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y);return y+ls.length*(lh||4.5);};
+    const RECT=(x,y,w,h)=>{doc.setDrawColor(80,80,80);doc.setLineWidth(0.2);doc.rect(x,y,w,h);};
+    const chkPg=(y,n)=>{if(y+(n||8)>282){doc.addPage();pdfHeader();return 52;}return y;};
+
+    const pdfHeader=()=>{
+      doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
+      try{if(LOGO_B64)doc.addImage(LOGO_B64,"PNG",10,3,38,38);}catch(e){}
+      doc.setDrawColor(...steel); doc.setLineWidth(0.4); doc.line(52,6,52,40);
+      doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+      doc.text(seller.name,57,13);
+      const cnW=TW(seller.name,12);
+      doc.setDrawColor(...gold); doc.setLineWidth(0.6); doc.line(57,14.5,57+cnW,14.5);
+      doc.setFontSize(7); doc.setFont("helvetica","italic"); doc.setTextColor(...steel);
+      doc.text(seller.tagline||"",57,18.5);
+      doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0); doc.setFontSize(6.5);
+      doc.text(seller.address,57,23);
+      doc.text((seller.phone||"")+(seller.email?"  |  "+seller.email:""),57,27.5);
+      if(seller.gstin) doc.text(seller.gstin,57,32);
+      doc.setTextColor(0,0,0);
+    };
+
+    const pdfFooter=()=>{
+      const tp=doc.getNumberOfPages();
+      for(let i=1;i<=tp;i++){
+        doc.setPage(i);
+        doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
+        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...white);
+        doc.text(seller.name+"  |  "+seller.phone+"  |  "+seller.email,105,293,{align:"center"});
+        doc.setFont("helvetica","bold"); doc.setTextColor(220,220,220);
+        doc.text("Page "+i+" of "+tp,M+RW-2,293,{align:"right"});
+      }
+    };
+
+    pdfHeader();
+    let y=50;
+
+    // Date + address
+    NF(false,9);
+    doc.text("Date: "+f.date,M+RW-TW("Date: "+f.date,9),y); y+=6;
+    doc.text("To,",M,y); y+=4.5;
+    doc.text("The Branch Manager,",M,y); y+=4.5;
+    doc.text("IndusInd Bank"+(f.branch?", "+f.branch:""),M,y); y+=7;
+    doc.text("Dear Sir,",M,y); y+=7;
+
+    // Subject
+    NF(true,9);
+    doc.text("Re: Submission of shipping bill details evidencing export of goods from India.",M,y,{maxWidth:RW}); y+=7;
+    NF(false,9); doc.text("Please find below details of shipping bill.",M,y); y+=8;
+
+    // Shipping bill details table
+    NF(true,9); doc.text("Shipping Bill Details",M,y); y+=4;
+
+    const c0=RW*0.45, c1=RW*0.55;
+    const tblRows=[
+      ["IEC Code",f.iec_code],
+      ["Exporter Name and Full Address",f.exporter_name+(f.exporter_address?"\n"+f.exporter_address:"")],
+      ["Consignee Name and Full Address",f.consignee_name+(f.consignee_address?"\n"+f.consignee_address:"")],
+      ["Shipping Bill Number",f.sb_no],
+      ["Shipping Bill Date",f.sb_date],
+      ["Shipping Bill Port of Loading Code",f.port_loading_code],
+      ["Shipping Bill Currency and Amount",f.ccy+": "+f.amount],
+      ["AD Code Declared on Shipping Bill",f.ad_code],
+      ["Invoice Number and Date",f.invoice_no+(f.invoice_date?" DT. "+f.invoice_date:"")],
+      ["Goods Description",f.goods_description],
+      ["Destination of Goods",f.destination],
+      ["Buyer / Third Party Name and Country (if different from Consignee)",f.buyer_name+(f.buyer_country?", "+f.buyer_country:"")],
+      ["Agency Commission (if any)",f.agency_commission||"NIL"],
+      ["Export Advance Remittance Reference Number & Date",
+        f.remittances.map(r=>r.ref_no+(r.amount?": "+r.ccy+" "+r.amount:"")).join("\n")||""],
+    ];
+
+    NF(false,8.5);
+    tblRows.forEach(([lbl,val])=>{
+      const lLines=doc.splitTextToSize(lbl,c0-3);
+      const vLines=doc.splitTextToSize(String(val||""),c1-3);
+      const rh=Math.max(lLines.length,vLines.length)*4+3;
+      y=chkPg(y,rh);
+      RECT(M,y,c0,rh); RECT(M+c0,y,c1,rh);
+      NF(true,8); doc.text(lLines,M+2,y+4);
+      NF(false,8.5); doc.text(vLines,M+c0+2,y+4);
+      y+=rh;
+    });
+    y+=8;
+
+    // Certification
+    y=chkPg(y,18);
+    NF(false,9);
+    y=WRAP("We certify that goods have been exported from India. We confirm that the export proceeds will be received into India within regulatory timelines as specified by the Reserve Bank of India from time to time.",M,y,RW,4.5);
+    y+=10;
+
+    // Sign block
+    NF(false,9); doc.text("Yours faithfully,",M,y); y+=12;
+    NF(true,9); doc.text("For "+seller.name,M,y); y+=6;
+    NF(false,8); doc.text("Authorised Signatory",M,y); y+=5;
+    doc.text("(Please affix Company Stamp)",M,y);
+
+    pdfFooter();
+    doc.save("IBL_Collection_Form_"+f.invoice_no+".pdf");
+  };
+
+  return(
+    <div style={{background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+      <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>🏦 IBL Collection Form</h3>
+      <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>IndusInd Bank — Shipping Bill Details for Export Collection</p>
+
+      <SectionHeader title="Basic Details"/>
+      <FRow label="Date" required><DateInput value={f.date} onChange={v=>sf("date",v)}/></FRow>
+      <FRow label="Branch (optional)"><FInput value={f.branch} onChange={v=>sf("branch",v)} placeholder="e.g. Indore Main Branch"/></FRow>
+
+      <SectionHeader title="Auto-fill from Shipment Register"/>
+      <FRow label="Select Invoice">
+        <select onChange={e=>onSelectShip(e.target.value)} style={{...iS,fontSize:12}}>
+          <option value="">— Select to auto-fill —</option>
+          {ships.map(s=><option key={s.id} value={s.invoice_no}>{s.invoice_no} — {s.buyer_name||""}</option>)}
+        </select>
+      </FRow>
+
+      <SectionHeader title="Exporter Details"/>
+      <FRow label="IEC Code"><FInput value={f.iec_code} onChange={v=>sf("iec_code",v)}/></FRow>
+      <FRow label="Exporter Name"><FInput value={f.exporter_name} onChange={v=>sf("exporter_name",v)}/></FRow>
+      <FRow label="Exporter Address"><FTextarea value={f.exporter_address} onChange={v=>sf("exporter_address",v)}/></FRow>
+
+      <SectionHeader title="Consignee Details"/>
+      <FRow label="Consignee Name" required><FInput value={f.consignee_name} onChange={v=>sf("consignee_name",v)}/></FRow>
+      <FRow label="Consignee Address"><FTextarea value={f.consignee_address} onChange={v=>sf("consignee_address",v)}/></FRow>
+
+      <SectionHeader title="Shipping Bill Details"/>
+      <FRow label="Shipping Bill Number" required><FInput value={f.sb_no} onChange={v=>sf("sb_no",v)}/></FRow>
+      <FRow label="Shipping Bill Date" required><DateInput value={f.sb_date} onChange={v=>sf("sb_date",v)}/></FRow>
+      <FRow label="Port of Loading Code"><FInput value={f.port_loading_code} onChange={v=>sf("port_loading_code",v)} placeholder="e.g. INMUN1"/></FRow>
+      <FRow label="Currency & Amount" required>
+        <div style={{display:"flex",gap:6}}>
+          <select value={f.ccy} onChange={e=>sf("ccy",e.target.value)} style={{...iS,width:90,fontSize:12}}>
+            {["USD","EUR","GBP","JPY","AED","SGD","AUD","CNY"].map(c=><option key={c}>{c}</option>)}
+          </select>
+          <FInput value={f.amount} onChange={v=>sf("amount",v)} placeholder="e.g. 119850"/>
+        </div>
+      </FRow>
+      <FRow label="AD Code"><FInput value={f.ad_code} onChange={v=>sf("ad_code",v)} placeholder="e.g. 6380012"/></FRow>
+
+      <SectionHeader title="Invoice Details"/>
+      <FRow label="Invoice Number" required><FInput value={f.invoice_no} onChange={v=>sf("invoice_no",v)}/></FRow>
+      <FRow label="Invoice Date" required><DateInput value={f.invoice_date} onChange={v=>sf("invoice_date",v)}/></FRow>
+      <FRow label="Goods Description"><FInput value={f.goods_description} onChange={v=>sf("goods_description",v)}/></FRow>
+      <FRow label="Destination of Goods" required><FInput value={f.destination} onChange={v=>sf("destination",v)}/></FRow>
+
+      <SectionHeader title="Buyer Details (if different from Consignee)"/>
+      <FRow label="Buyer / Third Party Name"><FInput value={f.buyer_name} onChange={v=>sf("buyer_name",v)}/></FRow>
+      <FRow label="Buyer Country"><FInput value={f.buyer_country} onChange={v=>sf("buyer_country",v)}/></FRow>
+      <FRow label="Agency Commission"><FInput value={f.agency_commission} onChange={v=>sf("agency_commission",v)} placeholder="NIL or amount"/></FRow>
+
+      <SectionHeader title="Export Advance Remittance References"/>
+      <p style={{fontSize:11,color:"#64748b",margin:"0 0 10px"}}>Add IRM / FIRC entries for advance remittances received</p>
+      {f.remittances.length>0&&(
+        <div style={{display:"grid",gap:6,marginBottom:10}}>
+          {f.remittances.map((r,i)=>(
+            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 1fr auto",gap:6,alignItems:"center",background:"#f8fafc",borderRadius:8,padding:"8px 10px",border:"1px solid #e2e8f0"}}>
+              <input value={r.ref_no} onChange={e=>updRemit(i,"ref_no",e.target.value)}
+                placeholder="IRM / FIRC Ref No" style={{...iS,fontSize:11}}/>
+              <select value={r.ccy} onChange={e=>updRemit(i,"ccy",e.target.value)} style={{...iS,fontSize:11}}>
+                {["USD","EUR","GBP","AED"].map(c=><option key={c}>{c}</option>)}
+              </select>
+              <input value={r.amount} onChange={e=>updRemit(i,"amount",e.target.value)}
+                placeholder="Amount" style={{...iS,fontSize:11}}/>
+              <button onClick={()=>delRemit(i)}
+                style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <button onClick={addRemittance}
+        style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,
+                padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600,marginBottom:4}}>
+        + Add IRM / FIRC Entry
+      </button>
+
+      <div style={{marginTop:16,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
+        📄 PDF: Single page · Company header · Shipping bill details table · Certification · Signature block
+      </div>
+      <div style={{display:"flex",gap:10,marginTop:12,justifyContent:"flex-end"}}>
+        <button onClick={exportPDF}
+          style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",
+                  borderRadius:8,padding:"8px 20px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+          📄 Export PDF
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function EPCForm({ships}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
