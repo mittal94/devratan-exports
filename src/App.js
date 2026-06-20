@@ -5612,7 +5612,7 @@ function IBLForm({ships, buyers}){
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
 
   // Remittance entries (IRM/FIRC)
-  const addRemittance=()=>setF(p=>({...p,remittances:[...p.remittances,{ref_no:"",ccy:"USD",amount:""}]}));
+  const addRemittance=()=>setF(p=>({...p,remittances:[...p.remittances,{ref_no:"",ccy:"USD",amount:"",bank_charges:""}]}));
   const updRemit=(i,k,v)=>setF(p=>{const arr=[...p.remittances];arr[i]={...arr[i],[k]:v};return{...p,remittances:arr};});
   const delRemit=(i)=>setF(p=>({...p,remittances:p.remittances.filter((_,j)=>j!==i)}));
 
@@ -5722,7 +5722,7 @@ function IBLForm({ships, buyers}){
       ["Buyer / Third Party Name and Country (if different from Consignee)",f.buyer_name+(f.buyer_country?", "+f.buyer_country:"")],
       ["Agency Commission (if any)",f.agency_commission||"NIL"],
       ["Export Advance Remittance Reference Number & Date",
-        f.remittances.map(r=>r.ref_no+(r.amount?": "+r.ccy+" "+r.amount:"")).join("\n")||""],
+        f.remittances.map(r=>r.ref_no+(r.amount?": "+r.ccy+" "+r.amount:"")+(r.bank_charges?" (Bank Charges: "+r.bank_charges+")":"")).join("\n")||""],
     ];
 
     NF(false,8.5);
@@ -5777,7 +5777,7 @@ function IBLForm({ships, buyers}){
       <FRow label="Exporter Address"><FTextarea value={f.exporter_address} onChange={v=>sf("exporter_address",v)}/></FRow>
 
       <SectionHeader title="Consignee Details"/>
-      <FRow label="Consignee Name" required><FInput value={f.consignee_name} onChange={v=>sf("consignee_name",v)}/></FRow>
+      <FRow label="Consignee Name" required><FTextarea value={f.consignee_name} onChange={v=>sf("consignee_name",v)} rows={3} placeholder="Can mention multiple consignee names"/></FRow>
       <FRow label="Consignee Address"><FTextarea value={f.consignee_address} onChange={v=>sf("consignee_address",v)}/></FRow>
 
       <SectionHeader title="Shipping Bill Details"/>
@@ -5810,16 +5810,23 @@ function IBLForm({ships, buyers}){
       {f.remittances.length>0&&(
         <div style={{display:"grid",gap:6,marginBottom:10}}>
           {f.remittances.map((r,i)=>(
-            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 1fr auto",gap:6,alignItems:"center",background:"#f8fafc",borderRadius:8,padding:"8px 10px",border:"1px solid #e2e8f0"}}>
-              <input value={r.ref_no} onChange={e=>updRemit(i,"ref_no",e.target.value)}
-                placeholder="IRM / FIRC Ref No" style={{...iS,fontSize:11}}/>
-              <select value={r.ccy} onChange={e=>updRemit(i,"ccy",e.target.value)} style={{...iS,fontSize:11}}>
-                {["USD","EUR","GBP","AED"].map(c=><option key={c}>{c}</option>)}
-              </select>
-              <input value={r.amount} onChange={e=>updRemit(i,"amount",e.target.value)}
-                placeholder="Amount" style={{...iS,fontSize:11}}/>
-              <button onClick={()=>delRemit(i)}
-                style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>✕</button>
+            <div key={i} style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px",border:"1px solid #e2e8f0",display:"grid",gap:6}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 80px 1fr auto",gap:6,alignItems:"center"}}>
+                <input value={r.ref_no} onChange={e=>updRemit(i,"ref_no",e.target.value)}
+                  placeholder="IRM / FIRC Ref No" style={{...iS,fontSize:11}}/>
+                <select value={r.ccy} onChange={e=>updRemit(i,"ccy",e.target.value)} style={{...iS,fontSize:11}}>
+                  {["USD","EUR","GBP","AED"].map(c=><option key={c}>{c}</option>)}
+                </select>
+                <input value={r.amount} onChange={e=>updRemit(i,"amount",e.target.value)}
+                  placeholder="Amount" style={{...iS,fontSize:11}}/>
+                <button onClick={()=>delRemit(i)}
+                  style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12}}>✕</button>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <label style={{fontSize:11,color:"#374151",fontWeight:600,whiteSpace:"nowrap"}}>Bank Charges:</label>
+                <input value={r.bank_charges} onChange={e=>updRemit(i,"bank_charges",e.target.value)}
+                  placeholder="e.g. USD 25.00 (optional)" style={{...iS,fontSize:11}}/>
+              </div>
             </div>
           ))}
         </div>
