@@ -3622,7 +3622,17 @@ function exportContractPDF(contract, buyer, consignee) {
           [{ content: "Price",         styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: "USD "+(items[0].price_usd||"")+" Per "+(items[0].price_per||"MTs")+" "+(contract.delivery_terms||"CIF"), styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
         ]
       : [
-          [{ content: "Items ("+items.length+" lines)", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: itemsDisplay }],
+          // Each item on its own row for clean multi-item layout
+          ...items.map((it,i)=>([
+            { content: "Item "+(i+1), styles: { fontStyle: "bold", fillColor: lgray, textColor: navy, fontSize:8 } },
+            { content: (it.packing||"")+"\n"+([
+                it.quantity_mt?it.quantity_mt+" MTS":"",
+                (it.container_qty&&it.container_type)?it.container_qty+" x "+it.container_type:"",
+                it.price_usd?"USD "+it.price_usd+" per "+(it.price_per||"MTs")+" "+baseTerms:""
+              ].filter(Boolean).join("  |  ")),
+              styles: { fontStyle: "normal", fontSize:8 }
+            }
+          ])),
           [{ content: "Total Qty",     styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: totQty+" MTS "+( contract.quantity_tolerance||""), styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
           [{ content: "Total Value",   styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: "USD "+totVal.toLocaleString("en-IN",{minimumFractionDigits:0,maximumFractionDigits:0})+" "+baseTerms, styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
         ]
