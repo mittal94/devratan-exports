@@ -6139,7 +6139,7 @@ const INVOICE_EMPTY = {
   third_party_name:"", third_party_gst:"",
   bl_no:"", bl_date:"",
   freight_per_mt:"", insurance_per_mt:"",
-  items:[{desc1:"INDIAN PARBOILED RICE",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:""}],
+  items:[{desc1:"INDIAN PARBOILED RICE",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",cont_qty:"",cont_type:"20' FCL"}],
   containers:[{cont_no:"",seal_no:"",bags:""}],
   parties:{
     exp:   {consignee_id:"",buyer_id:"",notifies:["","","","","",""]},
@@ -6177,7 +6177,7 @@ function InvoicingTab({buyers}){
   });
 
   // ── Items helpers ──────────────────────────────────────────────────────────
-  const addItem=()=>setForm(p=>({...p,items:[...p.items,{desc1:"",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:""}]}));
+  const addItem=()=>setForm(p=>({...p,items:[...p.items,{desc1:"",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",cont_qty:"",cont_type:"20' FCL"}]}));
   const updItem=(i,k,v)=>setForm(p=>{const it=[...p.items];it[i]={...it[i],[k]:v};return{...p,items:it};});
   const delItem=(i)=>setForm(p=>({...p,items:p.items.filter((_,j)=>j!==i)}));
 
@@ -6243,9 +6243,9 @@ function InvoicingTab({buyers}){
     try{
       const payload={invoice_no:form.invoice_no,invoice_date:form.invoice_date,contract_no:form.contract_no,form_data:form};
       if(editId){
-        await sb(`invoices?id=eq.${editId}`,"PATCH",payload);
+        await sb(`invoices?id=eq.${editId}`,{method:"PATCH",body:JSON.stringify(payload)});
       } else {
-        await sb("invoices","POST",payload);
+        await sb("invoices",{method:"POST",body:JSON.stringify(payload)});
       }
       await loadInvoices();
       setView("list"); setEditId(null);
@@ -6269,7 +6269,7 @@ function InvoicingTab({buyers}){
 
   const deleteInvoice=async(id)=>{
     if(!window.confirm("Delete this invoice?"))return;
-    await sb(`invoices?id=eq.${id}`,"DELETE",null);
+    await sb(`invoices?id=eq.${id}`,{method:"DELETE"});
     await loadInvoices();
   };
 
@@ -6296,11 +6296,11 @@ function InvoicingTab({buyers}){
     doc.text(seller.address,57,23);
     doc.text((seller.phone||"")+(seller.email?"  |  "+seller.email:""),57,27.5);
     if(seller.gstin) doc.text(seller.gstin,57,32);
-    // Title right
-    doc.setFontSize(13); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
-    doc.text(title,200,13,{align:"right"});
+    // Title centred below header
+    doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+    doc.text(title,105,43,{align:"center"});
     doc.setTextColor(0,0,0);
-    return 50;
+    return 52;
   };
 
   const addInvFooter=(doc)=>{
@@ -6409,8 +6409,8 @@ function InvoicingTab({buyers}){
   const renderItemsTable=(doc,M,y,RW,showPrice)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
     const cols=showPrice
-      ?[["S.No.",10],["No. & Kind of Pkg / Description",showPrice?70:100],["Qty (MT)",22],["Rate/MT",22],["Amount",RW-10-70-22-22]]
-      :[["S.No.",10],["No. & Kind of Pkg / Description",100],["Qty (MT)",25],["Gross Wt (Kg)",32.5],["Net Wt (Kg)",RW-10-100-25-32.5]];
+      ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
+      :[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Gross Wt (Kg)",28],["Net Wt (Kg)",RW-10-45-55-20-28]];
     let hx=M;
     cols.forEach(([h,w])=>{
       invRECT(doc,hx,y,w,7); doc.setFillColor(...lgray); doc.rect(hx,y,w,7,"F");
@@ -6425,22 +6425,26 @@ function InvoicingTab({buyers}){
       const gross=Math.round(qty*1000*n(form.bag_gross_wt)/n(form.bag_net_wt)*100)/100;
       const net=qty*1000;
       totalQtyLocal+=qty; totalAmtLocal+=amt; totalGross+=gross; totalNet+=net;
-      const descLines=doc.splitTextToSize((it.desc1||"")+(it.desc2?"\n"+it.desc2:""),cols[1][1]-2);
+      const descLines=doc.splitTextToSize((it.desc1||"")+(it.desc2?"\n"+it.desc2:""),cols[2][1]-2);
       const rh=Math.max(descLines.length*3.8+2,8);
       y=invChkPg(doc,y,rh,null,null);
       let rx=M;
       cols.forEach(([h,w],ci)=>{
         invRECT(doc,rx,y,w,rh);
         invNF(doc,false,7.5); doc.setTextColor(0,0,0);
+        const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"");
+        const descL1=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
+        const descL2=it.desc2?doc.splitTextToSize(it.desc2,cols[2][1]-2):[];
         if(ci===0) doc.text(String(i+1),rx+0.5,y+4);
-        else if(ci===1) doc.text(descLines,rx+0.5,y+3.5);
-        else if(ci===2) doc.text(qty?qty.toFixed(3):"",rx+0.5,y+4);
+        else if(ci===1){invNF(doc,false,7);doc.text(pkgStr,rx+0.5,y+4,{maxWidth:cols[1][1]-2});}
+        else if(ci===2){invNF(doc,true,7.5);doc.text(descL1,rx+0.5,y+3.5);if(descL2.length){invNF(doc,false,7);doc.text(descL2,rx+0.5,y+3.5+descL1.length*3.8);}}
+        else if(ci===3) doc.text(qty?qty.toFixed(3):"",rx+0.5,y+4);
         else if(showPrice){
-          if(ci===3) doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+4);
-          if(ci===4){invNF(doc,true,7.5);doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+4);}
+          if(ci===4){invNF(doc,false,7.5);doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+4);}
+          if(ci===5){invNF(doc,true,7.5);doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+4);}
         } else {
-          if(ci===3) doc.text(gross?gross.toFixed(3):"",rx+0.5,y+4);
-          if(ci===4) doc.text(net?net.toFixed(3):"",rx+0.5,y+4);
+          if(ci===4) doc.text(gross?gross.toFixed(3):"",rx+0.5,y+4);
+          if(ci===5) doc.text(net?net.toFixed(3):"",rx+0.5,y+4);
         }
         invNF(doc,false,7.5);
         rx+=w;
@@ -6450,11 +6454,12 @@ function InvoicingTab({buyers}){
     // Totals row
     const tCols=cols.map(([h,w],i)=>{
       if(i===0) return "";
-      if(i===1) return "TOTAL";
-      if(i===2) return totalQtyLocal.toFixed(3);
-      if(showPrice && i===4) return (form.items[0]?.ccy||"USD")+" "+totalAmtLocal.toLocaleString("en-IN",{minimumFractionDigits:2});
-      if(!showPrice && i===3) return totalGross.toFixed(3);
-      if(!showPrice && i===4) return totalNet.toFixed(3);
+      if(i===1) return "";
+      if(i===2) return "TOTAL";
+      if(i===3) return totalQtyLocal.toFixed(3);
+      if(showPrice && i===5) return (form.items[0]?.ccy||"USD")+" "+totalAmtLocal.toLocaleString("en-IN",{minimumFractionDigits:2});
+      if(!showPrice && i===4) return totalGross.toFixed(3);
+      if(!showPrice && i===5) return totalNet.toFixed(3);
       return "";
     });
     let tx=M;
@@ -6579,16 +6584,19 @@ function InvoicingTab({buyers}){
     invNF(doc,false,8); doc.text(numWords(totalAmt),M+invTW(doc,"Amount in Words: ",8),y,{maxWidth:RW-invTW(doc,"Amount in Words: ",8)});
     y+=8;
 
-    // Container table
-    y=invChkPg(doc,y,30,null,null);
-    invNF(doc,true,8.5); doc.text("Container Details:",M,y); y+=4;
-    y=renderContainerTable(doc,M,y,RW); y+=3;
-
     // Third party
     if(form.third_party_name){
       invNF(doc,false,8);
       doc.text("Third Party: "+form.third_party_name+(form.third_party_gst?"  |  GST: "+form.third_party_gst:""),M,y); y+=6;
     }
+
+    // Bank details
+    y=invChkPg(doc,y,22,null,null);
+    invNF(doc,true,8.5); doc.text("Bank Details:",M,y); y+=5;
+    invNF(doc,false,8);
+    const bd=BANK_DETAILS.devratan;
+    doc.text("Bank: "+bd.bankName+"  |  Branch: "+bd.branch,M,y); y+=4;
+    doc.text("A/c No.: "+bd.accNo+"  |  SWIFT: "+bd.swift,M,y); y+=8;
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
@@ -6633,6 +6641,14 @@ function InvoicingTab({buyers}){
     invNF(doc,true,8); doc.text("Amount in Words: ",M,y);
     invNF(doc,false,8); doc.text(numWords(totalAmt),M+invTW(doc,"Amount in Words: ",8),y,{maxWidth:RW-invTW(doc,"Amount in Words: ",8)});
     y+=8;
+
+    // Bank details
+    y=invChkPg(doc,y,22,null,null);
+    invNF(doc,true,8.5); doc.text("Bank Details:",M,y); y+=5;
+    invNF(doc,false,8);
+    const bdc=BANK_DETAILS.devratan;
+    doc.text("Bank: "+bdc.bankName+"  |  Branch: "+bdc.branch,M,y); y+=4;
+    doc.text("A/c No.: "+bdc.accNo+"  |  SWIFT: "+bdc.swift,M,y); y+=8;
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
@@ -6829,9 +6845,17 @@ function InvoicingTab({buyers}){
           <div style={{fontWeight:700,color:"#1e3a5f",fontSize:12,marginBottom:8}}>Item {i+1}</div>
           <FRow label="Description Line 1" required><FInput value={it.desc1} onChange={v=>updItem(i,"desc1",v)}/></FRow>
           <FRow label="Description Line 2 (bags/brand)"><FInput value={it.desc2} onChange={v=>updItem(i,"desc2",v)} placeholder="e.g. 10400 BAGS OF 25KG EACH IN BOPP BAGS – BRAND NAME"/></FRow>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 80px 1fr",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
             <FRow label="Qty (MT)" required><FInput value={it.qty_mt} onChange={v=>updItem(i,"qty_mt",v)} placeholder="e.g. 260"/></FRow>
             <FRow label="No. of Bags"><FInput value={it.bags} onChange={v=>updItem(i,"bags",v)} placeholder="e.g. 10400"/></FRow>
+            <FRow label="No. of Containers"><FInput value={it.cont_qty} onChange={v=>updItem(i,"cont_qty",v)} placeholder="e.g. 05"/></FRow>
+            <FRow label="Container Type">
+              <select value={it.cont_type} onChange={e=>updItem(i,"cont_type",e.target.value)} style={{...iS,fontSize:12}}>
+                {["20' FCL","40' FCL","20' & 40' FCL"].map(c=><option key={c}>{c}</option>)}
+              </select>
+            </FRow>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
             <FRow label="Currency">
               <select value={it.ccy} onChange={e=>updItem(i,"ccy",e.target.value)} style={{...iS,fontSize:12}}>
                 {["USD","EUR","GBP","AED","SGD","AUD"].map(c=><option key={c}>{c}</option>)}
