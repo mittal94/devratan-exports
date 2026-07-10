@@ -6581,10 +6581,11 @@ function InvoicingTab({buyers}){
     y=doc.lastAutoTable.finalY+3;
 
     // Gross/Net wt summary
-    const totNetWt=form.containers.reduce((s,c)=>{const ci=form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"};return s+Math.round(n(c.bags)*n(ci.bag_net_wt)*100)/100;},0);
-    const totGrossWt=form.containers.reduce((s,c)=>{const ci=form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"};return s+Math.round(n(c.bags)*n(ci.bag_gross_wt)*100)/100;},0);
+    // Total wt from items: total bags × per-bag wt (not containers)
+    const totNetWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
+    const totGrossWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_gross_wt)*100)/100,0);
     invNF(doc,false,8);
-    const wtStr="Total Net Wt: "+totNetWt.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWt.toLocaleString("en-IN")+" Kgs"+(form.items[0]?.bag_net_wt?"  |  Per Bag: Net "+form.items[0].bag_net_wt+" Kg / Gross "+form.items[0].bag_gross_wt+" Kg":"");
+    const wtStr="Total Net Wt: "+totNetWt.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWt.toLocaleString("en-IN")+" Kgs";
     doc.text(wtStr,M,y,{maxWidth:RW}); y+=6;
 
     // Amount in words
@@ -6650,10 +6651,11 @@ function InvoicingTab({buyers}){
     y=y2+5;
 
     // Gross/Net wt summary (Comm Invoice)
-    const totNetWtC=form.containers.reduce((s,c)=>{const ci=form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"};return s+Math.round(n(c.bags)*n(ci.bag_net_wt)*100)/100;},0);
-    const totGrossWtC=form.containers.reduce((s,c)=>{const ci=form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"};return s+Math.round(n(c.bags)*n(ci.bag_gross_wt)*100)/100;},0);
+    // Total wt from items: total bags × per-bag wt (not containers)
+    const totNetWtC=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
+    const totGrossWtC=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_gross_wt)*100)/100,0);
     invNF(doc,false,8);
-    const wtStrC="Total Net Wt: "+totNetWtC.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWtC.toLocaleString("en-IN")+" Kgs"+(form.items[0]?.bag_net_wt?"  |  Per Bag: Net "+form.items[0].bag_net_wt+" Kg / Gross "+form.items[0].bag_gross_wt+" Kg":"");
+    const wtStrC="Total Net Wt: "+totNetWtC.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWtC.toLocaleString("en-IN")+" Kgs";
     doc.text(wtStrC,M,y,{maxWidth:RW}); y+=6;
 
     // Amount in words
