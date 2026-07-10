@@ -6134,12 +6134,11 @@ const INVOICE_EMPTY = {
   hsn:"10063019", port_loading:"", port_discharge:"",
   country_origin:"INDIA", country_dest:"",
   delivery_terms:"CIF", payment_terms:"CAD",
-  bag_net_wt:"25", bag_gross_wt:"25.13",
   state_origin:"", exchange_rate:"", gst_rate:"0.05",
   third_party_name:"", third_party_gst:"",
   bl_no:"", bl_date:"",
   freight_per_mt:"", insurance_per_mt:"",
-  items:[{desc1:"INDIAN PARBOILED RICE",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",cont_qty:"",cont_type:"20' FCL"}],
+  items:[{desc1:"INDIAN PARBOILED RICE",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",rate_per_mt_buyer:"",cont_qty:"",cont_type:"20' FCL",bag_net_wt:"25",bag_gross_wt:"25.13"}],
   containers:[{cont_no:"",seal_no:"",bags:""}],
   parties:{
     exp:   {consignee_id:"",buyer_id:"",notifies:["","","","","",""]},
@@ -6177,7 +6176,7 @@ function InvoicingTab({buyers}){
   });
 
   // ── Items helpers ──────────────────────────────────────────────────────────
-  const addItem=()=>setForm(p=>({...p,items:[...p.items,{desc1:"",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",cont_qty:"",cont_type:"20' FCL"}]}));
+  const addItem=()=>setForm(p=>({...p,items:[...p.items,{desc1:"",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",rate_per_mt_buyer:"",cont_qty:"",cont_type:"20' FCL",bag_net_wt:"25",bag_gross_wt:"25.13"}]}));
   const updItem=(i,k,v)=>setForm(p=>{const it=[...p.items];it[i]={...it[i],[k]:v};return{...p,items:it};});
   const delItem=(i)=>setForm(p=>({...p,items:p.items.filter((_,j)=>j!==i)}));
 
@@ -6197,8 +6196,9 @@ function InvoicingTab({buyers}){
   const totalINR=Math.round(totalAmt*n(form.exchange_rate));
   const igst=Math.round(totalINR*n(form.gst_rate));
   const contTotBags=form.containers.reduce((s,c)=>s+n(c.bags),0);
-  const contTotGross=Math.round(contTotBags*n(form.bag_gross_wt)*100)/100;
-  const contTotNet=Math.round(contTotBags*n(form.bag_net_wt)*100)/100;
+  const getItemForCont=c=>(form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"});
+  const contTotGross=form.containers.reduce((s,c)=>{const it=getItemForCont(c);return s+Math.round(n(c.bags)*n(it.bag_gross_wt)*100)/100;},0);
+  const contTotNet=form.containers.reduce((s,c)=>{const it=getItemForCont(c);return s+Math.round(n(c.bags)*n(it.bag_net_wt)*100)/100;},0);
 
   // ── Party copy helper ──────────────────────────────────────────────────────
   const copyFromExp=(tab)=>setForm(p=>{
@@ -6406,7 +6406,7 @@ function InvoicingTab({buyers}){
   };
 
   // Items table
-  const renderItemsTable=(doc,M,y,RW,showPrice)=>{
+  const renderItemsTable=(doc,M,y,RW,showPrice,useBuyerRate)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
     const cols=showPrice
       ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
@@ -6421,23 +6421,24 @@ function InvoicingTab({buyers}){
     y+=7;
     let totalQtyLocal=0,totalAmtLocal=0,totalGross=0,totalNet=0;
     form.items.forEach((it,i)=>{
-      const qty=n(it.qty_mt),rate=n(it.rate_per_mt),amt=qty*rate;
-      const gross=Math.round(qty*1000*n(form.bag_gross_wt)/n(form.bag_net_wt)*100)/100;
+      const qty=n(it.qty_mt),rate=useBuyerRate&&it.rate_per_mt_buyer?n(it.rate_per_mt_buyer):n(it.rate_per_mt),amt=qty*rate;
+      const gross=Math.round(qty*1000*n(it.bag_gross_wt||form.bag_gross_wt||"25.13")/n(it.bag_net_wt||form.bag_net_wt||"25")*100)/100;
       const net=qty*1000;
       totalQtyLocal+=qty; totalAmtLocal+=amt; totalGross+=gross; totalNet+=net;
-      const descLines=doc.splitTextToSize((it.desc1||"")+(it.desc2?"\n"+it.desc2:""),cols[2][1]-2);
-      const rh=Math.max(descLines.length*3.8+2,8);
+      const descLines=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
+      const pkgLines=doc.splitTextToSize(pkgStr,cols[1][1]-2);
+      const rh=Math.max(Math.max(descLines.length,pkgLines.length)*3.8+2,8);
       y=invChkPg(doc,y,rh,null,null);
       let rx=M;
       cols.forEach(([h,w],ci)=>{
         invRECT(doc,rx,y,w,rh);
         invNF(doc,false,7.5); doc.setTextColor(0,0,0);
-        const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"");
+        const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
         const descL1=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
         const descL2=it.desc2?doc.splitTextToSize(it.desc2,cols[2][1]-2):[];
         if(ci===0) doc.text(String(i+1),rx+0.5,y+4);
         else if(ci===1){invNF(doc,false,7);doc.text(pkgStr,rx+0.5,y+4,{maxWidth:cols[1][1]-2});}
-        else if(ci===2){invNF(doc,true,7.5);doc.text(descL1,rx+0.5,y+3.5);if(descL2.length){invNF(doc,false,7);doc.text(descL2,rx+0.5,y+3.5+descL1.length*3.8);}}
+        else if(ci===2){invNF(doc,true,7.5);doc.text(descL1,rx+0.5,y+3.5);}
         else if(ci===3) doc.text(qty?qty.toFixed(3):"",rx+0.5,y+4);
         else if(showPrice){
           if(ci===4){invNF(doc,false,7.5);doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+4);}
@@ -6488,8 +6489,9 @@ function InvoicingTab({buyers}){
     y+=7;
     form.containers.forEach((c,i)=>{
       const bags=n(c.bags);
-      const gross=Math.round(bags*n(form.bag_gross_wt)*100)/100;
-      const net=Math.round(bags*n(form.bag_net_wt)*100)/100;
+      const cItm=form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"};
+      const gross=Math.round(bags*n(cItm.bag_gross_wt)*100)/100;
+      const net=Math.round(bags*n(cItm.bag_net_wt)*100)/100;
       const rowData=[String(i+1),c.cont_no||"",c.seal_no||"",bags?bags+" BAGS":"",gross?gross.toFixed(2):"",net?net.toFixed(2):""];
       let rx=M;
       y=invChkPg(doc,y,7,null,null);
@@ -6578,6 +6580,13 @@ function InvoicingTab({buyers}){
     });
     y=doc.lastAutoTable.finalY+3;
 
+    // Gross/Net wt summary
+    const totNetWt=form.containers.reduce((s,c)=>{const ci=form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"};return s+Math.round(n(c.bags)*n(ci.bag_net_wt)*100)/100;},0);
+    const totGrossWt=form.containers.reduce((s,c)=>{const ci=form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"};return s+Math.round(n(c.bags)*n(ci.bag_gross_wt)*100)/100;},0);
+    invNF(doc,false,8);
+    const wtStr="Total Net Wt: "+totNetWt.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWt.toLocaleString("en-IN")+" Kgs"+(form.items[0]?.bag_net_wt?"  |  Per Bag: Net "+form.items[0].bag_net_wt+" Kg / Gross "+form.items[0].bag_gross_wt+" Kg":"");
+    doc.text(wtStr,M,y,{maxWidth:RW}); y+=6;
+
     // Amount in words
     y=invChkPg(doc,y,16,null,null);
     invNF(doc,true,8); doc.text("Amount in Words:",M,y); y+=4.5;
@@ -6637,8 +6646,15 @@ function InvoicingTab({buyers}){
     }
 
     invNF(doc,true,8.5); doc.text("Items:",M,y); y+=4;
-    const {y:y2,totalAmtLocal}=renderItemsTable(doc,M,y,RW,true);
+    const {y:y2,totalAmtLocal}=renderItemsTable(doc,M,y,RW,true,partyKey==="buyer");
     y=y2+5;
+
+    // Gross/Net wt summary (Comm Invoice)
+    const totNetWtC=form.containers.reduce((s,c)=>{const ci=form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"};return s+Math.round(n(c.bags)*n(ci.bag_net_wt)*100)/100;},0);
+    const totGrossWtC=form.containers.reduce((s,c)=>{const ci=form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"};return s+Math.round(n(c.bags)*n(ci.bag_gross_wt)*100)/100;},0);
+    invNF(doc,false,8);
+    const wtStrC="Total Net Wt: "+totNetWtC.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWtC.toLocaleString("en-IN")+" Kgs"+(form.items[0]?.bag_net_wt?"  |  Per Bag: Net "+form.items[0].bag_net_wt+" Kg / Gross "+form.items[0].bag_gross_wt+" Kg":"");
+    doc.text(wtStrC,M,y,{maxWidth:RW}); y+=6;
 
     // Amount in words
     y=invChkPg(doc,y,16,null,null);
@@ -6837,8 +6853,7 @@ function InvoicingTab({buyers}){
           </select>
         </FRow>
         <FRow label="Payment Terms"><FInput value={form.payment_terms} onChange={v=>sf("payment_terms",v)}/></FRow>
-        <FRow label="Single Bag Net Wt (kg)"><FInput value={form.bag_net_wt} onChange={v=>sf("bag_net_wt",v)} placeholder="e.g. 25"/></FRow>
-        <FRow label="Single Bag Gross Wt (kg)"><FInput value={form.bag_gross_wt} onChange={v=>sf("bag_gross_wt",v)} placeholder="e.g. 25.13"/></FRow>
+
       </div>
       <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"10px 14px",marginBottom:10}}>
         <div style={{fontWeight:700,color:"#92400e",fontSize:12,marginBottom:8}}>Export Invoice Extras</div>
@@ -6874,6 +6889,8 @@ function InvoicingTab({buyers}){
                 {["20' FCL","40' FCL","20' & 40' FCL"].map(c=><option key={c}>{c}</option>)}
               </select>
             </FRow>
+            <FRow label="Bag Net Wt (kg)"><FInput value={it.bag_net_wt} onChange={v=>updItem(i,"bag_net_wt",v)} placeholder="e.g. 25"/></FRow>
+            <FRow label="Bag Gross Wt (kg)"><FInput value={it.bag_gross_wt} onChange={v=>updItem(i,"bag_gross_wt",v)} placeholder="e.g. 25.13"/></FRow>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
             <FRow label="Currency">
@@ -6881,7 +6898,8 @@ function InvoicingTab({buyers}){
                 {["USD","EUR","GBP","AED","SGD","AUD"].map(c=><option key={c}>{c}</option>)}
               </select>
             </FRow>
-            <FRow label="Rate/MT" required><FInput value={it.rate_per_mt} onChange={v=>updItem(i,"rate_per_mt",v)} placeholder="e.g. 370"/></FRow>
+            <FRow label="Rate/MT (Export Inv)" required><FInput value={it.rate_per_mt} onChange={v=>updItem(i,"rate_per_mt",v)} placeholder="e.g. 370"/></FRow>
+            <FRow label="Rate/MT (Comm Inv Buyer)"><FInput value={it.rate_per_mt_buyer} onChange={v=>updItem(i,"rate_per_mt_buyer",v)} placeholder="Override for Buyer invoice"/></FRow>
             <FRow label="Amount (auto)">
               <div style={{...iS,background:"#f1f5f9",fontSize:12,color:"#15803d",fontWeight:700}}>
                 {it.ccy} {it.qty_mt&&it.rate_per_mt?(n(it.qty_mt)*n(it.rate_per_mt)).toLocaleString("en-IN",{minimumFractionDigits:2}):"—"}
@@ -6916,12 +6934,12 @@ function InvoicingTab({buyers}){
 
       {/* Section 4: Containers */}
       <SectionHeader title="4. Containers"/>
-      <div style={{fontSize:11,color:"#64748b",marginBottom:8}}>Single bag net: {form.bag_net_wt} kg · Gross: {form.bag_gross_wt} kg</div>
+      <div style={{fontSize:11,color:"#64748b",marginBottom:8}}>Gross/Net wt auto-calculated per item's bag weight. Select Item for each container.</div>
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:600}}>
           <thead>
             <tr style={{background:"#f1f5f9"}}>
-              {["S.No.","Container No.","Seal No.","No. of Bags","Net Wt (kg)","Gross Wt (kg)",""].map(h=>(
+              {["S.No.","Container No.","Seal No.","Item","No. of Bags","Net Wt (kg)","Gross Wt (kg)",""].map(h=>(
                 <th key={h} style={{border:"1px solid #e2e8f0",padding:"6px 8px",textAlign:"left",fontWeight:700}}>{h}</th>
               ))}
             </tr>
@@ -6929,14 +6947,20 @@ function InvoicingTab({buyers}){
           <tbody>
             {form.containers.map((c,i)=>{
               const bags=n(c.bags);
+              const cItem=getItemForCont(c);
               return(
                 <tr key={i}>
                   <td style={{border:"1px solid #e2e8f0",padding:4,textAlign:"center",width:35}}>{i+1}</td>
                   <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={c.cont_no} onChange={e=>updCont(i,"cont_no",e.target.value)} style={{...iS,fontSize:11}} placeholder="MSKU1234567"/></td>
                   <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={c.seal_no} onChange={e=>updCont(i,"seal_no",e.target.value)} style={{...iS,fontSize:11}} placeholder="ML-IN1234567"/></td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3,minWidth:80}}>
+                    <select value={c.item_idx||"0"} onChange={e=>updCont(i,"item_idx",e.target.value)} style={{...iS,fontSize:11}}>
+                      {form.items.map((_,ii)=><option key={ii} value={String(ii)}>Item {ii+1}</option>)}
+                    </select>
+                  </td>
                   <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={c.bags} onChange={e=>updCont(i,"bags",e.target.value)} style={{...iS,fontSize:11,width:80}} placeholder="1060"/></td>
-                  <td style={{border:"1px solid #e2e8f0",padding:"4px 8px",color:"#15803d",fontWeight:600}}>{bags?(Math.round(bags*n(form.bag_net_wt)*100)/100).toFixed(2):""}</td>
-                  <td style={{border:"1px solid #e2e8f0",padding:"4px 8px",color:"#15803d",fontWeight:600}}>{bags?(Math.round(bags*n(form.bag_gross_wt)*100)/100).toFixed(2):""}</td>
+                  <td style={{border:"1px solid #e2e8f0",padding:"4px 8px",color:"#15803d",fontWeight:600}}>{bags?(Math.round(bags*n(cItem.bag_net_wt)*100)/100).toFixed(2):""}</td>
+                  <td style={{border:"1px solid #e2e8f0",padding:"4px 8px",color:"#15803d",fontWeight:600}}>{bags?(Math.round(bags*n(cItem.bag_gross_wt)*100)/100).toFixed(2):""}</td>
                   <td style={{border:"1px solid #e2e8f0",padding:3,textAlign:"center"}}>
                     {form.containers.length>1&&<button onClick={()=>delCont(i)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11}}>✕</button>}
                   </td>
@@ -6946,7 +6970,7 @@ function InvoicingTab({buyers}){
             {/* Totals */}
             <tr style={{background:"#f0fdf4",fontWeight:700}}>
               <td colSpan={3} style={{border:"1px solid #e2e8f0",padding:"5px 8px",textAlign:"right",color:"#15803d"}}>TOTAL</td>
-              <td style={{border:"1px solid #e2e8f0",padding:"5px 8px",color:"#15803d"}}>{contTotBags} bags</td>
+              <td></td><td style={{border:"1px solid #e2e8f0",padding:"5px 8px",color:"#15803d"}}>{contTotBags} bags</td>
               <td style={{border:"1px solid #e2e8f0",padding:"5px 8px",color:"#15803d"}}>{contTotNet.toFixed(2)}</td>
               <td style={{border:"1px solid #e2e8f0",padding:"5px 8px",color:"#15803d"}}>{contTotGross.toFixed(2)}</td>
               <td style={{border:"1px solid #e2e8f0"}}></td>
