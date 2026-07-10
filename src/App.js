@@ -6579,13 +6579,12 @@ function InvoicingTab({buyers}){
     y=doc.lastAutoTable.finalY+3;
 
     // Amount in words
-    y=invChkPg(doc,y,12,null,null);
-    const amtWordsExp=numWords(totalAmt);
-    invNF(doc,true,8); doc.text("Amount in Words: ",M,y);
+    y=invChkPg(doc,y,16,null,null);
+    invNF(doc,true,8); doc.text("Amount in Words:",M,y); y+=4.5;
     invNF(doc,false,8);
-    const amtLblWExp=invTW(doc,"Amount in Words: ",8);
-    const amtLinesExp=doc.splitTextToSize(amtWordsExp,RW-amtLblWExp);
-    doc.text(amtLinesExp,M+amtLblWExp,y);
+    const amtWordsExp=numWords(totalAmt);
+    const amtLinesExp=doc.splitTextToSize(amtWordsExp,RW);
+    doc.text(amtLinesExp,M,y);
     y+=amtLinesExp.length*4.5+4;
 
     // Third party
@@ -6642,13 +6641,12 @@ function InvoicingTab({buyers}){
     y=y2+5;
 
     // Amount in words
-    y=invChkPg(doc,y,12,null,null);
-    const amtWordsComm=numWords(totalAmt);
-    invNF(doc,true,8); doc.text("Amount in Words: ",M,y);
+    y=invChkPg(doc,y,16,null,null);
+    invNF(doc,true,8); doc.text("Amount in Words:",M,y); y+=4.5;
     invNF(doc,false,8);
-    const amtLblWComm=invTW(doc,"Amount in Words: ",8);
-    const amtLinesComm=doc.splitTextToSize(amtWordsComm,RW-amtLblWComm);
-    doc.text(amtLinesComm,M+amtLblWComm,y);
+    const amtWordsComm=numWords(totalAmt);
+    const amtLinesComm=doc.splitTextToSize(amtWordsComm,RW);
+    doc.text(amtLinesComm,M,y);
     y+=amtLinesComm.length*4.5+4;
 
     // Bank details
@@ -6662,7 +6660,6 @@ function InvoicingTab({buyers}){
       ["BRANCH",bdc.branch],
       ["ACCOUNT NO.",bdc.accNo],
       ["SWIFT CODE",bdc.swift],
-      ["AD CODE","0023340"],
     ];
     doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
       body:bdRows.map(([l,v])=>[{content:l,styles:{fontStyle:"bold",fillColor:[230,239,250],textColor:[18,52,96],cellWidth:RW*0.4}},{content:v,styles:{fontStyle:"bold"}}]),
