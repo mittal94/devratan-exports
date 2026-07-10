@@ -6558,31 +6558,35 @@ function InvoicingTab({buyers}){
     const breakupRows=[];
     if(form.delivery_terms==="CIF"){
       breakupRows.push(["TOTAL CIF VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+totalINR.toLocaleString("en-IN")]);
-      breakupRows.push(["FREIGHT ("+ccy+" "+n(form.freight_per_mt).toFixed(2)+" × "+totalQty+" MT)","("+ccy+" "+totalFrt.toLocaleString("en-IN",{minimumFractionDigits:2})+")",""]);
-      breakupRows.push(["INSURANCE ("+ccy+" "+n(form.insurance_per_mt).toFixed(2)+" × "+totalQty+" MT)","("+ccy+" "+totalIns.toLocaleString("en-IN",{minimumFractionDigits:2})+")",""]);
+      breakupRows.push(["FREIGHT ("+ccy+" "+n(form.freight_per_mt).toFixed(2)+" × "+totalQty+" MT)","("+ccy+" "+totalFrt.toLocaleString("en-IN",{minimumFractionDigits:2})+")"]);
+      breakupRows.push(["INSURANCE ("+ccy+" "+n(form.insurance_per_mt).toFixed(2)+" × "+totalQty+" MT)","("+ccy+" "+totalIns.toLocaleString("en-IN",{minimumFractionDigits:2})+")"]);
       breakupRows.push(["FOB VALUE",ccy+" "+totalFOB.toLocaleString("en-IN",{minimumFractionDigits:2}),""]);
     } else if(form.delivery_terms==="FOB"){
       breakupRows.push(["TOTAL FOB VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+totalINR.toLocaleString("en-IN")]);
     } else {
       breakupRows.push(["TOTAL C&I VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+totalINR.toLocaleString("en-IN")]);
-      breakupRows.push(["INSURANCE","("+ccy+" "+totalIns.toLocaleString("en-IN",{minimumFractionDigits:2})+")",""]);
+      breakupRows.push(["INSURANCE","("+ccy+" "+totalIns.toLocaleString("en-IN",{minimumFractionDigits:2})+")"]);
       breakupRows.push(["FOB VALUE",ccy+" "+totalFOB.toLocaleString("en-IN",{minimumFractionDigits:2}),""]);
     }
-    breakupRows.push(["EXCHANGE RATE (1 "+ccy+" = INR "+form.exchange_rate+")","",""]);
+    breakupRows.push(["EXCHANGE RATE (1 "+ccy+" = INR "+form.exchange_rate+")",""]);
     breakupRows.push(["AMOUNT IN INR","INR "+totalINR.toLocaleString("en-IN"),""]);
     breakupRows.push(["GST @ "+(n(form.gst_rate)*100).toFixed(0)+"% (IGST)","INR "+igst.toLocaleString("en-IN"),""]);
     doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
-      body:breakupRows.map(r=>[{content:r[0],styles:{fontStyle:"bold",cellWidth:RW*0.5}},{content:r[1],styles:{fontStyle:"bold"}},{content:r[2],styles:{fontSize:7.5}}]),
+      body:breakupRows.map(r=>[{content:r[0],styles:{fontStyle:"bold",cellWidth:RW*0.55}},{content:r[1],styles:{fontStyle:"bold"}}]),
       styles:{fontSize:8,cellPadding:{top:2,bottom:2,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
     y=doc.lastAutoTable.finalY+3;
 
     // Amount in words
-    invNF(doc,false,8);
+    y=invChkPg(doc,y,12,null,null);
+    const amtWordsExp=numWords(totalAmt);
     invNF(doc,true,8); doc.text("Amount in Words: ",M,y);
-    invNF(doc,false,8); doc.text(numWords(totalAmt),M+invTW(doc,"Amount in Words: ",8),y,{maxWidth:RW-invTW(doc,"Amount in Words: ",8)});
-    y+=8;
+    invNF(doc,false,8);
+    const amtLblWExp=invTW(doc,"Amount in Words: ",8);
+    const amtLinesExp=doc.splitTextToSize(amtWordsExp,RW-amtLblWExp);
+    doc.text(amtLinesExp,M+amtLblWExp,y);
+    y+=amtLinesExp.length*4.5+4;
 
     // Third party
     if(form.third_party_name){
@@ -6596,7 +6600,7 @@ function InvoicingTab({buyers}){
     invNF(doc,false,8);
     const bd=BANK_DETAILS.devratan;
     doc.text("Bank: "+bd.bankName+"  |  Branch: "+bd.branch,M,y); y+=4;
-    doc.text("A/c No.: "+bd.accNo+"  |  SWIFT: "+bd.swift,M,y); y+=8;
+    doc.text("A/c No.: "+bd.accNo+"  |  AD Code: 0023340",M,y); y+=8;
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
@@ -6638,17 +6642,34 @@ function InvoicingTab({buyers}){
     y=y2+5;
 
     // Amount in words
+    y=invChkPg(doc,y,12,null,null);
+    const amtWordsComm=numWords(totalAmt);
     invNF(doc,true,8); doc.text("Amount in Words: ",M,y);
-    invNF(doc,false,8); doc.text(numWords(totalAmt),M+invTW(doc,"Amount in Words: ",8),y,{maxWidth:RW-invTW(doc,"Amount in Words: ",8)});
-    y+=8;
+    invNF(doc,false,8);
+    const amtLblWComm=invTW(doc,"Amount in Words: ",8);
+    const amtLinesComm=doc.splitTextToSize(amtWordsComm,RW-amtLblWComm);
+    doc.text(amtLinesComm,M+amtLblWComm,y);
+    y+=amtLinesComm.length*4.5+4;
 
     // Bank details
     y=invChkPg(doc,y,22,null,null);
     invNF(doc,true,8.5); doc.text("Bank Details:",M,y); y+=5;
     invNF(doc,false,8);
     const bdc=BANK_DETAILS.devratan;
-    doc.text("Bank: "+bdc.bankName+"  |  Branch: "+bdc.branch,M,y); y+=4;
-    doc.text("A/c No.: "+bdc.accNo+"  |  SWIFT: "+bdc.swift,M,y); y+=8;
+    const bdRows=[
+      ["BENEFICIARY NAME","DEVRATAN ENTERPRISES LLP"],
+      ["BENEFICIARY BANK",bdc.bankName],
+      ["BRANCH",bdc.branch],
+      ["ACCOUNT NO.",bdc.accNo],
+      ["SWIFT CODE",bdc.swift],
+      ["AD CODE","0023340"],
+    ];
+    doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
+      body:bdRows.map(([l,v])=>[{content:l,styles:{fontStyle:"bold",fillColor:[230,239,250],textColor:[18,52,96],cellWidth:RW*0.4}},{content:v,styles:{fontStyle:"bold"}}]),
+      styles:{fontSize:8,cellPadding:{top:2,bottom:2,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+      tableLineColor:[100,100,100],tableLineWidth:0.2,
+    });
+    y=doc.lastAutoTable.finalY+5;
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
@@ -6667,6 +6688,8 @@ function InvoicingTab({buyers}){
         {content:"Date:\n"+form.invoice_date,styles:{fontSize:8}},
         {content:"Contract No.:\n"+form.contract_no,styles:{fontStyle:"bold",fontSize:8}},
         {content:"Contract Date:\n"+form.contract_date,styles:{fontSize:8}},
+        {content:"BL No.:\n"+(form.bl_no||"—"),styles:{fontStyle:"bold",fontSize:8}},
+        {content:"BL Date:\n"+(form.bl_date||"—"),styles:{fontSize:8}},
       ]],
       styles:{cellPadding:{top:2,bottom:2,left:2,right:2},lineColor:[100,100,100],lineWidth:0.2},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
