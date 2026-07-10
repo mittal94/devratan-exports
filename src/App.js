@@ -6425,6 +6425,7 @@ function InvoicingTab({buyers}){
       const gross=Math.round(qty*1000*n(it.bag_gross_wt||form.bag_gross_wt||"25.13")/n(it.bag_net_wt||form.bag_net_wt||"25")*100)/100;
       const net=qty*1000;
       totalQtyLocal+=qty; totalAmtLocal+=amt; totalGross+=gross; totalNet+=net;
+      const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
       const descLines=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
       const pkgLines=doc.splitTextToSize(pkgStr,cols[1][1]-2);
       const rh=Math.max(Math.max(descLines.length,pkgLines.length)*3.8+2,8);
@@ -6433,7 +6434,6 @@ function InvoicingTab({buyers}){
       cols.forEach(([h,w],ci)=>{
         invRECT(doc,rx,y,w,rh);
         invNF(doc,false,7.5); doc.setTextColor(0,0,0);
-        const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
         const descL1=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
         const descL2=it.desc2?doc.splitTextToSize(it.desc2,cols[2][1]-2):[];
         if(ci===0) doc.text(String(i+1),rx+0.5,y+4);
