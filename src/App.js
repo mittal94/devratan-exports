@@ -3725,6 +3725,13 @@ function exportContractPDF(contract, buyer, consignee) {
     "The sufficient proof of action of force majeure circumstances is the document given by Commercial and industrial chamber or other representative on distribution of such documents by a state body.",
   ].forEach(clause => { y = addClause(clause, y); });
 
+  // ── CONDITION OF GOODS AT DESTINATION ────────────────────────────────────
+  y = sectionHead("Condition of Goods at Destination:", y);
+  [
+    "The Shipper shall not be held liable for any moisture damage, water damage, or rusted bags identified at the Port of Discharge (POD). Furthermore, no claims for weight or quantity shortages shall be accepted at the POD; the quantity and weight stated in the Loading Port Certificate shall be final, binding, and conclusively accepted by both parties.",
+    "The Buyer expressly agrees that no deductions, offsets, or discounts shall be applied to the invoice value for such damages. Any claims for moisture, water, or rust damage must be settled strictly in accordance with the applicable marine insurance policy terms and supported by an official Certificate of Destruction. The Buyer shall claim all such losses directly from the insurance provider, and the Shipper shall be completely absolved of any financial liability.",
+  ].forEach(clause => { y = addClause(clause, y); });
+
   // ── ARBITRATION ───────────────────────────────────────────────────────────
   y = sectionHead("Arbitration:", y);
   [
@@ -6120,6 +6127,820 @@ function EPCForm({ships}){
 
 
 
+// ─── Invoicing Module ─────────────────────────────────────────────────────────
+
+const INVOICE_EMPTY = {
+  invoice_no:"", invoice_date:"", contract_no:"", contract_date:"",
+  hsn:"10063019", port_loading:"", port_discharge:"",
+  country_origin:"INDIA", country_dest:"",
+  delivery_terms:"CIF", payment_terms:"CAD",
+  bag_net_wt:"25", bag_gross_wt:"25.13",
+  state_origin:"", exchange_rate:"", gst_rate:"0.05",
+  third_party_name:"", third_party_gst:"",
+  bl_no:"", bl_date:"",
+  freight_per_mt:"", insurance_per_mt:"",
+  items:[{desc1:"INDIAN PARBOILED RICE",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:""}],
+  containers:[{cont_no:"",seal_no:"",bags:""}],
+  parties:{
+    exp:   {consignee_id:"",buyer_id:"",notifies:["","","","","",""]},
+    buyer: {consignee_id:"",buyer_id:"",notifies:["","","","","",""]},
+    bank:  {consignee_id:"",buyer_id:"",notifies:["","","","","",""]},
+    pl:    {consignee_id:"",buyer_id:"",notifies:["","","","","",""]},
+  },
+};
+
+function InvoicingTab({buyers}){
+  const [view,setView]=useState("list"); // "list"|"form"
+  const [invoices,setInvoices]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [editId,setEditId]=useState(null);
+  const [form,setForm]=useState(JSON.parse(JSON.stringify(INVOICE_EMPTY)));
+  const [saving,setSaving]=useState(false);
+  const [activePartyTab,setActivePartyTab]=useState("exp");
+
+  useEffect(()=>{loadInvoices();},[]);
+  const loadInvoices=async()=>{
+    setLoading(true);
+    try{
+      const r=await sb("invoices?select=id,invoice_no,invoice_date,contract_no,form_data&order=invoice_date.desc");
+      setInvoices(r||[]);
+    }catch(e){console.error(e);}
+    setLoading(false);
+  };
+
+  const sf=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const sfDeep=(path,v)=>setForm(p=>{
+    const q=JSON.parse(JSON.stringify(p));
+    const parts=path.split(".");
+    let cur=q; parts.slice(0,-1).forEach(pt=>cur=cur[pt]);
+    cur[parts[parts.length-1]]=v; return q;
+  });
+
+  // ── Items helpers ──────────────────────────────────────────────────────────
+  const addItem=()=>setForm(p=>({...p,items:[...p.items,{desc1:"",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:""}]}));
+  const updItem=(i,k,v)=>setForm(p=>{const it=[...p.items];it[i]={...it[i],[k]:v};return{...p,items:it};});
+  const delItem=(i)=>setForm(p=>({...p,items:p.items.filter((_,j)=>j!==i)}));
+
+  // ── Container helpers ──────────────────────────────────────────────────────
+  const addCont=()=>setForm(p=>({...p,containers:[...p.containers,{cont_no:"",seal_no:"",bags:""}]}));
+  const updCont=(i,k,v)=>setForm(p=>{const cs=[...p.containers];cs[i]={...cs[i],[k]:v};return{...p,containers:cs};});
+  const delCont=(i)=>setForm(p=>({...p,containers:p.containers.filter((_,j)=>j!==i)}));
+
+  // ── Calculations ───────────────────────────────────────────────────────────
+  const totalQty=form.items.reduce((s,it)=>s+n(it.qty_mt),0);
+  const itemAmounts=form.items.map(it=>n(it.qty_mt)*n(it.rate_per_mt));
+  const totalAmt=itemAmounts.reduce((s,a)=>s+a,0);
+  const totalFrt=n(form.freight_per_mt)*totalQty;
+  const totalIns=n(form.insurance_per_mt)*totalQty;
+  const totalFOB=form.delivery_terms==="FOB"?totalAmt:form.delivery_terms==="CIF"?totalAmt-totalFrt-totalIns:totalAmt-totalIns;
+  const totalCIF=form.delivery_terms==="FOB"?totalAmt:totalAmt;
+  const totalINR=Math.round(totalAmt*n(form.exchange_rate));
+  const igst=Math.round(totalINR*n(form.gst_rate));
+  const contTotBags=form.containers.reduce((s,c)=>s+n(c.bags),0);
+  const contTotGross=Math.round(contTotBags*n(form.bag_gross_wt)*100)/100;
+  const contTotNet=Math.round(contTotBags*n(form.bag_net_wt)*100)/100;
+
+  // ── Party copy helper ──────────────────────────────────────────────────────
+  const copyFromExp=(tab)=>setForm(p=>{
+    const q=JSON.parse(JSON.stringify(p));
+    q.parties[tab]=JSON.parse(JSON.stringify(q.parties.exp));
+    return q;
+  });
+
+  // ── Buyer lookup ───────────────────────────────────────────────────────────
+  const buyerById=id=>(buyers||[]).find(b=>String(b.id)===String(id));
+  const buyerAddr=b=>b?[b.address,b.city,b.country].filter(Boolean).join(", "):"";
+  const buyerName=id=>{const b=buyerById(id);return b?b.company_name||b.name||"":"";}; 
+
+  // ── numWords ───────────────────────────────────────────────────────────────
+  const numWords=amt=>{
+    if(!amt||isNaN(Number(amt)))return"";
+    const num=Math.round(Number(amt)*100)/100;
+    const intPart=Math.floor(num);
+    const decPart=Math.round((num-intPart)*100);
+    const ones=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+    const tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+    const toW=n=>{
+      if(n===0)return"";
+      if(n<20)return ones[n]+" ";
+      if(n<100)return tens[Math.floor(n/10)]+" "+(n%10?ones[n%10]+" ":"");
+      if(n<1000)return ones[Math.floor(n/100)]+" Hundred "+(n%100?toW(n%100):"");
+      if(n<100000)return toW(Math.floor(n/1000))+"Thousand "+toW(n%1000);
+      if(n<10000000)return toW(Math.floor(n/100000))+"Lac "+toW(n%100000);
+      return toW(Math.floor(n/10000000))+"Crore "+toW(n%10000000);
+    };
+    const words=toW(intPart).trim();
+    const ccy=form.items[0]?.ccy||"USD";
+    if(decPart>0) return words+" "+ccy.slice(0,1).toUpperCase()+ccy.slice(1).toLowerCase()+"s and "+toW(decPart).trim()+" Cents Only";
+    return words+" "+ccy+"s and No Cents Only";
+  };
+
+  // ── Save ───────────────────────────────────────────────────────────────────
+  const saveInvoice=async()=>{
+    if(!form.invoice_no){alert("Invoice No. is required");return;}
+    if(!form.parties.exp.consignee_id||!form.parties.exp.buyer_id){alert("Consignee and Buyer are mandatory for Export Invoice");return;}
+    setSaving(true);
+    try{
+      const payload={invoice_no:form.invoice_no,invoice_date:form.invoice_date,contract_no:form.contract_no,form_data:form};
+      if(editId){
+        await sb(`invoices?id=eq.${editId}`,"PATCH",payload);
+      } else {
+        await sb("invoices","POST",payload);
+      }
+      await loadInvoices();
+      setView("list"); setEditId(null);
+    }catch(e){alert("Save failed: "+e.message);}
+    setSaving(false);
+  };
+
+  const openEdit=(inv)=>{
+    const fd=inv.form_data||{};
+    const merged={...JSON.parse(JSON.stringify(INVOICE_EMPTY)),...fd};
+    // ensure parties structure
+    ["exp","buyer","bank","pl"].forEach(tab=>{
+      if(!merged.parties[tab]) merged.parties[tab]={consignee_id:"",buyer_id:"",notifies:["","","","","",""]};
+      if(!merged.parties[tab].notifies) merged.parties[tab].notifies=["","","","","",""];
+      while(merged.parties[tab].notifies.length<6) merged.parties[tab].notifies.push("");
+    });
+    setForm(merged);
+    setEditId(inv.id);
+    setView("form");
+  };
+
+  const deleteInvoice=async(id)=>{
+    if(!window.confirm("Delete this invoice?"))return;
+    await sb(`invoices?id=eq.${id}`,"DELETE",null);
+    await loadInvoices();
+  };
+
+  // ── PDF helpers ────────────────────────────────────────────────────────────
+  const initPDF=()=>{
+    const JPDF=getPDF(); if(!JPDF)return null;
+    return new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  };
+
+  const addInvHeader=(doc,title)=>{
+    const navy=[18,52,96],steel=[70,130,180],ltblue=[220,235,250],gold=[162,120,50],white=[255,255,255];
+    const seller=COMPANIES.devratan;
+    const TW=(t,sz)=>doc.getStringUnitWidth(String(t||""))*(sz||9)/doc.internal.scaleFactor;
+    doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
+    try{if(LOGO_B64)doc.addImage(LOGO_B64,"PNG",10,3,38,38);}catch(e){}
+    doc.setDrawColor(...steel); doc.setLineWidth(0.4); doc.line(52,6,52,40);
+    doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+    doc.text(seller.name,57,13);
+    const cnW=TW(seller.name,12);
+    doc.setDrawColor(...gold); doc.setLineWidth(0.6); doc.line(57,14.5,57+cnW,14.5);
+    doc.setFontSize(7); doc.setFont("helvetica","italic"); doc.setTextColor(...steel);
+    doc.text(seller.tagline||"",57,18.5);
+    doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0); doc.setFontSize(6.5);
+    doc.text(seller.address,57,23);
+    doc.text((seller.phone||"")+(seller.email?"  |  "+seller.email:""),57,27.5);
+    if(seller.gstin) doc.text(seller.gstin,57,32);
+    // Title right
+    doc.setFontSize(13); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+    doc.text(title,200,13,{align:"right"});
+    doc.setTextColor(0,0,0);
+    return 50;
+  };
+
+  const addInvFooter=(doc)=>{
+    const navy=[18,52,96],white=[255,255,255];
+    const tp=doc.getNumberOfPages();
+    for(let i=1;i<=tp;i++){
+      doc.setPage(i);
+      doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
+      doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...white);
+      doc.text(COMPANIES.devratan.name+"  |  "+COMPANIES.devratan.phone+"  |  "+COMPANIES.devratan.email,105,293,{align:"center"});
+      doc.setFont("helvetica","bold"); doc.setTextColor(220,220,220);
+      doc.text("Page "+i+" of "+tp,193,293,{align:"right"});
+    }
+  };
+
+  const invNF=(doc,bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||8.5);doc.setTextColor(0,0,0);};
+  const invTW=(doc,t,sz)=>doc.getStringUnitWidth(String(t||""))*(sz||8.5)/doc.internal.scaleFactor;
+  const invWRAP=(doc,t,x,y,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y);return y+ls.length*(lh||4.5);};
+  const invRECT=(doc,x,y,w,h)=>{doc.setDrawColor(100,100,100);doc.setLineWidth(0.2);doc.rect(x,y,w,h);};
+  const invChkPg=(doc,y,n,header,headerFn)=>{if(y+(n||8)>282){doc.addPage();const ny=headerFn?headerFn(doc):50;return ny;}return y;};
+
+  // Parties block renderer
+  const renderParties=(doc,pdata,M,y,RW,showBL,blNo,blDate)=>{
+    const cons=buyerById(pdata.consignee_id);
+    const buyer=buyerById(pdata.buyer_id);
+    const notifyEntries=pdata.notifies.map((nid,i)=>({idx:i+1,b:buyerById(nid),raw:nid})).filter(e=>e.b||(!e.b&&String(e.raw||"").trim()&&!String(e.raw||"").match(/^\d+$/)));
+    const navy=[18,52,96]; const lgray=[230,239,250];
+    const hW=showBL?RW/3:RW/2;
+    const nCols=notifyEntries.length>0?Math.min(notifyEntries.length,3):0;
+
+    // Row 1: Consignee | Buyer
+    const consLines=doc.splitTextToSize("Consignee:\n"+(cons?cons.company_name||cons.name:"")+(cons?"\n"+buyerAddr(cons):""),hW-3);
+    const buyerLines=doc.splitTextToSize("Buyer:\n"+(buyer?buyer.company_name||buyer.name:"")+(buyer?"\n"+buyerAddr(buyer):""),hW-3);
+    const blLines=showBL?doc.splitTextToSize("BL No.: "+(blNo||"")+(blDate?"\nBL Date: "+blDate:""),hW-3):[];
+    const r1H=Math.max(Math.max(consLines.length,buyerLines.length,blLines.length)*3.8+4,14);
+    invRECT(doc,M,y,hW,r1H); invRECT(doc,M+hW,y,hW,r1H);
+    if(showBL) invRECT(doc,M+hW*2,y,hW,r1H);
+    invNF(doc,false,8);
+    doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+    doc.text("Consignee:",M+1,y+3.5);
+    invNF(doc,false,7.5);
+    if(cons){doc.text(cons.company_name||cons.name||"",M+1,y+7);doc.text(buyerAddr(cons),M+1,y+10.5,{maxWidth:hW-2});}
+    doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+    doc.text("Buyer:",M+hW+1,y+3.5);
+    invNF(doc,false,7.5);
+    if(buyer){doc.text(buyer.company_name||buyer.name||"",M+hW+1,y+7);doc.text(buyerAddr(buyer),M+hW+1,y+10.5,{maxWidth:hW-2});}
+    if(showBL){
+      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+      doc.text("BL No.:",M+hW*2+1,y+3.5);
+      invNF(doc,false,7.5);
+      doc.text(blNo||"—",M+hW*2+1,y+7);
+      doc.text("BL Date: "+(blDate||"—"),M+hW*2+1,y+10.5);
+    }
+    doc.setTextColor(0,0,0);
+    y+=r1H;
+
+    // Notify parties — up to 3 per row
+    if(notifyEntries.length>0){
+      const rows=[];
+      for(let i=0;i<notifyEntries.length;i+=3) rows.push(notifyEntries.slice(i,i+3));
+      rows.forEach(row=>{
+        const nW=RW/Math.max(row.length,1);
+        const rowLines=row.map(e=>doc.splitTextToSize("Notify Party "+e.idx+":\n"+(e.b?e.b.company_name||e.b.name:"")+(e.b&&buyerAddr(e.b)?"\n"+buyerAddr(e.b):""),nW-3));
+        const rH=Math.max(...rowLines.map(l=>l.length))*3.8+4;
+        row.forEach((e,j)=>{
+          invRECT(doc,M+j*nW,y,nW,rH);
+          doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+          doc.text("Notify Party "+e.idx+":",M+j*nW+1,y+3.5);
+          invNF(doc,false,7.5); doc.setTextColor(0,0,0);
+          if(e.b){
+            doc.text(e.b.company_name||e.b.name||"",M+j*nW+1,y+7);
+            const adr=buyerAddr(e.b); if(adr)doc.text(adr,M+j*nW+1,y+10.5,{maxWidth:nW-2});
+          }
+        });
+        y+=rH;
+      });
+    }
+    return y;
+  };
+
+  // Common header info row (HSN, ports, delivery, payment)
+  const renderInfoRow=(doc,M,y,RW)=>{
+    const navy=[18,52,96];
+    const cols=[
+      ["HSN Code",form.hsn],
+      ["Port of Loading",form.port_loading],
+      ["Country of Origin",form.country_origin],
+      ["Port of Discharge",form.port_discharge],
+      ["Country of Destination",form.country_dest],
+      ["Delivery Terms",form.delivery_terms],
+      ["Payment Terms",form.payment_terms],
+    ];
+    const cw=RW/cols.length;
+    cols.forEach(([l,v],i)=>{
+      invRECT(doc,M+i*cw,y,cw,10);
+      doc.setFillColor(230,239,250); doc.rect(M+i*cw,y,cw,4.5,"F");
+      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(6.5);
+      doc.text(l,M+i*cw+0.5,y+3.5,{maxWidth:cw-1});
+      invNF(doc,false,7.5); doc.setTextColor(0,0,0);
+      doc.text(String(v||"—"),M+i*cw+0.5,y+8,{maxWidth:cw-1});
+    });
+    return y+10;
+  };
+
+  // Items table
+  const renderItemsTable=(doc,M,y,RW,showPrice)=>{
+    const navy=[18,52,96]; const lgray=[230,239,250];
+    const cols=showPrice
+      ?[["S.No.",10],["No. & Kind of Pkg / Description",showPrice?70:100],["Qty (MT)",22],["Rate/MT",22],["Amount",RW-10-70-22-22]]
+      :[["S.No.",10],["No. & Kind of Pkg / Description",100],["Qty (MT)",25],["Gross Wt (Kg)",32.5],["Net Wt (Kg)",RW-10-100-25-32.5]];
+    let hx=M;
+    cols.forEach(([h,w])=>{
+      invRECT(doc,hx,y,w,7); doc.setFillColor(...lgray); doc.rect(hx,y,w,7,"F");
+      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7);
+      doc.text(h,hx+0.5,y+4.5,{maxWidth:w-1});
+      hx+=w;
+    });
+    y+=7;
+    let totalQtyLocal=0,totalAmtLocal=0,totalGross=0,totalNet=0;
+    form.items.forEach((it,i)=>{
+      const qty=n(it.qty_mt),rate=n(it.rate_per_mt),amt=qty*rate;
+      const gross=Math.round(qty*1000*n(form.bag_gross_wt)/n(form.bag_net_wt)*100)/100;
+      const net=qty*1000;
+      totalQtyLocal+=qty; totalAmtLocal+=amt; totalGross+=gross; totalNet+=net;
+      const descLines=doc.splitTextToSize((it.desc1||"")+(it.desc2?"\n"+it.desc2:""),cols[1][1]-2);
+      const rh=Math.max(descLines.length*3.8+2,8);
+      y=invChkPg(doc,y,rh,null,null);
+      let rx=M;
+      cols.forEach(([h,w],ci)=>{
+        invRECT(doc,rx,y,w,rh);
+        invNF(doc,false,7.5); doc.setTextColor(0,0,0);
+        if(ci===0) doc.text(String(i+1),rx+0.5,y+4);
+        else if(ci===1) doc.text(descLines,rx+0.5,y+3.5);
+        else if(ci===2) doc.text(qty?qty.toFixed(3):"",rx+0.5,y+4);
+        else if(showPrice){
+          if(ci===3) doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+4);
+          if(ci===4){invNF(doc,true,7.5);doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+4);}
+        } else {
+          if(ci===3) doc.text(gross?gross.toFixed(3):"",rx+0.5,y+4);
+          if(ci===4) doc.text(net?net.toFixed(3):"",rx+0.5,y+4);
+        }
+        invNF(doc,false,7.5);
+        rx+=w;
+      });
+      y+=rh;
+    });
+    // Totals row
+    const tCols=cols.map(([h,w],i)=>{
+      if(i===0) return "";
+      if(i===1) return "TOTAL";
+      if(i===2) return totalQtyLocal.toFixed(3);
+      if(showPrice && i===4) return (form.items[0]?.ccy||"USD")+" "+totalAmtLocal.toLocaleString("en-IN",{minimumFractionDigits:2});
+      if(!showPrice && i===3) return totalGross.toFixed(3);
+      if(!showPrice && i===4) return totalNet.toFixed(3);
+      return "";
+    });
+    let tx=M;
+    cols.forEach(([h,w],ci)=>{
+      invRECT(doc,tx,y,w,7); doc.setFillColor(...lgray); doc.rect(tx,y,w,7,"F");
+      invNF(doc,true,7.5); doc.setTextColor(...navy);
+      doc.text(tCols[ci],tx+0.5,y+4.5,{maxWidth:w-1});
+      tx+=w;
+    });
+    y+=7;
+    doc.setTextColor(0,0,0);
+    return {y,totalQtyLocal,totalAmtLocal,totalGross,totalNet};
+  };
+
+  // Container table
+  const renderContainerTable=(doc,M,y,RW)=>{
+    const navy=[18,52,96]; const lgray=[230,239,250];
+    const cCols=[["S.No.",12],["Container No.",50],["Seal No.",40],["No. of Pkgs",30],["Gross Wt (Kgs)",34],["Net Wt (Kgs)",RW-12-50-40-30-34]];
+    let hx=M;
+    cCols.forEach(([h,w])=>{
+      invRECT(doc,hx,y,w,7); doc.setFillColor(...lgray); doc.rect(hx,y,w,7,"F");
+      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7);
+      doc.text(h,hx+0.5,y+4.5,{maxWidth:w-1});
+      hx+=w;
+    });
+    y+=7;
+    form.containers.forEach((c,i)=>{
+      const bags=n(c.bags);
+      const gross=Math.round(bags*n(form.bag_gross_wt)*100)/100;
+      const net=Math.round(bags*n(form.bag_net_wt)*100)/100;
+      const rowData=[String(i+1),c.cont_no||"",c.seal_no||"",bags?bags+" BAGS":"",gross?gross.toFixed(2):"",net?net.toFixed(2):""];
+      let rx=M;
+      y=invChkPg(doc,y,7,null,null);
+      cCols.forEach(([h,w],ci)=>{
+        invRECT(doc,rx,y,w,6); invNF(doc,false,7.5); doc.setTextColor(0,0,0);
+        doc.text(rowData[ci],rx+0.5,y+4,{maxWidth:w-1});
+        rx+=w;
+      });
+      y+=6;
+    });
+    // Totals
+    const rowData=["","TOTAL","",contTotBags?contTotBags+" BAGS":"",contTotGross?contTotGross.toFixed(2):"",contTotNet?contTotNet.toFixed(2):""];
+    let tx=M;
+    cCols.forEach(([h,w],ci)=>{
+      invRECT(doc,tx,y,w,7); doc.setFillColor(...lgray); doc.rect(tx,y,w,7,"F");
+      invNF(doc,true,7.5); doc.setTextColor(...navy);
+      doc.text(rowData[ci],tx+0.5,y+4.5,{maxWidth:w-1});
+      tx+=w;
+    });
+    doc.setTextColor(0,0,0);
+    return y+7;
+  };
+
+  const signBlock=(doc,M,y,RW)=>{
+    const seller=COMPANIES.devratan;
+    invNF(doc,false,8.5);
+    y+=10;
+    doc.text("For "+seller.name,M+RW-50,y);
+    y+=12;
+    doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
+    doc.line(M+RW-50,y,M+RW,y); y+=4;
+    invNF(doc,false,7.5);
+    doc.text("Authorised Signatory",M+RW-50,y);
+    return y;
+  };
+
+  // ── PDF: Export Invoice cum Packing List ───────────────────────────────────
+  const exportExpInv=()=>{
+    const doc=initPDF(); if(!doc)return;
+    const M=12,RW=186,navy=[18,52,96],lgray=[230,239,250];
+    let y=addInvHeader(doc,"EXPORT INVOICE CUM PACKING LIST");
+
+    // Invoice/Contract info row
+    doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
+      body:[[
+        {content:"Invoice No.:\n"+form.invoice_no,styles:{fontStyle:"bold",fontSize:8}},
+        {content:"Date:\n"+form.invoice_date,styles:{fontSize:8}},
+        {content:"Contract No.:\n"+form.contract_no,styles:{fontStyle:"bold",fontSize:8}},
+        {content:"Contract Date:\n"+form.contract_date,styles:{fontSize:8}},
+        {content:"State of Origin:\n"+form.state_origin,styles:{fontSize:8}},
+      ]],
+      styles:{cellPadding:{top:2,bottom:2,left:2,right:2},lineColor:[100,100,100],lineWidth:0.2},
+      headStyles:{fillColor:lgray},tableLineColor:[100,100,100],tableLineWidth:0.2,
+    });
+    y=doc.lastAutoTable.finalY+2;
+
+    y=renderParties(doc,form.parties.exp,M,y,RW,false,"","");
+    y+=2; y=renderInfoRow(doc,M,y,RW); y+=3;
+
+    invNF(doc,true,8.5); doc.text("Items:",M,y); y+=4;
+    const {y:y2,totalAmtLocal}=renderItemsTable(doc,M,y,RW,true);
+    y=y2+3;
+
+    // CIF/FOB/Freight/Insurance breakup
+    const ccy=form.items[0]?.ccy||"USD";
+    const breakupRows=[];
+    if(form.delivery_terms==="CIF"){
+      breakupRows.push(["TOTAL CIF VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+totalINR.toLocaleString("en-IN")]);
+      breakupRows.push(["FREIGHT ("+ccy+" "+n(form.freight_per_mt).toFixed(2)+" × "+totalQty+" MT)","("+ccy+" "+totalFrt.toLocaleString("en-IN",{minimumFractionDigits:2})+")",""]);
+      breakupRows.push(["INSURANCE ("+ccy+" "+n(form.insurance_per_mt).toFixed(2)+" × "+totalQty+" MT)","("+ccy+" "+totalIns.toLocaleString("en-IN",{minimumFractionDigits:2})+")",""]);
+      breakupRows.push(["FOB VALUE",ccy+" "+totalFOB.toLocaleString("en-IN",{minimumFractionDigits:2}),""]);
+    } else if(form.delivery_terms==="FOB"){
+      breakupRows.push(["TOTAL FOB VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+totalINR.toLocaleString("en-IN")]);
+    } else {
+      breakupRows.push(["TOTAL C&I VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+totalINR.toLocaleString("en-IN")]);
+      breakupRows.push(["INSURANCE","("+ccy+" "+totalIns.toLocaleString("en-IN",{minimumFractionDigits:2})+")",""]);
+      breakupRows.push(["FOB VALUE",ccy+" "+totalFOB.toLocaleString("en-IN",{minimumFractionDigits:2}),""]);
+    }
+    breakupRows.push(["EXCHANGE RATE (1 "+ccy+" = INR "+form.exchange_rate+")","",""]);
+    breakupRows.push(["AMOUNT IN INR","INR "+totalINR.toLocaleString("en-IN"),""]);
+    breakupRows.push(["GST @ "+(n(form.gst_rate)*100).toFixed(0)+"% (IGST)","INR "+igst.toLocaleString("en-IN"),""]);
+    doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
+      body:breakupRows.map(r=>[{content:r[0],styles:{fontStyle:"bold",cellWidth:RW*0.5}},{content:r[1],styles:{fontStyle:"bold"}},{content:r[2],styles:{fontSize:7.5}}]),
+      styles:{fontSize:8,cellPadding:{top:2,bottom:2,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+      tableLineColor:[100,100,100],tableLineWidth:0.2,
+    });
+    y=doc.lastAutoTable.finalY+3;
+
+    // Amount in words
+    invNF(doc,false,8);
+    invNF(doc,true,8); doc.text("Amount in Words: ",M,y);
+    invNF(doc,false,8); doc.text(numWords(totalAmt),M+invTW(doc,"Amount in Words: ",8),y,{maxWidth:RW-invTW(doc,"Amount in Words: ",8)});
+    y+=8;
+
+    // Container table
+    y=invChkPg(doc,y,30,null,null);
+    invNF(doc,true,8.5); doc.text("Container Details:",M,y); y+=4;
+    y=renderContainerTable(doc,M,y,RW); y+=3;
+
+    // Third party
+    if(form.third_party_name){
+      invNF(doc,false,8);
+      doc.text("Third Party: "+form.third_party_name+(form.third_party_gst?"  |  GST: "+form.third_party_gst:""),M,y); y+=6;
+    }
+
+    y=signBlock(doc,M,y,RW);
+    addInvFooter(doc);
+    doc.save("ExportInvoice_"+form.invoice_no+".pdf");
+  };
+
+  // ── PDF: Commercial Invoice (Buyer / Bank) ─────────────────────────────────
+  const exportCommInv=(partyKey,label)=>{
+    const doc=initPDF(); if(!doc)return;
+    const M=12,RW=186,navy=[18,52,96],lgray=[230,239,250];
+    let y=addInvHeader(doc,label);
+
+    doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
+      body:[[
+        {content:"Invoice No.:\n"+form.invoice_no,styles:{fontStyle:"bold",fontSize:8}},
+        {content:"Date:\n"+form.invoice_date,styles:{fontSize:8}},
+        {content:"Contract No.:\n"+form.contract_no,styles:{fontStyle:"bold",fontSize:8}},
+        {content:"Contract Date:\n"+form.contract_date,styles:{fontSize:8}},
+        {content:"BL No.:\n"+(form.bl_no||"—"),styles:{fontStyle:"bold",fontSize:8}},
+        {content:"BL Date:\n"+(form.bl_date||"—"),styles:{fontSize:8}},
+      ]],
+      styles:{cellPadding:{top:2,bottom:2,left:2,right:2},lineColor:[100,100,100],lineWidth:0.2},
+      tableLineColor:[100,100,100],tableLineWidth:0.2,
+    });
+    y=doc.lastAutoTable.finalY+2;
+
+    y=renderParties(doc,form.parties[partyKey],M,y,RW,false,"","");
+    y+=2; y=renderInfoRow(doc,M,y,RW); y+=3;
+
+    // Container nos (compact)
+    if(form.containers.some(c=>c.cont_no)){
+      invNF(doc,false,7.5);
+      const contStr=form.containers.filter(c=>c.cont_no).map((c,i)=>(i+1)+". "+c.cont_no+(c.seal_no?" / "+c.seal_no:"")).join("   ");
+      y=invWRAP(doc,"Containers: "+contStr,M,y,RW,4); y+=3;
+    }
+
+    invNF(doc,true,8.5); doc.text("Items:",M,y); y+=4;
+    const {y:y2,totalAmtLocal}=renderItemsTable(doc,M,y,RW,true);
+    y=y2+5;
+
+    // Amount in words
+    invNF(doc,true,8); doc.text("Amount in Words: ",M,y);
+    invNF(doc,false,8); doc.text(numWords(totalAmt),M+invTW(doc,"Amount in Words: ",8),y,{maxWidth:RW-invTW(doc,"Amount in Words: ",8)});
+    y+=8;
+
+    y=signBlock(doc,M,y,RW);
+    addInvFooter(doc);
+    doc.save(label.replace(/ /g,"_")+"_"+form.invoice_no+".pdf");
+  };
+
+  // ── PDF: Packing List ──────────────────────────────────────────────────────
+  const exportPL=()=>{
+    const doc=initPDF(); if(!doc)return;
+    const M=12,RW=186,navy=[18,52,96],lgray=[230,239,250];
+    let y=addInvHeader(doc,"PACKING LIST");
+
+    doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
+      body:[[
+        {content:"Invoice No.:\n"+form.invoice_no,styles:{fontStyle:"bold",fontSize:8}},
+        {content:"Date:\n"+form.invoice_date,styles:{fontSize:8}},
+        {content:"Contract No.:\n"+form.contract_no,styles:{fontStyle:"bold",fontSize:8}},
+        {content:"Contract Date:\n"+form.contract_date,styles:{fontSize:8}},
+      ]],
+      styles:{cellPadding:{top:2,bottom:2,left:2,right:2},lineColor:[100,100,100],lineWidth:0.2},
+      tableLineColor:[100,100,100],tableLineWidth:0.2,
+    });
+    y=doc.lastAutoTable.finalY+2;
+
+    y=renderParties(doc,form.parties.pl,M,y,RW,false,"","");
+    y+=2; y=renderInfoRow(doc,M,y,RW); y+=3;
+
+    invNF(doc,true,8.5); doc.text("Items:",M,y); y+=4;
+    const {y:y2}=renderItemsTable(doc,M,y,RW,false);
+    y=y2+3;
+
+    invNF(doc,true,8.5); doc.text("Container Details:",M,y); y+=4;
+    y=renderContainerTable(doc,M,y,RW); y+=3;
+
+    y=signBlock(doc,M,y,RW);
+    addInvFooter(doc);
+    doc.save("PackingList_"+form.invoice_no+".pdf");
+  };
+
+  // ── Party sub-form ─────────────────────────────────────────────────────────
+  const PartyPanel=({pkey,label})=>{
+    const pdata=form.parties[pkey];
+    const BuyerSel=({field,req})=>(
+      <div>
+        <select value={pdata[field]} onChange={e=>sfDeep("parties."+pkey+"."+field,e.target.value)}
+          style={{...iS,fontSize:12,borderColor:req&&!pdata[field]?"#dc2626":"#e2e8f0"}}>
+          <option value="">— Select —</option>
+          {(buyers||[]).map(b=><option key={b.id} value={b.id}>{b.company_name||b.name}</option>)}
+        </select>
+        {req&&!pdata[field]&&<p style={{color:"#dc2626",fontSize:10,margin:"2px 0 0"}}>Mandatory</p>}
+      </div>
+    );
+    return(
+      <div style={{padding:"12px 0"}}>
+        {pkey!=="exp"&&<button onClick={()=>copyFromExp(pkey)}
+          style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,padding:"4px 12px",cursor:"pointer",fontSize:11,fontWeight:600,marginBottom:10}}>
+          📋 Copy from Export Invoice
+        </button>}
+        <FRow label="Consignee" required><BuyerSel field="consignee_id" req/></FRow>
+        <FRow label="Buyer" required><BuyerSel field="buyer_id" req/></FRow>
+        {[0,1,2,3,4,5].map(i=>(
+          <FRow key={i} label={"Notify Party "+(i+1)}>
+            <select value={pdata.notifies[i]} onChange={e=>{
+              const arr=[...pdata.notifies]; arr[i]=e.target.value;
+              sfDeep("parties."+pkey+".notifies",arr);
+            }} style={{...iS,fontSize:12}}>
+              <option value="">— None —</option>
+              {(buyers||[]).map(b=><option key={b.id} value={b.id}>{b.company_name||b.name}</option>)}
+            </select>
+          </FRow>
+        ))}
+      </div>
+    );
+  };
+
+  // ── LIST VIEW ──────────────────────────────────────────────────────────────
+  if(view==="list") return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div>
+          <h2 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:17}}>📄 Invoicing</h2>
+          <p style={{margin:0,fontSize:11,color:"#64748b"}}>Export Invoice cum PL · Commercial Invoice (Buyer/Bank) · Packing List</p>
+        </div>
+        <button onClick={()=>{setForm(JSON.parse(JSON.stringify(INVOICE_EMPTY)));setEditId(null);setView("form");}}
+          style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+          + New Invoice
+        </button>
+      </div>
+      {loading?<div style={{textAlign:"center",padding:40,color:"#94a3b8"}}>Loading...</div>:(
+        invoices.length===0?<div style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No invoices yet. Create your first one.</div>:(
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead>
+                <tr style={{background:"#f8fafc",borderBottom:"2px solid #e2e8f0"}}>
+                  {["Invoice No.","Date","Contract No.","Buyer","Amount",""].map(h=>(
+                    <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:"#374151",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map(inv=>{
+                  const fd=inv.form_data||{};
+                  const buyer=buyerById(fd.parties?.exp?.buyer_id);
+                  const items=fd.items||[];
+                  const totAmt=items.reduce((s,it)=>s+n(it.qty_mt)*n(it.rate_per_mt),0);
+                  const ccy=items[0]?.ccy||"USD";
+                  return(
+                    <tr key={inv.id} style={{borderBottom:"1px solid #e2e8f0"}}>
+                      <td style={{padding:"8px 10px",fontWeight:700,color:"#1e3a5f"}}>{inv.invoice_no}</td>
+                      <td style={{padding:"8px 10px",color:"#64748b"}}>{inv.invoice_date}</td>
+                      <td style={{padding:"8px 10px"}}>{inv.contract_no}</td>
+                      <td style={{padding:"8px 10px"}}>{buyer?buyer.company_name||buyer.name:"—"}</td>
+                      <td style={{padding:"8px 10px",fontWeight:600,color:"#15803d"}}>{ccy} {totAmt.toLocaleString("en-IN",{minimumFractionDigits:2})}</td>
+                      <td style={{padding:"8px 4px",display:"flex",gap:4,justifyContent:"flex-end"}}>
+                        <button onClick={()=>openEdit(inv)} style={{background:"#eff6ff",color:"#1d4ed8",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>
+                        <button onClick={()=>deleteInvoice(inv.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Del</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+    </div>
+  );
+
+  // ── FORM VIEW ──────────────────────────────────────────────────────────────
+  const toISO=dd=>{if(!dd||!dd.includes("."))return dd||"";const[d,m,y]=dd.split(".");return y?`${y}-${m}-${d}`:dd;};
+  const toDD=iso=>{if(!iso||!iso.includes("-"))return iso||"";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
+  const DI=({value,onChange,style})=>(
+    <input type="date" value={toISO(value)} onChange={e=>onChange(toDD(e.target.value))} style={{...iS,fontSize:12,...style}}/>
+  );
+
+  const PARTY_TABS=[["exp","Export Invoice"],["buyer","Comm. Inv. (Buyer)"],["bank","Comm. Inv. (Bank)"],["pl","Packing List"]];
+
+  return(
+    <div style={{maxWidth:900,margin:"0 auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div>
+          <button onClick={()=>setView("list")} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:12,padding:0,marginRight:8}}>← Back</button>
+          <span style={{fontWeight:700,color:"#1e3a5f",fontSize:15}}>{editId?"Edit Invoice":"New Invoice"}</span>
+        </div>
+        <button onClick={saveInvoice} disabled={saving}
+          style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"7px 20px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+          {saving?"Saving...":"💾 Save Invoice"}
+        </button>
+      </div>
+
+      {/* Section 1: Common Details */}
+      <SectionHeader title="1. Common Details"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <FRow label="Invoice No." required><FInput value={form.invoice_no} onChange={v=>sf("invoice_no",v)} placeholder="e.g. DEV-EXP-26/27-08"/></FRow>
+        <FRow label="Invoice Date"><DI value={form.invoice_date} onChange={v=>sf("invoice_date",v)}/></FRow>
+        <FRow label="Contract No."><FInput value={form.contract_no} onChange={v=>sf("contract_no",v)}/></FRow>
+        <FRow label="Contract Date"><DI value={form.contract_date} onChange={v=>sf("contract_date",v)}/></FRow>
+        <FRow label="HSN Code"><FInput value={form.hsn} onChange={v=>sf("hsn",v)}/></FRow>
+        <FRow label="Port of Loading"><FInput value={form.port_loading} onChange={v=>sf("port_loading",v)}/></FRow>
+        <FRow label="Port of Discharge"><FInput value={form.port_discharge} onChange={v=>sf("port_discharge",v)}/></FRow>
+        <FRow label="Country of Origin"><FInput value={form.country_origin} onChange={v=>sf("country_origin",v)}/></FRow>
+        <FRow label="Country of Destination"><FInput value={form.country_dest} onChange={v=>sf("country_dest",v)}/></FRow>
+        <FRow label="Delivery Terms">
+          <select value={form.delivery_terms} onChange={e=>sf("delivery_terms",e.target.value)} style={{...iS,fontSize:12}}>
+            {["FOB","CIF","C&I"].map(o=><option key={o}>{o}</option>)}
+          </select>
+        </FRow>
+        <FRow label="Payment Terms"><FInput value={form.payment_terms} onChange={v=>sf("payment_terms",v)}/></FRow>
+        <FRow label="Single Bag Net Wt (kg)"><FInput value={form.bag_net_wt} onChange={v=>sf("bag_net_wt",v)} placeholder="e.g. 25"/></FRow>
+        <FRow label="Single Bag Gross Wt (kg)"><FInput value={form.bag_gross_wt} onChange={v=>sf("bag_gross_wt",v)} placeholder="e.g. 25.13"/></FRow>
+      </div>
+      <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"10px 14px",marginBottom:10}}>
+        <div style={{fontWeight:700,color:"#92400e",fontSize:12,marginBottom:8}}>Export Invoice Extras</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <FRow label="State of Origin"><FInput value={form.state_origin} onChange={v=>sf("state_origin",v)} placeholder="e.g. UP"/></FRow>
+          <FRow label="Exchange Rate (INR per FCY)"><FInput value={form.exchange_rate} onChange={v=>sf("exchange_rate",v)} placeholder="e.g. 94.9"/></FRow>
+          <FRow label="GST Rate"><select value={form.gst_rate} onChange={e=>sf("gst_rate",e.target.value)} style={{...iS,fontSize:12}}><option value="0.05">5%</option><option value="0.12">12%</option><option value="0.18">18%</option><option value="0">0%</option></select></FRow>
+          <FRow label="Third Party Name (optional)"><FInput value={form.third_party_name} onChange={v=>sf("third_party_name",v)}/></FRow>
+          <FRow label="Third Party GST No. (optional)"><FInput value={form.third_party_gst} onChange={v=>sf("third_party_gst",v)}/></FRow>
+        </div>
+      </div>
+      <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"10px 14px",marginBottom:10}}>
+        <div style={{fontWeight:700,color:"#15803d",fontSize:12,marginBottom:8}}>Commercial Invoice (Buyer & Bank) Extras</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <FRow label="BL No."><FInput value={form.bl_no} onChange={v=>sf("bl_no",v)}/></FRow>
+          <FRow label="BL Date"><DI value={form.bl_date} onChange={v=>sf("bl_date",v)}/></FRow>
+        </div>
+      </div>
+
+      {/* Section 2: Items */}
+      <SectionHeader title="2. Items"/>
+      {form.items.map((it,i)=>(
+        <div key={i} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 14px",marginBottom:10,position:"relative"}}>
+          <div style={{fontWeight:700,color:"#1e3a5f",fontSize:12,marginBottom:8}}>Item {i+1}</div>
+          <FRow label="Description Line 1" required><FInput value={it.desc1} onChange={v=>updItem(i,"desc1",v)}/></FRow>
+          <FRow label="Description Line 2 (bags/brand)"><FInput value={it.desc2} onChange={v=>updItem(i,"desc2",v)} placeholder="e.g. 10400 BAGS OF 25KG EACH IN BOPP BAGS – BRAND NAME"/></FRow>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 80px 1fr",gap:8}}>
+            <FRow label="Qty (MT)" required><FInput value={it.qty_mt} onChange={v=>updItem(i,"qty_mt",v)} placeholder="e.g. 260"/></FRow>
+            <FRow label="No. of Bags"><FInput value={it.bags} onChange={v=>updItem(i,"bags",v)} placeholder="e.g. 10400"/></FRow>
+            <FRow label="Currency">
+              <select value={it.ccy} onChange={e=>updItem(i,"ccy",e.target.value)} style={{...iS,fontSize:12}}>
+                {["USD","EUR","GBP","AED","SGD","AUD"].map(c=><option key={c}>{c}</option>)}
+              </select>
+            </FRow>
+            <FRow label="Rate/MT" required><FInput value={it.rate_per_mt} onChange={v=>updItem(i,"rate_per_mt",v)} placeholder="e.g. 370"/></FRow>
+            <FRow label="Amount (auto)">
+              <div style={{...iS,background:"#f1f5f9",fontSize:12,color:"#15803d",fontWeight:700}}>
+                {it.ccy} {it.qty_mt&&it.rate_per_mt?(n(it.qty_mt)*n(it.rate_per_mt)).toLocaleString("en-IN",{minimumFractionDigits:2}):"—"}
+              </div>
+            </FRow>
+          </div>
+          {form.items.length>1&&<button onClick={()=>delItem(i)} style={{position:"absolute",top:10,right:10,background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>✕ Remove</button>}
+        </div>
+      ))}
+      <button onClick={addItem} style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600,marginBottom:4}}>+ Add Item</button>
+
+      {/* Total summary */}
+      <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"10px 14px",marginTop:10,marginBottom:4,fontSize:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+          {[["Total Qty",totalQty.toFixed(3)+" MT"],["Total Amount",(form.items[0]?.ccy||"USD")+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2})],
+            form.delivery_terms!=="FOB"?["Freight",(form.items[0]?.ccy||"USD")+" "+totalFrt.toLocaleString("en-IN",{minimumFractionDigits:2})]:["",""],
+            ["FOB Value",(form.items[0]?.ccy||"USD")+" "+totalFOB.toLocaleString("en-IN",{minimumFractionDigits:2})]
+          ].map(([l,v])=>l?(<div key={l} style={{background:"#fff",borderRadius:6,padding:"6px 10px"}}><div style={{fontSize:10,color:"#64748b"}}>{l}</div><div style={{fontWeight:700,color:"#1e3a5f"}}>{v}</div></div>):null)}
+        </div>
+      </div>
+
+      {/* Section 3: Freight & Insurance */}
+      {form.delivery_terms!=="FOB"&&(
+        <>
+          <SectionHeader title="3. Freight & Insurance"/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {form.delivery_terms==="CIF"&&<FRow label="Freight per MT"><FInput value={form.freight_per_mt} onChange={v=>sf("freight_per_mt",v)} placeholder="e.g. 56"/></FRow>}
+            <FRow label="Insurance per MT"><FInput value={form.insurance_per_mt} onChange={v=>sf("insurance_per_mt",v)} placeholder="e.g. 1"/></FRow>
+          </div>
+        </>
+      )}
+
+      {/* Section 4: Containers */}
+      <SectionHeader title="4. Containers"/>
+      <div style={{fontSize:11,color:"#64748b",marginBottom:8}}>Single bag net: {form.bag_net_wt} kg · Gross: {form.bag_gross_wt} kg</div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:600}}>
+          <thead>
+            <tr style={{background:"#f1f5f9"}}>
+              {["S.No.","Container No.","Seal No.","No. of Bags","Net Wt (kg)","Gross Wt (kg)",""].map(h=>(
+                <th key={h} style={{border:"1px solid #e2e8f0",padding:"6px 8px",textAlign:"left",fontWeight:700}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {form.containers.map((c,i)=>{
+              const bags=n(c.bags);
+              return(
+                <tr key={i}>
+                  <td style={{border:"1px solid #e2e8f0",padding:4,textAlign:"center",width:35}}>{i+1}</td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={c.cont_no} onChange={e=>updCont(i,"cont_no",e.target.value)} style={{...iS,fontSize:11}} placeholder="MSKU1234567"/></td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={c.seal_no} onChange={e=>updCont(i,"seal_no",e.target.value)} style={{...iS,fontSize:11}} placeholder="ML-IN1234567"/></td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={c.bags} onChange={e=>updCont(i,"bags",e.target.value)} style={{...iS,fontSize:11,width:80}} placeholder="1060"/></td>
+                  <td style={{border:"1px solid #e2e8f0",padding:"4px 8px",color:"#15803d",fontWeight:600}}>{bags?(Math.round(bags*n(form.bag_net_wt)*100)/100).toFixed(2):""}</td>
+                  <td style={{border:"1px solid #e2e8f0",padding:"4px 8px",color:"#15803d",fontWeight:600}}>{bags?(Math.round(bags*n(form.bag_gross_wt)*100)/100).toFixed(2):""}</td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3,textAlign:"center"}}>
+                    {form.containers.length>1&&<button onClick={()=>delCont(i)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontSize:11}}>✕</button>}
+                  </td>
+                </tr>
+              );
+            })}
+            {/* Totals */}
+            <tr style={{background:"#f0fdf4",fontWeight:700}}>
+              <td colSpan={3} style={{border:"1px solid #e2e8f0",padding:"5px 8px",textAlign:"right",color:"#15803d"}}>TOTAL</td>
+              <td style={{border:"1px solid #e2e8f0",padding:"5px 8px",color:"#15803d"}}>{contTotBags} bags</td>
+              <td style={{border:"1px solid #e2e8f0",padding:"5px 8px",color:"#15803d"}}>{contTotNet.toFixed(2)}</td>
+              <td style={{border:"1px solid #e2e8f0",padding:"5px 8px",color:"#15803d"}}>{contTotGross.toFixed(2)}</td>
+              <td style={{border:"1px solid #e2e8f0"}}></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <button onClick={addCont} style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600,marginTop:6}}>+ Add Container</button>
+
+      {/* Section 5: Parties */}
+      <SectionHeader title="5. Parties"/>
+      <div style={{display:"flex",gap:4,marginBottom:0,flexWrap:"wrap"}}>
+        {PARTY_TABS.map(([key,lbl])=>(
+          <button key={key} onClick={()=>setActivePartyTab(key)}
+            style={{padding:"6px 14px",border:"none",borderRadius:"6px 6px 0 0",cursor:"pointer",fontSize:12,fontWeight:activePartyTab===key?700:400,
+                    background:activePartyTab===key?"#1e3a5f":"#f1f5f9",color:activePartyTab===key?"#fff":"#374151"}}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+      <div style={{border:"1px solid #e2e8f0",borderRadius:"0 6px 6px 6px",padding:"14px 16px",background:"#fff"}}>
+        <PartyPanel pkey={activePartyTab} label={PARTY_TABS.find(t=>t[0]===activePartyTab)?.[1]}/>
+      </div>
+
+      {/* Export PDF buttons */}
+      <div style={{marginTop:20,padding:"14px 16px",background:"#f8fafc",borderRadius:10,border:"1px solid #e2e8f0"}}>
+        <div style={{fontWeight:700,color:"#1e3a5f",fontSize:13,marginBottom:10}}>📄 Export Documents</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button onClick={exportExpInv} style={{background:"linear-gradient(135deg,#1e3a5f,#0369a1)",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>Export Invoice cum PL</button>
+          <button onClick={()=>exportCommInv("buyer","COMMERCIAL INVOICE")} style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>Comm. Invoice (Buyer)</button>
+          <button onClick={()=>exportCommInv("bank","COMMERCIAL INVOICE — BANK")} style={{background:"linear-gradient(135deg,#7c3aed,#6d28d9)",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>Comm. Invoice (Bank)</button>
+          <button onClick={exportPL} style={{background:"linear-gradient(135deg,#d97706,#b45309)",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>Packing List</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App(){
   const [session,setSession]=useState(()=>{
     try{
@@ -6714,7 +7535,7 @@ export default function App(){
       )}
       <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
         {[["dashboard","📊 Dashboard"],["shipments","📦 Register"],
-          ...(!isJuniorAccountant?[["profitability","💰 P&L"],["bcmanager","🏦 Bill Coll."],["banking","🏛 Banking Forms"]]:[]),
+          ...(!isJuniorAccountant?[["profitability","💰 P&L"],["bcmanager","🏦 Bill Coll."],["banking","🏛 Banking Forms"],["invoicing","📄 Invoicing"]]:[]),
           ["buyers","👥 Buyers"],
           ...(!isJuniorAccountant||true?[["contracts","📋 Contracts"]]:[]),
         ].map(([k,l])=>(
@@ -6934,6 +7755,9 @@ export default function App(){
           </div>
         )}
 
+        {tab==="invoicing"&&(
+          <InvoicingTab buyers={buyers}/>
+        )}
         {tab==="buyers"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
