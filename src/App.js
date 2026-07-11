@@ -7731,6 +7731,7 @@ export default function App(){
   });
   const [loginForm,setLoginForm]=useState({email:"",password:"",error:"",loading:false});
   const [tab,setTab]=useState("dashboard");
+  const [invSubTab,setInvSubTab]=useState("devratan");
   const [fy,setFy]=useState(CURR_FY);
   const [ships,setShips]=useState([]);
   const [bcs,setBcs]=useState([]);
@@ -8518,25 +8519,22 @@ export default function App(){
           </div>
         )}
 
-        {tab==="invoicing"&&(()=>{
-          const [invSubTab,setInvSubTab]=React.useState("devratan");
-          return(
-            <div>
-              <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:"2px solid #e2e8f0",paddingBottom:0}}>
-                {[["devratan","🏢 Devratan"],["vjra","🌐 VJRA"]].map(([k,l])=>(
-                  <button key={k} onClick={()=>setInvSubTab(k)}
-                    style={{padding:"8px 20px",border:"none",borderBottom:invSubTab===k?"3px solid #1e3a5f":"3px solid transparent",
-                            background:"none",cursor:"pointer",fontSize:13,fontWeight:invSubTab===k?700:400,
-                            color:invSubTab===k?"#1e3a5f":"#64748b"}}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-              {invSubTab==="devratan"&&<InvoicingTab buyers={buyers}/>}
-              {invSubTab==="vjra"&&<VJRAInvoicingTab buyers={buyers}/>}
+        {tab==="invoicing"&&(
+          <div>
+            <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:"2px solid #e2e8f0",paddingBottom:0}}>
+              {[["devratan","🏢 Devratan"],["vjra","🌐 VJRA"]].map(([k,l])=>(
+                <button key={k} onClick={()=>setInvSubTab(k)}
+                  style={{padding:"8px 20px",border:"none",borderBottom:invSubTab===k?"3px solid #1e3a5f":"3px solid transparent",
+                          background:"none",cursor:"pointer",fontSize:13,fontWeight:invSubTab===k?700:400,
+                          color:invSubTab===k?"#1e3a5f":"#64748b"}}>
+                  {l}
+                </button>
+              ))}
             </div>
-          );
-        })()}
+            {invSubTab==="devratan"&&<InvoicingTab buyers={buyers}/>}
+            {invSubTab==="vjra"&&<VJRAInvoicingTab buyers={buyers}/>}
+          </div>
+        )}
         {tab==="buyers"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
