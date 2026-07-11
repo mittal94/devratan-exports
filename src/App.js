@@ -6423,8 +6423,9 @@ function InvoicingTab({buyers}){
     let totalQtyLocal=0,totalAmtLocal=0,totalGross=0,totalNet=0;
     form.items.forEach((it,i)=>{
       const qty=n(it.qty_mt),rate=useBuyerRate&&it.rate_per_mt_buyer?n(it.rate_per_mt_buyer):n(it.rate_per_mt),amt=qty*rate;
-      const gross=Math.round(qty*1000*n(it.bag_gross_wt||form.bag_gross_wt||"25.13")/n(it.bag_net_wt||form.bag_net_wt||"25")*100)/100;
-      const net=qty*1000;
+      const bags_count=n(it.bags);
+      const gross=Math.round(bags_count*n(it.bag_gross_wt||"25.13")*100)/100;
+      const net=Math.round(bags_count*n(it.bag_net_wt||"25")*100)/100;
       totalQtyLocal+=qty; totalAmtLocal+=amt; totalGross+=gross; totalNet+=net;
       const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
       const descLines=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
@@ -6719,12 +6720,6 @@ function InvoicingTab({buyers}){
     invNF(doc,true,8.5); doc.text("Items:",M,y); y+=4;
     const {y:y2,totalGross:plGross,totalNet:plNet}=renderItemsTable(doc,M,y,RW,false);
     y=y2+3;
-
-    // Gross/Net wt from items
-    const plTotNet=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
-    const plTotGross=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_gross_wt)*100)/100,0);
-    invNF(doc,false,8);
-    doc.text("Total Net Wt: "+plTotNet.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+plTotGross.toLocaleString("en-IN")+" Kgs",M,y,{maxWidth:RW}); y+=6;
 
     invNF(doc,true,8.5); doc.text("Container Details:",M,y); y+=4;
     y=renderContainerTable(doc,M,y,RW); y+=3;
