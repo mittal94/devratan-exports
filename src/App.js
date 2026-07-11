@@ -7174,28 +7174,26 @@ function VJRAInvoicingTab({buyers}){
   const vjraBank=BANK_DETAILS.vjra;
 
   const addVJRAHeader=(doc,title)=>{
-    const teal=[0,105,92],ltTeal=[178,223,219],gold=[180,120,0],white=[255,255,255];
-    // Teal gradient-style header
-    doc.setFillColor(...ltTeal); doc.rect(0,0,210,50,"F");
-    doc.setFillColor(...teal); doc.rect(0,0,210,3,"F"); // top bar
-    // Company name centered
-    doc.setFontSize(15); doc.setFont("helvetica","bold"); doc.setTextColor(...teal);
-    doc.text(vjraCo.name,105,14,{align:"center"});
-    const cnW=doc.getStringUnitWidth(vjraCo.name)*15/doc.internal.scaleFactor;
-    doc.setDrawColor(...gold); doc.setLineWidth(0.8);
-    doc.line(105-cnW/2,16,105+cnW/2,16);
-    doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(0,60,50);
-    doc.text(vjraCo.address,105,21,{align:"center"});
-    doc.text(vjraCo.phone+"  |  "+vjraCo.email,105,26,{align:"center"});
-    // Title centred below header
-    doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...teal);
-    doc.text(title,105,45,{align:"center"});
+    const navy=[18,52,96],steel=[70,130,180],ltblue=[220,235,250],gold=[162,120,50],white=[255,255,255];
+    // Compact header — same scheme as Devratan
+    doc.setFillColor(...ltblue); doc.rect(0,0,210,36,"F");
+    doc.setFontSize(13); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+    doc.text(vjraCo.name,105,10,{align:"center"});
+    const cnW=doc.getStringUnitWidth(vjraCo.name)*13/doc.internal.scaleFactor;
+    doc.setDrawColor(...gold); doc.setLineWidth(0.6);
+    doc.line(105-cnW/2,12,105+cnW/2,12);
+    doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
+    doc.text(vjraCo.address,105,17,{align:"center"});
+    doc.text(vjraCo.phone+"  |  "+vjraCo.email,105,21,{align:"center"});
+    // Title below header box
+    doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+    doc.text(title,105,32,{align:"center"});
     doc.setTextColor(0,0,0);
-    return 54;
+    return 38;
   };
 
   const addVJRAFooter=(doc)=>{
-    const navy=[0,105,92],white=[255,255,255];
+    const navy=[18,52,96],white=[255,255,255];
     const tp=doc.getNumberOfPages();
     for(let i=1;i<=tp;i++){
       doc.setPage(i);
@@ -7221,57 +7219,63 @@ function VJRAInvoicingTab({buyers}){
   };
 
   const vjraRenderParties=(doc,pdata,M,y,RW)=>{
-    const teal=[0,105,92],ltTeal=[178,223,219];
+    const navy=[18,52,96],lgray=[230,239,250];
     const cons=buyerById(pdata.consignee_id);
     const buyer=buyerById(pdata.buyer_id);
     const notifyEntries=pdata.notifies.map((nid,i)=>({idx:i+1,b:buyerById(nid)})).filter(e=>e.b);
     const hW=RW/2;
-    // Proper height: name line + address wrapped lines + label + padding
-    const consNameLines=doc.splitTextToSize(cons?cons.company_name||cons.name||"":"",hW-4);
-    const consAddrLines=doc.splitTextToSize(cons?buyerAddr(cons):"",hW-4);
-    const buyerNameLines=doc.splitTextToSize(buyer?buyer.company_name||buyer.name||"":"",hW-4);
-    const buyerAddrLines=doc.splitTextToSize(buyer?buyerAddr(buyer):"",hW-4);
-    const r1H=Math.max(24,Math.max(
-      (consNameLines.length+consAddrLines.length)*3.8+7,
-      (buyerNameLines.length+buyerAddrLines.length)*3.8+7));
+    // Calculate proper box height from all content lines
+    doc.setFontSize(7.5);
+    const consNameL=doc.splitTextToSize(cons?cons.company_name||cons.name||"":"",hW-4);
+    const consAddrL=doc.splitTextToSize(cons?buyerAddr(cons):"",hW-4);
+    const buyerNameL=doc.splitTextToSize(buyer?buyer.company_name||buyer.name||"":"",hW-4);
+    const buyerAddrL=doc.splitTextToSize(buyer?buyerAddr(buyer):"",hW-4);
+    const LH=3.8;
+    const r1H=Math.max(22,Math.max(
+      (consNameL.length+consAddrL.length)*LH+8,
+      (buyerNameL.length+buyerAddrL.length)*LH+8));
+    // Draw boxes
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.2);
     doc.rect(M,y,hW,r1H); doc.rect(M+hW,y,hW,r1H);
-    doc.setFillColor(...ltTeal); doc.rect(M,y,hW,5,"F"); doc.rect(M+hW,y,hW,5,"F");
-    doc.setTextColor(...teal); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+    doc.setFillColor(...lgray); doc.rect(M,y,hW,5,"F"); doc.rect(M+hW,y,hW,5,"F");
+    // Consignee label + content
+    doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
     doc.text("Consignee:",M+1,y+3.8);
-    doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0);
-    let cy=y+7;
-    if(cons){doc.text(consNameLines,M+1,cy,{maxWidth:hW-2});cy+=consNameLines.length*3.8;}
-    if(cons&&consAddrLines.length){doc.text(consAddrLines,M+1,cy,{maxWidth:hW-2});}
-    doc.setTextColor(...teal); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+    doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
+    let cy=y+7.5;
+    if(cons){doc.text(consNameL,M+1,cy);cy+=consNameL.length*LH;}
+    if(cons&&consAddrL.length){doc.text(consAddrL,M+1,cy,{maxWidth:hW-2});}
+    // Buyer label + content
+    doc.setTextColor(...navy); doc.setFont("helvetica","bold");
     doc.text("Buyer:",M+hW+1,y+3.8);
-    doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0);
-    let by2=y+7;
-    if(buyer){doc.text(buyerNameLines,M+hW+1,by2,{maxWidth:hW-2});by2+=buyerNameLines.length*3.8;}
-    if(buyer&&buyerAddrLines.length){doc.text(buyerAddrLines,M+hW+1,by2,{maxWidth:hW-2});}
+    doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
+    let by=y+7.5;
+    if(buyer){doc.text(buyerNameL,M+hW+1,by);by+=buyerNameL.length*LH;}
+    if(buyer&&buyerAddrL.length){doc.text(buyerAddrL,M+hW+1,by,{maxWidth:hW-2});}
     y+=r1H;
+    // Notify parties
     if(notifyEntries.length>0){
       const rows=[];
       for(let i=0;i<notifyEntries.length;i+=3) rows.push(notifyEntries.slice(i,i+3));
       rows.forEach(row=>{
         const nW=RW/Math.max(row.length,1);
         const rHs=row.map(e=>{
-          const nml=doc.splitTextToSize(e.b?e.b.company_name||e.b.name||"":"",nW-4);
-          const nal=doc.splitTextToSize(e.b?buyerAddr(e.b):"",nW-4);
-          return Math.max(20,(nml.length+nal.length)*3.8+7);
+          const nl=doc.splitTextToSize(e.b?e.b.company_name||e.b.name||"":"",nW-4);
+          const al=doc.splitTextToSize(e.b?buyerAddr(e.b):"",nW-4);
+          return Math.max(20,(nl.length+al.length)*LH+8);
         });
         const rH=Math.max(...rHs);
         row.forEach((e,j)=>{
-          doc.rect(M+j*nW,y,nW,rH);
-          doc.setFillColor(...ltTeal); doc.rect(M+j*nW,y,nW,5,"F");
-          doc.setTextColor(...teal); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+          doc.setDrawColor(100,100,100); doc.rect(M+j*nW,y,nW,rH);
+          doc.setFillColor(...lgray); doc.rect(M+j*nW,y,nW,5,"F");
+          doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
           doc.text("Notify Party "+e.idx+":",M+j*nW+1,y+3.8);
-          doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0);
+          doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
           if(e.b){
             const nl=doc.splitTextToSize(e.b.company_name||e.b.name||"",nW-4);
             const al=doc.splitTextToSize(buyerAddr(e.b),nW-4);
-            doc.text(nl,M+j*nW+1,y+7,{maxWidth:nW-2});
-            if(al.length) doc.text(al,M+j*nW+1,y+7+nl.length*3.8,{maxWidth:nW-2});
+            doc.text(nl,M+j*nW+1,y+7.5);
+            if(al.length) doc.text(al,M+j*nW+1,y+7.5+nl.length*LH,{maxWidth:nW-2});
           }
         });
         y+=rH;
