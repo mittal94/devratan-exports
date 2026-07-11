@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 
-const SUPABASE_URL = "https://jqbagmezerzgewxaqtpt.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxYmFnbWV6ZXJ6Z2V3eGFxdHB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjMxMjIsImV4cCI6MjA5NTc5OTEyMn0.HAG23sw41cMXiyrnTC2-9dTZn5bO0oXMc69XKwB3IkU";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://jqbagmezerzgewxaqtpt.supabase.co";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxYmFnbWV6ZXJ6Z2V3eGFxdHB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjMxMjIsImV4cCI6MjA5NTc5OTEyMn0.HAG23sw41cMXiyrnTC2-9dTZn5bO0oXMc69XKwB3IkU";
 const R2_WORKER = "https://devratan-r2-worker.mittal94.workers.dev";
 const APP_VERSION = "1.0.4"; // ← Increment this on every deployment to force logout all users
 
@@ -55,6 +55,138 @@ const r2Upload = async (folder, docKey, file) => {
 const r2Delete = async (key) => {
   const res = await fetch(`${R2_WORKER}/${key}`, {method:"DELETE"});
   if(!res.ok) throw new Error("Delete failed");
+};
+
+// Save a jsPDF doc as PDF to R2 at a fixed path (overwrites on repeat)
+const r2SavePDF = async (doc, folder, filename) => {
+  try {
+    const pdfBlob = doc.output("blob");
+    const cleanFolder = String(folder||"").trim().replace(/\s+/g,"-");
+    const cleanFile = String(filename||"").trim().replace(/\s+/g,"-");
+    const key = `${cleanFolder}/${cleanFile}`;
+    const res = await fetch(`${R2_WORKER}/${key}`, {
+      method:"PUT", headers:{"Content-Type":"application/pdf"}, body:pdfBlob
+    });
+    if(!res.ok) console.warn("r2SavePDF failed:", res.status);
+    else console.log("PDF saved to R2:", key);
+  } catch(e){ console.warn("r2SavePDF error:", e.message); }
+};
+
+// ── Backup: Download all R2 files as ZIP ─────────────────────────────────
+const backupR2AsZip = async (setStatus) => {
+  try {
+    setStatus("Fetching file list from R2...");
+    // List all files from invoices/ and vjra_invoices/
+    const [invRes, vjraRes] = await Promise.all([
+      fetch(`${R2_WORKER}/list/invoices`),
+      fetch(`${R2_WORKER}/list/vjra_invoices`)
+    ]);
+    const invData = invRes.ok ? await invRes.json() : {files:[]};
+    const vjraData = vjraRes.ok ? await vjraRes.json() : {files:[]};
+    const allFiles = [
+      ...(invData.files||invData.keys||[]).map(f=>({key:typeof f==="string"?f:f.key||f.name,folder:"invoices"})),
+      ...(vjraData.files||vjraData.keys||[]).map(f=>({key:typeof f==="string"?f:f.key||f.name,folder:"vjra_invoices"}))
+    ].filter(f=>f.key);
+    if(!allFiles.length){ setStatus("No files found in R2."); return; }
+    setStatus(`Found ${allFiles.length} files. Loading JSZip...`);
+    // Dynamically load JSZip
+    await new Promise((res,rej)=>{
+      if(window.JSZip){res();return;}
+      const s=document.createElement("script");
+      s.src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+      s.onload=res; s.onerror=rej;
+      document.head.appendChild(s);
+    });
+    const zip = new window.JSZip();
+    let done=0;
+    for(const f of allFiles){
+      try{
+        setStatus(`Downloading ${done+1}/${allFiles.length}: ${f.key}`);
+        const res = await fetch(`${R2_WORKER}/${f.key}`);
+        if(res.ok){
+          const blob = await res.blob();
+          // Organize by folder path
+          zip.file(f.key, blob);
+        }
+      }catch(e){ console.warn("Skip:",f.key,e.message); }
+      done++;
+    }
+    setStatus("Creating ZIP file...");
+    const zipBlob = await zip.generateAsync({type:"blob"});
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement("a");
+    a.href=url; a.download=`Devratan_Backup_${new Date().toISOString().slice(0,10)}.zip`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setStatus(`✅ Done! Downloaded ${done} files.`);
+  } catch(e){ setStatus("❌ Error: "+e.message); }
+};
+
+// ── Backup: Export all data to Excel ─────────────────────────────────────────
+const backupDataToExcel = async (shipments, invoices, vjraInvoices, buyers, bcs, setStatus) => {
+  try {
+    setStatus("Loading SheetJS...");
+    await new Promise((res,rej)=>{
+      if(window.XLSX){res();return;}
+      const s=document.createElement("script");
+      s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      s.onload=res; s.onerror=rej;
+      document.head.appendChild(s);
+    });
+    const XL = window.XLSX;
+    const wb = XL.utils.book_new();
+    setStatus("Preparing Shipments...");
+    if(shipments&&shipments.length){
+      const ws = XL.utils.json_to_sheet(shipments.map(s=>({
+        "Invoice No":s.invoice_no,"Date":s.invoice_date,"Buyer":s.buyer_name,
+        "Description":s.description,"Port of Loading":s.port_of_loading,
+        "Port of Discharge":s.port_of_discharge,"Country":s.country_of_destination,
+        "Qty (MT)":s.qty_mt,"Rate":s.rate_per_mt,"Invoice USD":s.invoice_value_usd,
+        "Invoice INR":s.invoice_value_inr,"FOB USD":s.fob_value_usd,
+        "Payment Rcvd USD":s.payment_received_usd,"Payment Rcvd INR":s.payment_received_inr,
+        "BL No":s.bl_no,"BL Date":s.bl_date,"SB No":s.sb_no,"SB Date":s.sb_date,
+        "BRC":s.brc_no,"RODTEP":s.rodtep_status,"GST Refund":s.gst_refund_status,
+        "FY":s.financial_year
+      })));
+      XL.utils.book_append_sheet(wb,ws,"Shipments");
+    }
+    setStatus("Preparing Invoices...");
+    if(invoices&&invoices.length){
+      const ws = XL.utils.json_to_sheet(invoices.map(inv=>({
+        "Invoice No":inv.invoice_no,"Date":inv.invoice_date,
+        "Linked Data":JSON.stringify(inv.form_data||{}).slice(0,200)
+      })));
+      XL.utils.book_append_sheet(wb,ws,"Invoices");
+    }
+    setStatus("Preparing VJRA Invoices...");
+    if(vjraInvoices&&vjraInvoices.length){
+      const ws = XL.utils.json_to_sheet(vjraInvoices.map(inv=>({
+        "Invoice No":inv.invoice_no,"Date":inv.invoice_date,
+        "Linked Devratan":inv.linked_devratan_no,
+        "Data":JSON.stringify(inv.form_data||{}).slice(0,200)
+      })));
+      XL.utils.book_append_sheet(wb,ws,"VJRA Invoices");
+    }
+    setStatus("Preparing Buyers...");
+    if(buyers&&buyers.length){
+      const ws = XL.utils.json_to_sheet(buyers.map(b=>({
+        "Name":b.name||b.company_name,"Address":b.address,
+        "Country":b.country,"Email":b.email,"Phone":b.phone
+      })));
+      XL.utils.book_append_sheet(wb,ws,"Buyers");
+    }
+    setStatus("Preparing BC/IRM/BRC...");
+    if(bcs&&bcs.length){
+      const ws = XL.utils.json_to_sheet(bcs.map(bc=>({
+        "BC No":bc.bc_no,"Date":bc.bc_date,"Invoice No":bc.invoice_no,
+        "Bank":bc.bank_name,"Amount USD":bc.amount_usd,"Amount INR":bc.amount_inr
+      })));
+      XL.utils.book_append_sheet(wb,ws,"Bill Collections");
+    }
+    setStatus("Generating Excel file...");
+    XL.writeFile(wb,`Devratan_Data_Backup_${new Date().toISOString().slice(0,10)}.xlsx`);
+    setStatus("✅ Excel backup downloaded!");
+  } catch(e){ setStatus("❌ Error: "+e.message); }
 };
 
 const r2List = async (folder) => {
@@ -6160,6 +6292,7 @@ const INVOICE_EMPTY = {
   delivery_terms:"CIF", payment_terms:"CAD",
   state_origin:"", exchange_rate:"", gst_rate:"0.05",
   third_party_name:"", third_party_gst:"",
+  advance_amt:"", extra_charges:[{label:"",amount:""}],
   bl_no:"", bl_date:"",
   freight_per_mt:"", insurance_per_mt:"",
   items:[{desc1:"INDIAN PARBOILED RICE",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",rate_per_mt_buyer:"",cont_qty:"",cont_type:"20' FCL",bag_net_wt:"25",bag_gross_wt:"25.13"}],
@@ -6527,18 +6660,18 @@ function InvoicingTab({buyers}){
   const signBlock=(doc,M,y,RW,co)=>{
     const seller=co||COMPANIES.devratan;
     const sealImg=co?null:SEAL_B64;
-    // Need ~50mm for sign block — add new page if not enough room
-    if(y+42>282){doc.addPage();y=50;}
-    invNF(doc,false,8.5);
-    y+=5;
-    doc.text("For "+seller.name,M+RW-55,y); y+=2;
-    try{if(sealImg)doc.addImage(sealImg,"JPEG",M+RW-55,y,45,28);}catch(e){}
-    y+=30;
+    // Compact sign block: ~28mm total — only add page if genuinely no space
+    if(y+28>287){doc.addPage();y=20;}
+    invNF(doc,false,8);
+    y+=3;
+    doc.text("For "+seller.name,M+RW-42,y); y+=1;
+    try{if(sealImg)doc.addImage(sealImg,"JPEG",M+RW-42,y,32,20);}catch(e){}
+    y+=21;
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
-    doc.line(M+RW-55,y,M+RW,y); y+=5;
-    invNF(doc,false,7.5);
-    doc.text("Authorised Signatory",M+RW-55,y);
-    return y+6;
+    doc.line(M+RW-42,y,M+RW,y); y+=4;
+    invNF(doc,false,7);
+    doc.text("Authorised Signatory",M+RW-42,y);
+    return y+5;
   };
 
   // ── PDF: Export Invoice cum Packing List ───────────────────────────────────
@@ -6591,7 +6724,7 @@ function InvoicingTab({buyers}){
       styles:{fontSize:7.5,cellPadding:{top:1.5,bottom:1.5,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
-    y=doc.lastAutoTable.finalY+2;
+    y=doc.lastAutoTable.finalY+4;
 
     // Gross/Net wt summary
     const totNetWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
@@ -6623,6 +6756,7 @@ function InvoicingTab({buyers}){
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
+    await r2SavePDF(doc,"invoices/"+form.invoice_no.replace(/\//g,"-"),"ExportInvoice.pdf");
     doc.save("ExportInvoice_"+form.invoice_no+".pdf");
   };
 
@@ -6661,22 +6795,38 @@ function InvoicingTab({buyers}){
     y=y2+5;
 
     // Gross/Net wt summary (Comm Invoice)
-    // Total wt from items: total bags × per-bag wt (not containers)
     const totNetWtC=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
     const totGrossWtC=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_gross_wt)*100)/100,0);
     invNF(doc,false,8);
     const wtStrC="Total Net Wt: "+totNetWtC.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWtC.toLocaleString("en-IN")+" Kgs";
     doc.text(wtStrC,M,y,{maxWidth:RW}); y+=6;
 
+    // Advance & Extra Charges (Comm Invoice Buyer only)
+    const commBuyerAmt=partyKey==="buyer"
+      ? form.items.reduce((s,it)=>{const r=it.rate_per_mt_buyer?n(it.rate_per_mt_buyer):n(it.rate_per_mt);return s+n(it.qty_mt)*r;},0)
+      : totalAmt;
+    const advAmt=n(form.advance_amt||0);
+    const extraCharges=(form.extra_charges||[]).filter(c=>c.label&&n(c.amount));
+    const extraTotal=extraCharges.reduce((s,c)=>s+n(c.amount),0);
+    const finalDue=commBuyerAmt - advAmt + extraTotal;
+    if(partyKey==="buyer" && (advAmt>0||extraCharges.length>0)){
+      const summRows=[];
+      summRows.push([{content:"Invoice Amount",styles:{fontStyle:"bold",cellWidth:RW*0.6}},{content:(form.items[0]?.ccy||"USD")+" "+commBuyerAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),styles:{fontStyle:"bold",halign:"right"}}]);
+      if(advAmt>0) summRows.push([{content:"Less: Advance Received",styles:{cellWidth:RW*0.6}},{content:"("+( form.items[0]?.ccy||"USD")+" "+advAmt.toLocaleString("en-IN",{minimumFractionDigits:2})+")",styles:{halign:"right",textColor:[220,38,38]}}]);
+      extraCharges.forEach(c=>summRows.push([{content:"Add: "+c.label,styles:{cellWidth:RW*0.6}},{content:(form.items[0]?.ccy||"USD")+" "+n(c.amount).toLocaleString("en-IN",{minimumFractionDigits:2}),styles:{halign:"right"}}]));
+      summRows.push([{content:"NET AMOUNT DUE",styles:{fontStyle:"bold",fillColor:[230,239,250],textColor:[18,52,96],cellWidth:RW*0.6}},{content:(form.items[0]?.ccy||"USD")+" "+finalDue.toLocaleString("en-IN",{minimumFractionDigits:2}),styles:{fontStyle:"bold",halign:"right",fillColor:[230,239,250],textColor:[18,52,96]}}]);
+      doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,body:summRows,
+        styles:{fontSize:8,cellPadding:{top:1.5,bottom:1.5,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+        tableLineColor:[100,100,100],tableLineWidth:0.2});
+      y=doc.lastAutoTable.finalY+4;
+    }
+
     // Amount in words
     y=invChkPg(doc,y,16,null,null);
     invNF(doc,true,8); doc.text("Amount in Words:",M,y); y+=4.5;
     invNF(doc,false,8);
-    // Use buyer rate if set
-    const commBuyerAmt=partyKey==="buyer"
-      ? form.items.reduce((s,it)=>{const r=it.rate_per_mt_buyer?n(it.rate_per_mt_buyer):n(it.rate_per_mt);return s+n(it.qty_mt)*r;},0)
-      : totalAmt;
-    const amtWordsComm=numWords(commBuyerAmt,form.items[0]?.ccy);
+    const amtForWords=partyKey==="buyer"?(advAmt>0||extraCharges.length>0?finalDue:commBuyerAmt):totalAmt;
+    const amtWordsComm=numWords(amtForWords,form.items[0]?.ccy);
     const amtLinesComm=doc.splitTextToSize(amtWordsComm,RW);
     doc.text(amtLinesComm,M,y);
     y+=amtLinesComm.length*4.5+4;
@@ -6702,6 +6852,8 @@ function InvoicingTab({buyers}){
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
+    const commFile=(partyKey==="buyer"?"CommercialInvoice_Buyer.pdf":"CommercialInvoice_Bank.pdf");
+    await r2SavePDF(doc,"invoices/"+form.invoice_no.replace(/\//g,"-"),commFile);
     doc.save(label.replace(/ /g,"_")+"_"+form.invoice_no+".pdf");
   };
 
@@ -6737,6 +6889,7 @@ function InvoicingTab({buyers}){
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
+    await r2SavePDF(doc,"invoices/"+form.invoice_no.replace(/\//g,"-"),"PackingList.pdf");
     doc.save("PackingList_"+form.invoice_no+".pdf");
   };
 
@@ -6886,6 +7039,22 @@ function InvoicingTab({buyers}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           <FRow label="BL No."><FInput value={form.bl_no} onChange={v=>sf("bl_no",v)}/></FRow>
           <FRow label="BL Date"><DI value={form.bl_date} onChange={v=>sf("bl_date",v)}/></FRow>
+        </div>
+        <div style={{marginTop:8}}>
+          <FRow label="Advance Received from Buyer (if any)">
+            <FInput value={form.advance_amt||""} onChange={v=>sf("advance_amt",v)} placeholder="e.g. 5000" type="number"/>
+          </FRow>
+        </div>
+        <div style={{marginTop:8}}>
+          <div style={{fontSize:11,fontWeight:600,color:"#374151",marginBottom:6}}>Additional Charges (e.g. Amendment charges)</div>
+          {(form.extra_charges||[{label:"",amount:""}]).map((c,i)=>(
+            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 120px 28px",gap:6,marginBottom:6,alignItems:"center"}}>
+              <FInput value={c.label} onChange={v=>sf("extra_charges",(form.extra_charges||[]).map((x,j)=>j===i?{...x,label:v}:x))} placeholder="Charge name (e.g. Amendment Charges)"/>
+              <FInput value={c.amount} onChange={v=>sf("extra_charges",(form.extra_charges||[]).map((x,j)=>j===i?{...x,amount:v}:x))} placeholder="Amount" type="number"/>
+              <button onClick={()=>sf("extra_charges",(form.extra_charges||[]).filter((_,j)=>j!==i))} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:14,height:32}}>×</button>
+            </div>
+          ))}
+          <button onClick={()=>sf("extra_charges",[...(form.extra_charges||[]),{label:"",amount:""}])} style={{background:"#f0fdf4",color:"#15803d",border:"1px dashed #86efac",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600,marginTop:2}}>+ Add Charge</button>
         </div>
       </div>
 
@@ -7042,6 +7211,7 @@ const VJRA_INVOICE_EMPTY = {
   delivery_terms:"CIF", payment_terms:"CAD",
   bl_no:"", bl_date:"",
   freight_per_mt:"", insurance_per_mt:"",
+  advance_amt:"", extra_charges:[{label:"",amount:""}],
   items:[{desc1:"INDIAN PARBOILED RICE",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",cont_qty:"",cont_type:"20' FCL",bag_net_wt:"25",bag_gross_wt:"25.13"}],
   containers:[{cont_no:"",seal_no:"",bags:"",item_idx:"0"}],
   parties:{
@@ -7205,17 +7375,17 @@ function VJRAInvoicingTab({buyers}){
   };
 
   const vjraSignBlock=(doc,M,y,RW)=>{
-    if(y+42>282){doc.addPage();y=50;}
-    doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(0,0,0);
-    y+=5;
-    doc.text("For "+vjraCo.name,M+RW-55,y); y+=2;
-    try{if(VJRA_SEAL_B64)doc.addImage(VJRA_SEAL_B64,"PNG",M+RW-55,y,45,28);}catch(e){}
-    y+=30;
+    if(y+28>287){doc.addPage();y=20;}
+    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(0,0,0);
+    y+=3;
+    doc.text("For "+vjraCo.name,M+RW-42,y); y+=1;
+    try{if(VJRA_SEAL_B64)doc.addImage(VJRA_SEAL_B64,"PNG",M+RW-42,y,32,20);}catch(e){}
+    y+=21;
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
-    doc.line(M+RW-55,y,M+RW,y); y+=5;
-    doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
-    doc.text("Authorised Signatory",M+RW-55,y);
-    return y+6;
+    doc.line(M+RW-42,y,M+RW,y); y+=4;
+    doc.setFont("helvetica","normal"); doc.setFontSize(7);
+    doc.text("Authorised Signatory",M+RW-42,y);
+    return y+5;
   };
 
   const vjraRenderParties=(doc,pdata,M,y,RW)=>{
@@ -7435,11 +7605,29 @@ function VJRAInvoicingTab({buyers}){
     doc.setFont("helvetica","normal"); doc.setFontSize(8);
     doc.text("Total Net Wt: "+totNetWt.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWt.toLocaleString("en-IN")+" Kgs",M,y,{maxWidth:RW}); y+=6;
 
+    // Advance & Extra Charges (VJRA)
+    const vjraAdvAmt=n(form.advance_amt||0);
+    const vjraExtraCharges=(form.extra_charges||[]).filter(c=>c.label&&n(c.amount));
+    const vjraExtraTotal=vjraExtraCharges.reduce((s,c)=>s+n(c.amount),0);
+    const vjraFinalDue=totAmt - vjraAdvAmt + vjraExtraTotal;
+    if(vjraAdvAmt>0||vjraExtraCharges.length>0){
+      const summRows=[];
+      summRows.push([{content:"Invoice Amount",styles:{fontStyle:"bold",cellWidth:RW*0.6}},{content:(form.items[0]?.ccy||"USD")+" "+totAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),styles:{fontStyle:"bold",halign:"right"}}]);
+      if(vjraAdvAmt>0) summRows.push([{content:"Less: Advance Received",styles:{cellWidth:RW*0.6}},{content:"("+(form.items[0]?.ccy||"USD")+" "+vjraAdvAmt.toLocaleString("en-IN",{minimumFractionDigits:2})+")",styles:{halign:"right",textColor:[220,38,38]}}]);
+      vjraExtraCharges.forEach(c=>summRows.push([{content:"Add: "+c.label,styles:{cellWidth:RW*0.6}},{content:(form.items[0]?.ccy||"USD")+" "+n(c.amount).toLocaleString("en-IN",{minimumFractionDigits:2}),styles:{halign:"right"}}]));
+      summRows.push([{content:"NET AMOUNT DUE",styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:RW*0.6}},{content:(form.items[0]?.ccy||"USD")+" "+vjraFinalDue.toLocaleString("en-IN",{minimumFractionDigits:2}),styles:{fontStyle:"bold",halign:"right",fillColor:lgray,textColor:navy}}]);
+      doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,body:summRows,
+        styles:{fontSize:8,cellPadding:{top:1.5,bottom:1.5,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+        tableLineColor:[100,100,100],tableLineWidth:0.2});
+      y=doc.lastAutoTable.finalY+4;
+    }
+
     // Amount in words
     if(y+16>282){doc.addPage();y=52;}
     doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.text("Amount in Words:",M,y); y+=4.5;
     doc.setFont("helvetica","normal"); doc.setFontSize(8);
-    const amtW=numWords(totAmt,form.items[0]?.ccy||"USD");
+    const amtForWordsVJRA=(vjraAdvAmt>0||vjraExtraCharges.length>0)?vjraFinalDue:totAmt;
+    const amtW=numWords(amtForWordsVJRA,form.items[0]?.ccy||"USD");
     const amtLines=doc.splitTextToSize(amtW,RW);
     doc.text(amtLines,M,y); y+=amtLines.length*4.5+4;
 
@@ -7462,6 +7650,7 @@ function VJRAInvoicingTab({buyers}){
 
     y=vjraSignBlock(doc,M,y,RW);
     addVJRAFooter(doc);
+    await r2SavePDF(doc,"vjra_invoices/"+form.invoice_no.replace(/\//g,"-"),"CommercialInvoice.pdf");
     doc.save("VJRA_CommInvoice_"+form.invoice_no+".pdf");
   };
 
@@ -7497,6 +7686,7 @@ function VJRAInvoicingTab({buyers}){
 
     y=vjraSignBlock(doc,M,y,RW);
     addVJRAFooter(doc);
+    await r2SavePDF(doc,"vjra_invoices/"+form.invoice_no.replace(/\//g,"-"),"PackingList.pdf");
     doc.save("VJRA_PackingList_"+form.invoice_no+".pdf");
   };
 
@@ -7638,6 +7828,25 @@ function VJRAInvoicingTab({buyers}){
         <FRow label="Payment Terms"><FInput value={form.payment_terms} onChange={v=>sf("payment_terms",v)}/></FRow>
         {form.delivery_terms==="CIF"&&<FRow label="Freight per MT"><FInput value={form.freight_per_mt} onChange={v=>sf("freight_per_mt",v)}/></FRow>}
         {form.delivery_terms!=="FOB"&&<FRow label="Insurance per MT"><FInput value={form.insurance_per_mt} onChange={v=>sf("insurance_per_mt",v)}/></FRow>}
+      </div>
+
+      {/* Advance & Extra Charges */}
+      <div style={{background:"#faf5ff",border:"1px solid #d8b4fe",borderRadius:8,padding:"10px 14px",marginBottom:10,marginTop:4}}>
+        <div style={{fontWeight:700,color:"#7c3aed",fontSize:12,marginBottom:8}}>Commercial Invoice — Advance & Charges</div>
+        <FRow label="Advance Received from Buyer (if any)">
+          <FInput value={form.advance_amt||""} onChange={v=>sf("advance_amt",v)} placeholder="e.g. 5000" type="number"/>
+        </FRow>
+        <div style={{marginTop:8}}>
+          <div style={{fontSize:11,fontWeight:600,color:"#374151",marginBottom:6}}>Additional Charges (e.g. Amendment charges)</div>
+          {(form.extra_charges||[{label:"",amount:""}]).map((c,i)=>(
+            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 120px 28px",gap:6,marginBottom:6,alignItems:"center"}}>
+              <FInput value={c.label} onChange={v=>sf("extra_charges",(form.extra_charges||[]).map((x,j)=>j===i?{...x,label:v}:x))} placeholder="Charge name (e.g. Amendment Charges)"/>
+              <FInput value={c.amount} onChange={v=>sf("extra_charges",(form.extra_charges||[]).map((x,j)=>j===i?{...x,amount:v}:x))} placeholder="Amount" type="number"/>
+              <button onClick={()=>sf("extra_charges",(form.extra_charges||[]).filter((_,j)=>j!==i))} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,cursor:"pointer",fontWeight:700,fontSize:14,height:32}}>×</button>
+            </div>
+          ))}
+          <button onClick={()=>sf("extra_charges",[...(form.extra_charges||[]),{label:"",amount:""}])} style={{background:"#faf5ff",color:"#7c3aed",border:"1px dashed #d8b4fe",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600,marginTop:2}}>+ Add Charge</button>
+        </div>
       </div>
 
       {/* Items */}
@@ -7835,6 +8044,8 @@ export default function App(){
   const [saving,setSaving]=useState(false);
   const [exportModal,setExportModal]=useState(null);
   const [showUpdateBanner,setShowUpdateBanner]=useState(false); // "shipments"|"profitability"|"bc"|"dashboard"
+  const [showBackupPanel,setShowBackupPanel]=useState(false);
+  const [backupStatus,setBackupStatus]=useState("");
   const [dashFilter,setDashFilter]=useState(null); // null|"brc"|"rodtep"|"gst"
 
   const doLogin=async()=>{
@@ -8375,8 +8586,37 @@ export default function App(){
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 <FYBar selected={fy} onChange={setFy} counts={fyCounts}/>
                 <button onClick={()=>setExportModal("dashboard")} style={{background:"#1e3a5f",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:11}}>📄 Export</button>
+                <button onClick={()=>setShowBackupPanel(v=>!v)} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600,fontSize:11}}>🔒 Backup</button>
               </div>
             </div>
+            {showBackupPanel&&(
+              <div style={{background:"#f8f5ff",border:"1px solid #c4b5fd",borderRadius:10,padding:14,marginBottom:14}}>
+                <div style={{fontWeight:700,color:"#7c3aed",fontSize:13,marginBottom:10}}>🔒 Backup & Export</div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                  <button onClick={async()=>{
+                    setBackupStatus("Starting...");
+                    await backupR2AsZip(setBackupStatus);
+                  }} style={{background:"#1e3a5f",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>
+                    📦 Download All PDFs (ZIP)
+                  </button>
+                  <button onClick={async()=>{
+                    setBackupStatus("Starting...");
+                    // Load all data fresh for backup
+                    const [ships,invs,vjraInvs,buys,bcList] = await Promise.all([
+                      sb("/rest/v1/shipments?select=*&order=invoice_date.desc").then(r=>r.json()).catch(()=>[]),
+                      sb("/rest/v1/invoices?select=*&order=invoice_date.desc").then(r=>r.json()).catch(()=>[]),
+                      sb("/rest/v1/vjra_invoices?select=*&order=invoice_date.desc").then(r=>r.json()).catch(()=>[]),
+                      sb("/rest/v1/buyers?select=*&order=name.asc").then(r=>r.json()).catch(()=>[]),
+                      sb("/rest/v1/bill_collections?select=*&order=bc_date.desc").then(r=>r.json()).catch(()=>[])
+                    ]);
+                    await backupDataToExcel(ships,invs,vjraInvs,buys,bcList,setBackupStatus);
+                  }} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>
+                    📊 Download All Data (Excel)
+                  </button>
+                </div>
+                {backupStatus&&<div style={{marginTop:8,fontSize:11,color:"#6d28d9",fontWeight:500}}>{backupStatus}</div>}
+              </div>
+            )}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:18}}>
               {[{l:"Shipments",v:totals.count,i:"📦",c:"#1e3a5f",click:()=>{setTab("shipments");setDashFilter(null);}},
                 {l:"Invoice (USD)",v:fU(totals.invUSD),i:"🧾",c:"#0369a1",click:null},
