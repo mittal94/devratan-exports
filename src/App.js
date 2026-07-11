@@ -6675,7 +6675,7 @@ function InvoicingTab({buyers}){
   };
 
   // ── PDF: Export Invoice cum Packing List ───────────────────────────────────
-  const exportExpInv=()=>{
+  const exportExpInv=async()=>{
     const doc=initPDF(); if(!doc)return;
     const M=12,RW=186,navy=[18,52,96],lgray=[230,239,250];
     let y=addInvHeader(doc,"EXPORT INVOICE CUM PACKING LIST");
@@ -6761,7 +6761,7 @@ function InvoicingTab({buyers}){
   };
 
   // ── PDF: Commercial Invoice (Buyer / Bank) ─────────────────────────────────
-  const exportCommInv=(partyKey,label)=>{
+  const exportCommInv=async(partyKey,label)=>{
     const doc=initPDF(); if(!doc)return;
     const M=12,RW=186,navy=[18,52,96],lgray=[230,239,250];
     let y=addInvHeader(doc,label);
@@ -6858,7 +6858,7 @@ function InvoicingTab({buyers}){
   };
 
   // ── PDF: Packing List ──────────────────────────────────────────────────────
-  const exportPL=()=>{
+  const exportPL=async()=>{
     const doc=initPDF(); if(!doc)return;
     const M=12,RW=186,navy=[18,52,96],lgray=[230,239,250];
     let y=addInvHeader(doc,"PACKING LIST");
@@ -7565,7 +7565,7 @@ function VJRAInvoicingTab({buyers}){
   };
 
   // ── PDF: VJRA Commercial Invoice ───────────────────────────────────────────
-  const exportVJRACommInv=()=>{
+  const exportVJRACommInv=async()=>{
     const JPDF=getPDF(); if(!JPDF)return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const M=12,RW=186,lgray=[230,239,250],navy=[18,52,96];
@@ -7655,7 +7655,7 @@ function VJRAInvoicingTab({buyers}){
   };
 
   // ── PDF: VJRA Packing List ─────────────────────────────────────────────────
-  const exportVJRAPL=()=>{
+  const exportVJRAPL=async()=>{
     const JPDF=getPDF(); if(!JPDF)return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const M=12,RW=186;
