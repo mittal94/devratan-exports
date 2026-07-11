@@ -76,18 +76,18 @@ const r2SavePDF = async (doc, folder, filename) => {
 const backupR2AsZip = async (setStatus) => {
   try {
     setStatus("Fetching file list from R2...");
-    // List all files from invoices/ and vjra_invoices/
-    const [invRes, vjraRes] = await Promise.all([
-      fetch(`${R2_WORKER}/list/invoices`),
-      fetch(`${R2_WORKER}/list/vjra_invoices`)
-    ]);
-    const invData = invRes.ok ? await invRes.json() : {files:[]};
-    const vjraData = vjraRes.ok ? await vjraRes.json() : {files:[]};
-    const allFiles = [
-      ...(invData.files||invData.keys||[]).map(f=>({key:typeof f==="string"?f:f.key||f.name,folder:"invoices"})),
-      ...(vjraData.files||vjraData.keys||[]).map(f=>({key:typeof f==="string"?f:f.key||f.name,folder:"vjra_invoices"}))
-    ].filter(f=>f.key);
-    if(!allFiles.length){ setStatus("No files found in R2."); return; }
+    // List all files from all 3 folders
+    const folders = ["shipments","invoices","vjra_invoices"];
+    const results = await Promise.all(folders.map(f=>fetch(`${R2_WORKER}/list/${f}`).then(r=>r.ok?r.json():{}).catch(()=>({}))));
+    const allFiles = [];
+    results.forEach((data,i)=>{
+      const keys = data.files||data.keys||data.objects||[];
+      keys.forEach(f=>{
+        const key = typeof f==="string"?f:(f.key||f.name||"");
+        if(key) allFiles.push({key, folder:folders[i]});
+      });
+    });
+    if(!allFiles.length){ setStatus("No files found in R2. (PDFs are saved when you generate them from the Invoicing tab)"); return; }
     setStatus(`Found ${allFiles.length} files. Loading JSZip...`);
     // Dynamically load JSZip
     await new Promise((res,rej)=>{
@@ -135,57 +135,62 @@ const backupDataToExcel = async (shipments, invoices, vjraInvoices, buyers, bcs,
     });
     const XL = window.XLSX;
     const wb = XL.utils.book_new();
+    let sheetsAdded=0;
+
+    const addSheet=(name,rows)=>{
+      if(!rows||!rows.length) return;
+      const ws=XL.utils.json_to_sheet(rows);
+      XL.utils.book_append_sheet(wb,ws,name);
+      sheetsAdded++;
+    };
+
     setStatus("Preparing Shipments...");
-    if(shipments&&shipments.length){
-      const ws = XL.utils.json_to_sheet(shipments.map(s=>({
-        "Invoice No":s.invoice_no,"Date":s.invoice_date,"Buyer":s.buyer_name,
-        "Description":s.description,"Port of Loading":s.port_of_loading,
-        "Port of Discharge":s.port_of_discharge,"Country":s.country_of_destination,
-        "Qty (MT)":s.qty_mt,"Rate":s.rate_per_mt,"Invoice USD":s.invoice_value_usd,
-        "Invoice INR":s.invoice_value_inr,"FOB USD":s.fob_value_usd,
-        "Payment Rcvd USD":s.payment_received_usd,"Payment Rcvd INR":s.payment_received_inr,
-        "BL No":s.bl_no,"BL Date":s.bl_date,"SB No":s.sb_no,"SB Date":s.sb_date,
-        "BRC":s.brc_no,"RODTEP":s.rodtep_status,"GST Refund":s.gst_refund_status,
-        "FY":s.financial_year
-      })));
-      XL.utils.book_append_sheet(wb,ws,"Shipments");
-    }
+    addSheet("Shipments",(shipments||[]).map(s=>({
+      "Invoice No":s.invoice_no||"","Date":s.invoice_date||"","Buyer":s.buyer_name||"",
+      "Description":s.description||"","Port of Loading":s.port_of_loading||"",
+      "Port of Discharge":s.port_of_discharge||"","Country":s.country_of_destination||"",
+      "Qty (MT)":s.qty_mt||"","Rate":s.rate_per_mt||"","Invoice USD":s.invoice_value_usd||"",
+      "Invoice INR":s.invoice_value_inr||"","FOB USD":s.fob_value_usd||"",
+      "Payment Rcvd USD":s.payment_received_usd||"","Payment Rcvd INR":s.payment_received_inr||"",
+      "BL No":s.bl_no||"","BL Date":s.bl_date||"","SB No":s.sb_no||"","SB Date":s.sb_date||"",
+      "BRC":s.brc_no||"","RODTEP":s.rodtep_status||"","GST Refund":s.gst_refund_status||"","FY":s.financial_year||""
+    })));
+
     setStatus("Preparing Invoices...");
-    if(invoices&&invoices.length){
-      const ws = XL.utils.json_to_sheet(invoices.map(inv=>({
-        "Invoice No":inv.invoice_no,"Date":inv.invoice_date,
-        "Linked Data":JSON.stringify(inv.form_data||{}).slice(0,200)
-      })));
-      XL.utils.book_append_sheet(wb,ws,"Invoices");
-    }
+    addSheet("Invoices",(invoices||[]).map(inv=>({
+      "Invoice No":inv.invoice_no||"","Date":inv.invoice_date||"",
+      "Linked Data":JSON.stringify(inv.form_data||{}).slice(0,300)
+    })));
+
     setStatus("Preparing VJRA Invoices...");
-    if(vjraInvoices&&vjraInvoices.length){
-      const ws = XL.utils.json_to_sheet(vjraInvoices.map(inv=>({
-        "Invoice No":inv.invoice_no,"Date":inv.invoice_date,
-        "Linked Devratan":inv.linked_devratan_no,
-        "Data":JSON.stringify(inv.form_data||{}).slice(0,200)
-      })));
-      XL.utils.book_append_sheet(wb,ws,"VJRA Invoices");
-    }
+    addSheet("VJRA Invoices",(vjraInvoices||[]).map(inv=>({
+      "Invoice No":inv.invoice_no||"","Date":inv.invoice_date||"",
+      "Linked Devratan":inv.linked_devratan_no||"",
+      "Data":JSON.stringify(inv.form_data||{}).slice(0,300)
+    })));
+
     setStatus("Preparing Buyers...");
-    if(buyers&&buyers.length){
-      const ws = XL.utils.json_to_sheet(buyers.map(b=>({
-        "Name":b.name||b.company_name,"Address":b.address,
-        "Country":b.country,"Email":b.email,"Phone":b.phone
-      })));
-      XL.utils.book_append_sheet(wb,ws,"Buyers");
+    addSheet("Buyers",(buyers||[]).map(b=>({
+      "Name":b.name||b.company_name||"","Address":b.address||"",
+      "Country":b.country||"","Email":b.email||"","Phone":b.phone||""
+    })));
+
+    setStatus("Preparing Bill Collections...");
+    addSheet("Bill Collections",(bcs||[]).map(bc=>({
+      "BC No":bc.bc_no||"","Date":bc.bc_date||"","Invoice No":bc.invoice_no||"",
+      "Bank":bc.bank_name||"","Amount USD":bc.bc_amount_usd||bc.amount_usd||"",
+      "Amount INR":bc.bc_amount_inr||bc.amount_inr||""
+    })));
+
+    if(sheetsAdded===0){
+      // Fallback — add a placeholder sheet so workbook is not empty
+      const ws=XL.utils.json_to_sheet([{"Info":"No data found. Please check your internet connection and try again."}]);
+      XL.utils.book_append_sheet(wb,ws,"Info");
     }
-    setStatus("Preparing BC/IRM/BRC...");
-    if(bcs&&bcs.length){
-      const ws = XL.utils.json_to_sheet(bcs.map(bc=>({
-        "BC No":bc.bc_no,"Date":bc.bc_date,"Invoice No":bc.invoice_no,
-        "Bank":bc.bank_name,"Amount USD":bc.amount_usd,"Amount INR":bc.amount_inr
-      })));
-      XL.utils.book_append_sheet(wb,ws,"Bill Collections");
-    }
+
     setStatus("Generating Excel file...");
     XL.writeFile(wb,`Devratan_Data_Backup_${new Date().toISOString().slice(0,10)}.xlsx`);
-    setStatus("✅ Excel backup downloaded!");
+    setStatus(`✅ Excel backup downloaded! (${sheetsAdded} sheet${sheetsAdded!==1?"s":""} with data)`);
   } catch(e){ setStatus("❌ Error: "+e.message); }
 };
 
@@ -8603,11 +8608,11 @@ export default function App(){
                     setBackupStatus("Starting...");
                     // Load all data fresh for backup
                     const [ships,invs,vjraInvs,buys,bcList] = await Promise.all([
-                      sb("/rest/v1/shipments?select=*&order=invoice_date.desc").then(r=>r.json()).catch(()=>[]),
-                      sb("/rest/v1/invoices?select=*&order=invoice_date.desc").then(r=>r.json()).catch(()=>[]),
-                      sb("/rest/v1/vjra_invoices?select=*&order=invoice_date.desc").then(r=>r.json()).catch(()=>[]),
-                      sb("/rest/v1/buyers?select=*&order=name.asc").then(r=>r.json()).catch(()=>[]),
-                      sb("/rest/v1/bill_collections?select=*&order=bc_date.desc").then(r=>r.json()).catch(()=>[])
+                      sb("shipments?select=*&order=invoice_date.desc").then(r=>Array.isArray(r)?r:[]).catch(()=>[]),
+                      sb("invoices?select=*&order=invoice_date.desc").then(r=>Array.isArray(r)?r:[]).catch(()=>[]),
+                      sb("vjra_invoices?select=*&order=invoice_date.desc").then(r=>Array.isArray(r)?r:[]).catch(()=>[]),
+                      sb("buyers?select=*&order=name.asc").then(r=>Array.isArray(r)?r:[]).catch(()=>[]),
+                      sb("bill_collections?select=*&order=bc_date.desc").then(r=>Array.isArray(r)?r:[]).catch(()=>[])
                     ]);
                     await backupDataToExcel(ships,invs,vjraInvs,buys,bcList,setBackupStatus);
                   }} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>
