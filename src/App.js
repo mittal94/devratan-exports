@@ -6242,6 +6242,11 @@ function InvoicingTab({buyers}){
   const saveInvoice=async()=>{
     if(!form.invoice_no){alert("Invoice No. is required");return;}
     if(!form.parties.exp.consignee_id||!form.parties.exp.buyer_id){alert("Consignee and Buyer are mandatory for Export Invoice");return;}
+    // Duplicate check
+    if(!editId){
+      const existing=invoices.find(inv=>inv.invoice_no.trim().toLowerCase()===form.invoice_no.trim().toLowerCase());
+      if(existing){alert("Invoice No. '"+form.invoice_no+"' already exists. Please use a unique invoice number.");return;}
+    }
     setSaving(true);
     try{
       const payload={invoice_no:form.invoice_no,invoice_date:form.invoice_date,contract_no:form.contract_no,form_data:form};
@@ -6412,7 +6417,7 @@ function InvoicingTab({buyers}){
   const renderItemsTable=(doc,M,y,RW,showPrice,useBuyerRate)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
     const cols=showPrice
-      ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
+      ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
       :[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Gross Wt (Kg)",28],["Net Wt (Kg)",RW-10-45-55-20-28]];
     let hx=M;
     cols.forEach(([h,w])=>{
@@ -6443,7 +6448,7 @@ function InvoicingTab({buyers}){
         if(ci===0) doc.text(String(i+1),rx+0.5,y+4);
         else if(ci===1){invNF(doc,false,7);doc.text(pkgStr,rx+0.5,y+4,{maxWidth:cols[1][1]-2});}
         else if(ci===2){invNF(doc,true,7.5);doc.text(descL1,rx+0.5,y+3.5);}
-        else if(ci===3) doc.text(qty?qty.toFixed(3):"",rx+0.5,y+4);
+        else if(ci===3) doc.text(qty?(qty.toFixed(3)+" "+(it.qty_unit||"MT")):"",rx+0.5,y+4);
         else if(showPrice){
           if(ci===4){invNF(doc,false,7.5);doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+4);}
           if(ci===5){invNF(doc,true,7.5);doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+4);}
@@ -6893,7 +6898,14 @@ function InvoicingTab({buyers}){
           <FRow label="Description Line 1" required><FInput value={it.desc1} onChange={v=>updItem(i,"desc1",v)}/></FRow>
           <FRow label="Description Line 2 (bags/brand)"><FInput value={it.desc2} onChange={v=>updItem(i,"desc2",v)} placeholder="e.g. 10400 BAGS OF 25KG EACH IN BOPP BAGS – BRAND NAME"/></FRow>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
-            <FRow label="Qty (MT)" required><FInput value={it.qty_mt} onChange={v=>updItem(i,"qty_mt",v)} placeholder="e.g. 260"/></FRow>
+            <FRow label="Qty" required>
+            <div style={{display:"flex",gap:4}}>
+              <FInput value={it.qty_mt} onChange={v=>updItem(i,"qty_mt",v)} placeholder="e.g. 260" style={{flex:1}}/>
+              <select value={it.qty_unit||"MT"} onChange={e=>updItem(i,"qty_unit",e.target.value)} style={{...iS,fontSize:12,width:60}}>
+                <option>MT</option><option>QTL</option>
+              </select>
+            </div>
+          </FRow>
             <FRow label="No. of Bags"><FInput value={it.bags} onChange={v=>updItem(i,"bags",v)} placeholder="e.g. 10400"/></FRow>
             <FRow label="No. of Containers"><FInput value={it.cont_qty} onChange={v=>updItem(i,"cont_qty",v)} placeholder="e.g. 05"/></FRow>
             <FRow label="Container Type">
@@ -7127,6 +7139,10 @@ function VJRAInvoicingTab({buyers}){
 
   const saveInvoice=async()=>{
     if(!form.invoice_no){alert("Invoice No. is required");return;}
+    if(!editId){
+      const existing=invoices.find(inv=>inv.invoice_no.trim().toLowerCase()===form.invoice_no.trim().toLowerCase());
+      if(existing){alert("Invoice No. '"+form.invoice_no+"' already exists in VJRA invoices.");return;}
+    }
     setSaving(true);
     try{
       const payload={invoice_no:form.invoice_no,invoice_date:form.invoice_date,linked_devratan_no:form.linked_devratan_no,form_data:form};
@@ -7158,24 +7174,28 @@ function VJRAInvoicingTab({buyers}){
   const vjraBank=BANK_DETAILS.vjra;
 
   const addVJRAHeader=(doc,title)=>{
-    const navy=[18,52,96],steel=[70,130,180],ltblue=[220,235,250],gold=[162,120,50];
-    doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
-    doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
-    doc.text(vjraCo.name,12,13);
-    const cnW=doc.getStringUnitWidth(vjraCo.name)*12/doc.internal.scaleFactor;
-    doc.setDrawColor(...gold); doc.setLineWidth(0.6); doc.line(12,14.5,12+cnW,14.5);
-    doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
-    doc.text(vjraCo.address,12,19);
-    doc.text(vjraCo.phone+"  |  "+vjraCo.email,12,23.5);
+    const teal=[0,105,92],ltTeal=[178,223,219],gold=[180,120,0],white=[255,255,255];
+    // Teal gradient-style header
+    doc.setFillColor(...ltTeal); doc.rect(0,0,210,50,"F");
+    doc.setFillColor(...teal); doc.rect(0,0,210,3,"F"); // top bar
+    // Company name centered
+    doc.setFontSize(15); doc.setFont("helvetica","bold"); doc.setTextColor(...teal);
+    doc.text(vjraCo.name,105,14,{align:"center"});
+    const cnW=doc.getStringUnitWidth(vjraCo.name)*15/doc.internal.scaleFactor;
+    doc.setDrawColor(...gold); doc.setLineWidth(0.8);
+    doc.line(105-cnW/2,16,105+cnW/2,16);
+    doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(0,60,50);
+    doc.text(vjraCo.address,105,21,{align:"center"});
+    doc.text(vjraCo.phone+"  |  "+vjraCo.email,105,26,{align:"center"});
     // Title centred below header
-    doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
-    doc.text(title,105,43,{align:"center"});
+    doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...teal);
+    doc.text(title,105,45,{align:"center"});
     doc.setTextColor(0,0,0);
-    return 52;
+    return 54;
   };
 
   const addVJRAFooter=(doc)=>{
-    const navy=[18,52,96],white=[255,255,255];
+    const navy=[0,105,92],white=[255,255,255];
     const tp=doc.getNumberOfPages();
     for(let i=1;i<=tp;i++){
       doc.setPage(i);
@@ -7201,38 +7221,58 @@ function VJRAInvoicingTab({buyers}){
   };
 
   const vjraRenderParties=(doc,pdata,M,y,RW)=>{
-    const navy=[18,52,96];
+    const teal=[0,105,92],ltTeal=[178,223,219];
     const cons=buyerById(pdata.consignee_id);
     const buyer=buyerById(pdata.buyer_id);
     const notifyEntries=pdata.notifies.map((nid,i)=>({idx:i+1,b:buyerById(nid)})).filter(e=>e.b);
     const hW=RW/2;
-    const r1H=Math.max(18,
-      Math.max(doc.splitTextToSize((cons?cons.company_name||cons.name:""),hW-3).length,
-               doc.splitTextToSize((buyer?buyer.company_name||buyer.name:""),hW-3).length)*3.8+8);
-    // Consignee
+    // Proper height: name line + address wrapped lines + label + padding
+    const consNameLines=doc.splitTextToSize(cons?cons.company_name||cons.name||"":"",hW-4);
+    const consAddrLines=doc.splitTextToSize(cons?buyerAddr(cons):"",hW-4);
+    const buyerNameLines=doc.splitTextToSize(buyer?buyer.company_name||buyer.name||"":"",hW-4);
+    const buyerAddrLines=doc.splitTextToSize(buyer?buyerAddr(buyer):"",hW-4);
+    const r1H=Math.max(24,Math.max(
+      (consNameLines.length+consAddrLines.length)*3.8+7,
+      (buyerNameLines.length+buyerAddrLines.length)*3.8+7));
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.2);
     doc.rect(M,y,hW,r1H); doc.rect(M+hW,y,hW,r1H);
-    doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-    doc.text("Consignee:",M+1,y+3.5);
+    doc.setFillColor(...ltTeal); doc.rect(M,y,hW,5,"F"); doc.rect(M+hW,y,hW,5,"F");
+    doc.setTextColor(...teal); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+    doc.text("Consignee:",M+1,y+3.8);
     doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0);
-    if(cons){doc.text(cons.company_name||cons.name||"",M+1,y+7);doc.text(buyerAddr(cons),M+1,y+10.5,{maxWidth:hW-2});}
-    doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-    doc.text("Buyer:",M+hW+1,y+3.5);
+    let cy=y+7;
+    if(cons){doc.text(consNameLines,M+1,cy,{maxWidth:hW-2});cy+=consNameLines.length*3.8;}
+    if(cons&&consAddrLines.length){doc.text(consAddrLines,M+1,cy,{maxWidth:hW-2});}
+    doc.setTextColor(...teal); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+    doc.text("Buyer:",M+hW+1,y+3.8);
     doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0);
-    if(buyer){doc.text(buyer.company_name||buyer.name||"",M+hW+1,y+7);doc.text(buyerAddr(buyer),M+hW+1,y+10.5,{maxWidth:hW-2});}
+    let by2=y+7;
+    if(buyer){doc.text(buyerNameLines,M+hW+1,by2,{maxWidth:hW-2});by2+=buyerNameLines.length*3.8;}
+    if(buyer&&buyerAddrLines.length){doc.text(buyerAddrLines,M+hW+1,by2,{maxWidth:hW-2});}
     y+=r1H;
     if(notifyEntries.length>0){
       const rows=[];
       for(let i=0;i<notifyEntries.length;i+=3) rows.push(notifyEntries.slice(i,i+3));
       rows.forEach(row=>{
         const nW=RW/Math.max(row.length,1);
-        const rH=Math.max(...row.map(e=>doc.splitTextToSize((e.b?e.b.company_name||e.b.name:""),nW-3).length))*3.8+8;
+        const rHs=row.map(e=>{
+          const nml=doc.splitTextToSize(e.b?e.b.company_name||e.b.name||"":"",nW-4);
+          const nal=doc.splitTextToSize(e.b?buyerAddr(e.b):"",nW-4);
+          return Math.max(20,(nml.length+nal.length)*3.8+7);
+        });
+        const rH=Math.max(...rHs);
         row.forEach((e,j)=>{
           doc.rect(M+j*nW,y,nW,rH);
-          doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-          doc.text("Notify Party "+e.idx+":",M+j*nW+1,y+3.5);
+          doc.setFillColor(...ltTeal); doc.rect(M+j*nW,y,nW,5,"F");
+          doc.setTextColor(...teal); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
+          doc.text("Notify Party "+e.idx+":",M+j*nW+1,y+3.8);
           doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0);
-          if(e.b){doc.text(e.b.company_name||e.b.name||"",M+j*nW+1,y+7);doc.text(buyerAddr(e.b),M+j*nW+1,y+10.5,{maxWidth:nW-2});}
+          if(e.b){
+            const nl=doc.splitTextToSize(e.b.company_name||e.b.name||"",nW-4);
+            const al=doc.splitTextToSize(buyerAddr(e.b),nW-4);
+            doc.text(nl,M+j*nW+1,y+7,{maxWidth:nW-2});
+            if(al.length) doc.text(al,M+j*nW+1,y+7+nl.length*3.8,{maxWidth:nW-2});
+          }
         });
         y+=rH;
       });
@@ -7258,7 +7298,7 @@ function VJRAInvoicingTab({buyers}){
   const vjraItemsTable=(doc,M,y,RW,showPrice)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
     const cols=showPrice
-      ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
+      ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
       :[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Gross Wt (Kg)",28],["Net Wt (Kg)",RW-10-45-55-20-28]];
     let hx=M;
     cols.forEach(([h,w])=>{
@@ -7287,7 +7327,7 @@ function VJRAInvoicingTab({buyers}){
         if(ci===0) doc.text(String(i+1),rx+0.5,y+4);
         else if(ci===1) doc.text(pkgStr,rx+0.5,y+4,{maxWidth:w-2});
         else if(ci===2){doc.setFont("helvetica","bold");doc.text(descL1,rx+0.5,y+3.5);}
-        else if(ci===3) doc.text(qty?qty.toFixed(3):"",rx+0.5,y+4);
+        else if(ci===3) doc.text(qty?(qty.toFixed(3)+" "+(it.qty_unit||"MT")):"",rx+0.5,y+4);
         else if(showPrice){
           if(ci===4){doc.setFont("helvetica","normal");doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+4);}
           if(ci===5){doc.setFont("helvetica","bold");doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+4);}
@@ -7604,7 +7644,14 @@ function VJRAInvoicingTab({buyers}){
           <FRow label="Description Line 1"><FInput value={it.desc1} onChange={v=>updItem(i,"desc1",v)}/></FRow>
           <FRow label="Description Line 2 (bags/brand)"><FInput value={it.desc2} onChange={v=>updItem(i,"desc2",v)}/></FRow>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
-            <FRow label="Qty (MT)"><FInput value={it.qty_mt} onChange={v=>updItem(i,"qty_mt",v)}/></FRow>
+            <FRow label="Qty">
+              <div style={{display:"flex",gap:4}}>
+                <FInput value={it.qty_mt} onChange={v=>updItem(i,"qty_mt",v)} style={{flex:1}}/>
+                <select value={it.qty_unit||"MT"} onChange={e=>updItem(i,"qty_unit",e.target.value)} style={{...iS,fontSize:12,width:60}}>
+                  <option>MT</option><option>QTL</option>
+                </select>
+              </div>
+            </FRow>
             <FRow label="No. of Bags"><FInput value={it.bags} onChange={v=>updItem(i,"bags",v)}/></FRow>
             <FRow label="No. of Containers"><FInput value={it.cont_qty} onChange={v=>updItem(i,"cont_qty",v)}/></FRow>
             <FRow label="Container Type">
@@ -7972,6 +8019,11 @@ export default function App(){
   // ── Buyer CRUD ─────────────────────────────────────────────────────────────
   const saveBuyer=async(form)=>{
     if(!form.buyer_name){alert("Buyer name required.");return;}
+    // Duplicate check
+    if(!editBuyer){
+      const existing=buyers.find(b=>(b.company_name||b.buyer_name||b.name||"").trim().toLowerCase()===(form.buyer_name||"").trim().toLowerCase());
+      if(existing){alert("A buyer with the name '"+form.buyer_name+"' already exists.");return;}
+    }
     setSaving(true);
     try{
       const payload={...form};delete payload.id;delete payload.created_at;
