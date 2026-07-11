@@ -6129,6 +6129,28 @@ function EPCForm({ships}){
 
 
 
+// ── numWords helper (global) ───────────────────────────────────────────────
+function numWords(amt,ccy){
+  if(!amt||isNaN(Number(amt)))return"";
+  const num=Math.round(Number(amt)*100)/100;
+  const intPart=Math.floor(num);
+  const decPart=Math.round((num-intPart)*100);
+  const ones=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+  const tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  const toW=n=>{
+    if(n===0)return"";
+    if(n<20)return ones[n]+" ";
+    if(n<100)return tens[Math.floor(n/10)]+" "+(n%10?ones[n%10]+" ":"");
+    if(n<1000)return ones[Math.floor(n/100)]+" Hundred "+(n%100?toW(n%100):"");
+    if(n<100000)return toW(Math.floor(n/1000))+"Thousand "+toW(n%1000);
+    if(n<10000000)return toW(Math.floor(n/100000))+"Lac "+toW(n%100000);
+    return toW(Math.floor(n/10000000))+"Crore "+toW(n%10000000);
+  };
+  const words=toW(intPart).trim();
+  const c=ccy||"USD";
+  if(decPart>0) return words+" "+c.slice(0,1).toUpperCase()+c.slice(1).toLowerCase()+"s and "+toW(decPart).trim()+" Cents Only";
+  return words+" "+c+"s and No Cents Only";
+}
 // ─── Invoicing Module ─────────────────────────────────────────────────────────
 
 const INVOICE_EMPTY = {
@@ -6214,28 +6236,7 @@ function InvoicingTab({buyers}){
   const buyerAddr=b=>b?[b.address,b.city,b.country].filter(Boolean).join(", "):"";
   const buyerName=id=>{const b=buyerById(id);return b?b.company_name||b.name||"":"";}; 
 
-  // ── numWords ───────────────────────────────────────────────────────────────
-  const numWords=amt=>{
-    if(!amt||isNaN(Number(amt)))return"";
-    const num=Math.round(Number(amt)*100)/100;
-    const intPart=Math.floor(num);
-    const decPart=Math.round((num-intPart)*100);
-    const ones=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
-    const tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
-    const toW=n=>{
-      if(n===0)return"";
-      if(n<20)return ones[n]+" ";
-      if(n<100)return tens[Math.floor(n/10)]+" "+(n%10?ones[n%10]+" ":"");
-      if(n<1000)return ones[Math.floor(n/100)]+" Hundred "+(n%100?toW(n%100):"");
-      if(n<100000)return toW(Math.floor(n/1000))+"Thousand "+toW(n%1000);
-      if(n<10000000)return toW(Math.floor(n/100000))+"Lac "+toW(n%100000);
-      return toW(Math.floor(n/10000000))+"Crore "+toW(n%10000000);
-    };
-    const words=toW(intPart).trim();
-    const ccy=form.items[0]?.ccy||"USD";
-    if(decPart>0) return words+" "+ccy.slice(0,1).toUpperCase()+ccy.slice(1).toLowerCase()+"s and "+toW(decPart).trim()+" Cents Only";
-    return words+" "+ccy+"s and No Cents Only";
-  };
+  // numWords is now global
 
   // ── Save ───────────────────────────────────────────────────────────────────
   const saveInvoice=async()=>{
@@ -6597,7 +6598,7 @@ function InvoicingTab({buyers}){
     y=invChkPg(doc,y,16,null,null);
     invNF(doc,true,8); doc.text("Amount in Words:",M,y); y+=4.5;
     invNF(doc,false,8);
-    const amtWordsExp=numWords(totalAmt);
+    const amtWordsExp=numWords(totalAmt,form.items[0]?.ccy);
     const amtLinesExp=doc.splitTextToSize(amtWordsExp,RW);
     doc.text(amtLinesExp,M,y);
     y+=amtLinesExp.length*4.5+4;
@@ -6671,7 +6672,7 @@ function InvoicingTab({buyers}){
     const commBuyerAmt=partyKey==="buyer"
       ? form.items.reduce((s,it)=>{const r=it.rate_per_mt_buyer?n(it.rate_per_mt_buyer):n(it.rate_per_mt);return s+n(it.qty_mt)*r;},0)
       : totalAmt;
-    const amtWordsComm=numWords(commBuyerAmt);
+    const amtWordsComm=numWords(commBuyerAmt,form.items[0]?.ccy);
     const amtLinesComm=doc.splitTextToSize(amtWordsComm,RW);
     doc.text(amtLinesComm,M,y);
     y+=amtLinesComm.length*4.5+4;
@@ -7394,7 +7395,7 @@ function VJRAInvoicingTab({buyers}){
     if(y+16>282){doc.addPage();y=52;}
     doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.text("Amount in Words:",M,y); y+=4.5;
     doc.setFont("helvetica","normal"); doc.setFontSize(8);
-    const amtW=numWords(totAmt);
+    const amtW=numWords(totAmt,form.items[0]?.ccy||"USD");
     const amtLines=doc.splitTextToSize(amtW,RW);
     doc.text(amtLines,M,y); y+=amtLines.length*4.5+4;
 
