@@ -6527,15 +6527,17 @@ function InvoicingTab({buyers}){
   const signBlock=(doc,M,y,RW,co)=>{
     const seller=co||COMPANIES.devratan;
     const sealImg=co?null:SEAL_B64;
+    // Need ~50mm for sign block — add new page if not enough room
+    if(y+50>282){doc.addPage();y=50;}
     invNF(doc,false,8.5);
     y+=5;
-    doc.text("For "+seller.name,M+RW-60,y); y+=2;
-    try{if(sealImg)doc.addImage(sealImg,"JPEG",M+RW-58,y,50,30);}catch(e){}
-    y+=32;
+    doc.text("For "+seller.name,M+RW-55,y); y+=2;
+    try{if(sealImg)doc.addImage(sealImg,"JPEG",M+RW-55,y,45,28);}catch(e){}
+    y+=30;
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
-    doc.line(M+RW-60,y,M+RW,y); y+=5;
+    doc.line(M+RW-55,y,M+RW,y); y+=5;
     invNF(doc,false,7.5);
-    doc.text("Authorised Signatory",M+RW-60,y);
+    doc.text("Authorised Signatory",M+RW-55,y);
     return y+6;
   };
 
@@ -7206,15 +7208,16 @@ function VJRAInvoicingTab({buyers}){
   };
 
   const vjraSignBlock=(doc,M,y,RW)=>{
+    if(y+50>282){doc.addPage();y=50;}
     doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(0,0,0);
     y+=5;
-    doc.text("For "+vjraCo.name,M+RW-60,y); y+=2;
-    try{if(VJRA_SEAL_B64)doc.addImage(VJRA_SEAL_B64,"PNG",M+RW-58,y,50,30);}catch(e){}
-    y+=32;
+    doc.text("For "+vjraCo.name,M+RW-55,y); y+=2;
+    try{if(VJRA_SEAL_B64)doc.addImage(VJRA_SEAL_B64,"PNG",M+RW-55,y,45,28);}catch(e){}
+    y+=30;
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
-    doc.line(M+RW-60,y,M+RW,y); y+=5;
+    doc.line(M+RW-55,y,M+RW,y); y+=5;
     doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
-    doc.text("Authorised Signatory",M+RW-60,y);
+    doc.text("Authorised Signatory",M+RW-55,y);
     return y+6;
   };
 
