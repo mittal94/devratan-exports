@@ -6528,7 +6528,7 @@ function InvoicingTab({buyers}){
     const seller=co||COMPANIES.devratan;
     const sealImg=co?null:SEAL_B64;
     // Need ~50mm for sign block — add new page if not enough room
-    if(y+50>282){doc.addPage();y=50;}
+    if(y+42>282){doc.addPage();y=50;}
     invNF(doc,false,8.5);
     y+=5;
     doc.text("For "+seller.name,M+RW-55,y); y+=2;
@@ -6588,41 +6588,38 @@ function InvoicingTab({buyers}){
     breakupRows.push(["GST @ "+(n(form.gst_rate)*100).toFixed(0)+"% (IGST)","INR "+igst.toLocaleString("en-IN"),""]);
     doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
       body:breakupRows.map(r=>[{content:r[0],styles:{fontStyle:"bold",cellWidth:RW*0.55}},{content:r[1],styles:{fontStyle:"bold"}}]),
-      styles:{fontSize:8,cellPadding:{top:2,bottom:2,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+      styles:{fontSize:7.5,cellPadding:{top:1.5,bottom:1.5,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
-    y=doc.lastAutoTable.finalY+3;
+    y=doc.lastAutoTable.finalY+2;
 
     // Gross/Net wt summary
-    // Total wt from items: total bags × per-bag wt (not containers)
     const totNetWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
     const totGrossWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_gross_wt)*100)/100,0);
-    invNF(doc,false,8);
+    invNF(doc,false,7.5);
     const wtStr="Total Net Wt: "+totNetWt.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWt.toLocaleString("en-IN")+" Kgs";
-    doc.text(wtStr,M,y,{maxWidth:RW}); y+=6;
+    doc.text(wtStr,M,y,{maxWidth:RW}); y+=5;
 
     // Amount in words
-    y=invChkPg(doc,y,16,null,null);
-    invNF(doc,true,8); doc.text("Amount in Words:",M,y); y+=4.5;
-    invNF(doc,false,8);
+    invNF(doc,true,7.5); doc.text("Amount in Words:",M,y); y+=4;
+    invNF(doc,false,7.5);
     const amtWordsExp=numWords(totalAmt,form.items[0]?.ccy);
     const amtLinesExp=doc.splitTextToSize(amtWordsExp,RW);
     doc.text(amtLinesExp,M,y);
-    y+=amtLinesExp.length*4.5+4;
+    y+=amtLinesExp.length*4+3;
 
     // Third party
     if(form.third_party_name){
-      invNF(doc,false,8);
-      doc.text("Third Party: "+form.third_party_name+(form.third_party_gst?"  |  GST: "+form.third_party_gst:""),M,y); y+=6;
+      invNF(doc,false,7.5);
+      doc.text("Third Party: "+form.third_party_name+(form.third_party_gst?"  |  GST: "+form.third_party_gst:""),M,y); y+=5;
     }
 
     // Bank details
-    y=invChkPg(doc,y,22,null,null);
-    invNF(doc,true,8.5); doc.text("Bank Details:",M,y); y+=5;
-    invNF(doc,false,8);
+    invNF(doc,true,8); doc.text("Bank Details:",M,y); y+=4;
+    invNF(doc,false,7.5);
     const bd=BANK_DETAILS.devratan;
     doc.text("Bank: "+bd.bankName+"  |  Branch: "+bd.branch,M,y); y+=4;
-    doc.text("A/c No.: "+bd.accNo+"  |  AD Code: 0023340",M,y); y+=8;
+    doc.text("A/c No.: "+bd.accNo+"  |  AD Code: 0023340",M,y); y+=5;
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
@@ -7208,7 +7205,7 @@ function VJRAInvoicingTab({buyers}){
   };
 
   const vjraSignBlock=(doc,M,y,RW)=>{
-    if(y+50>282){doc.addPage();y=50;}
+    if(y+42>282){doc.addPage();y=50;}
     doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(0,0,0);
     y+=5;
     doc.text("For "+vjraCo.name,M+RW-55,y); y+=2;
