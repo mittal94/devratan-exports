@@ -6300,7 +6300,7 @@ const INVOICE_EMPTY = {
   advance_amt:"", extra_charges:[{label:"",amount:""}],
   bl_no:"", bl_date:"",
   freight_per_mt:"", insurance_per_mt:"",
-  items:[{desc1:"INDIAN PARBOILED RICE",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",rate_per_mt_buyer:"",cont_qty:"",cont_type:"20' FCL",bag_net_wt:"25",bag_gross_wt:"25.13"}],
+  items:[{desc1:"INDIAN PARBOILED RICE",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",rate_per_mt_buyer:"",cont_qty:"",cont_type:"20' FCL",bag_net_wt:"25",bag_gross_wt:"25.13",gst_rate:"0.05"}],
   containers:[{cont_no:"",seal_no:"",bags:""}],
   parties:{
     exp:   {consignee_id:"",buyer_id:"",notifies:["","","","","",""]},
@@ -6338,7 +6338,7 @@ function InvoicingTab({buyers}){
   });
 
   // ── Items helpers ──────────────────────────────────────────────────────────
-  const addItem=()=>setForm(p=>({...p,items:[...p.items,{desc1:"",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",rate_per_mt_buyer:"",cont_qty:"",cont_type:"20' FCL",bag_net_wt:"25",bag_gross_wt:"25.13"}]}));
+  const addItem=()=>setForm(p=>({...p,items:[...p.items,{desc1:"",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",rate_per_mt_buyer:"",cont_qty:"",cont_type:"20' FCL",bag_net_wt:"25",bag_gross_wt:"25.13",gst_rate:"0.05"}]}));
   const updItem=(i,k,v)=>setForm(p=>{const it=[...p.items];it[i]={...it[i],[k]:v};return{...p,items:it};});
   const delItem=(i)=>setForm(p=>({...p,items:p.items.filter((_,j)=>j!==i)}));
 
@@ -6356,7 +6356,12 @@ function InvoicingTab({buyers}){
   const totalFOB=form.delivery_terms==="FOB"?totalAmt:form.delivery_terms==="CIF"?totalAmt-totalFrt-totalIns:totalAmt-totalIns;
   const totalCIF=form.delivery_terms==="FOB"?totalAmt:totalAmt;
   const totalINR=Math.round(totalAmt*n(form.exchange_rate));
-  const igst=Math.round(totalINR*n(form.gst_rate));
+  // IGST calculated per item: each item's INR value × its own gst_rate
+  const igst=Math.round(form.items.reduce((s,it)=>{
+    const itemAmt=n(it.qty_mt)*n(it.rate_per_mt);
+    const itemINR=itemAmt*n(form.exchange_rate);
+    return s+itemINR*n(it.gst_rate||"0");
+  },0));
   const contTotBags=form.containers.reduce((s,c)=>s+n(c.bags),0);
   const getItemForCont=c=>(form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"});
   const contTotGross=form.containers.reduce((s,c)=>{const it=getItemForCont(c);return s+Math.round(n(c.bags)*n(it.bag_gross_wt)*100)/100;},0);
@@ -6723,7 +6728,9 @@ function InvoicingTab({buyers}){
     }
     breakupRows.push(["EXCHANGE RATE (1 "+ccy+" = INR "+form.exchange_rate+")",""]);
     breakupRows.push(["AMOUNT IN INR","INR "+totalINR.toLocaleString("en-IN"),""]);
-    breakupRows.push(["GST @ "+(n(form.gst_rate)*100).toFixed(0)+"% (IGST)","INR "+igst.toLocaleString("en-IN"),""]);
+    const gstRates=[...new Set(form.items.map(it=>it.gst_rate||"0").filter(r=>n(r)>0))];
+    const gstLabel=gstRates.length===0?"GST @ 0% (IGST)":gstRates.length===1?"GST @ "+(n(gstRates[0])*100).toFixed(0)+"% (IGST)":"GST (IGST) — Mixed Rates";
+    breakupRows.push([gstLabel,"INR "+igst.toLocaleString("en-IN"),""]);
     doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
       body:breakupRows.map(r=>[{content:r[0],styles:{fontStyle:"bold",cellWidth:RW*0.55}},{content:r[1],styles:{fontStyle:"bold"}}]),
       styles:{fontSize:7.5,cellPadding:{top:1.5,bottom:1.5,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
@@ -7034,7 +7041,7 @@ function InvoicingTab({buyers}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           <FRow label="State of Origin"><FInput value={form.state_origin} onChange={v=>sf("state_origin",v)} placeholder="e.g. UP"/></FRow>
           <FRow label="Exchange Rate (INR per FCY)"><FInput value={form.exchange_rate} onChange={v=>sf("exchange_rate",v)} placeholder="e.g. 94.9"/></FRow>
-          <FRow label="GST Rate"><select value={form.gst_rate} onChange={e=>sf("gst_rate",e.target.value)} style={{...iS,fontSize:12}}><option value="0.05">5%</option><option value="0.12">12%</option><option value="0.18">18%</option><option value="0">0%</option></select></FRow>
+{/* GST Rate moved to per-item below */}
           <FRow label="Third Party Name (optional)"><FInput value={form.third_party_name} onChange={v=>sf("third_party_name",v)}/></FRow>
           <FRow label="Third Party GST No. (optional)"><FInput value={form.third_party_gst} onChange={v=>sf("third_party_gst",v)}/></FRow>
         </div>
@@ -7097,6 +7104,7 @@ function InvoicingTab({buyers}){
             </FRow>
             <FRow label="Rate/MT (Export Inv)" required><FInput value={it.rate_per_mt} onChange={v=>updItem(i,"rate_per_mt",v)} placeholder="e.g. 370"/></FRow>
             <FRow label="Rate/MT (Comm Inv Buyer)"><FInput value={it.rate_per_mt_buyer} onChange={v=>updItem(i,"rate_per_mt_buyer",v)} placeholder="Override for Buyer invoice"/></FRow>
+            <FRow label="GST Rate (this item)"><select value={it.gst_rate||"0.05"} onChange={e=>updItem(i,"gst_rate",e.target.value)} style={{...iS,fontSize:12}}><option value="0.05">5%</option><option value="0.12">12%</option><option value="0.18">18%</option><option value="0">0% (No GST)</option></select></FRow>
             <FRow label="Amount (auto)">
               <div style={{...iS,background:"#f1f5f9",fontSize:12,color:"#15803d",fontWeight:700}}>
                 {it.ccy} {it.qty_mt&&it.rate_per_mt?(n(it.qty_mt)*n(it.rate_per_mt)).toLocaleString("en-IN",{minimumFractionDigits:2}):"—"}
