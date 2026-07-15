@@ -6360,7 +6360,7 @@ function InvoicingTab({buyers}){
   const igst=Math.round(form.items.reduce((s,it)=>{
     const itemAmt=n(it.qty_mt)*n(it.rate_per_mt);
     const itemINR=itemAmt*n(form.exchange_rate);
-    return s+itemINR*n(it.gst_rate||"0");
+    return s+itemINR*n(it.gst_rate!=null&&it.gst_rate!==""?it.gst_rate:"0.05");
   },0));
   const contTotBags=form.containers.reduce((s,c)=>s+n(c.bags),0);
   const getItemForCont=c=>(form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"});
@@ -6413,6 +6413,9 @@ function InvoicingTab({buyers}){
       if(!merged.parties[tab].notifies) merged.parties[tab].notifies=["","","","","",""];
       while(merged.parties[tab].notifies.length<6) merged.parties[tab].notifies.push("");
     });
+    // Migrate existing items — fill missing gst_rate with "0.05" default
+    const ITEM_DEFAULTS={desc1:"",desc2:"",bags:"",qty_mt:"",ccy:"USD",rate_per_mt:"",rate_per_mt_buyer:"",cont_qty:"",cont_type:"20' FCL",bag_net_wt:"25",bag_gross_wt:"25.13",gst_rate:"0.05"};
+    merged.items=(merged.items||[]).map(it=>({...ITEM_DEFAULTS,...it,gst_rate:it.gst_rate||"0.05"}));
     setForm(merged);
     setEditId(inv.id);
     setView("form");
