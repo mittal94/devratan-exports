@@ -3759,6 +3759,7 @@ function exportContractPDF(contract, buyer, consignee) {
           [{ content: "Packing",       styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: items[0].packing || "" }],
           [{ content: "Quantity",      styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: (items[0].quantity_mt||"")+" MTS "+(contract.quantity_tolerance||"")+"\n"+(items[0].container_qty&&items[0].container_type?items[0].container_qty+" x "+items[0].container_type:"") }],
           [{ content: "Price",         styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: "USD "+(items[0].price_usd||"")+" Per "+(items[0].price_per||"MTs")+" "+(contract.delivery_terms||"CIF"), styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
+          [{ content: "Total Value",   styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: totVal>0?"USD "+totVal.toLocaleString("en-IN",{minimumFractionDigits:2})+" "+(contract.delivery_terms||"CIF").split(" ")[0]:"", styles: { fontStyle: "bold", textColor: [20, 80, 20] } }],
         ]
       : [
           // Each item on its own row for clean multi-item layout
