@@ -3564,7 +3564,6 @@ function exportContractPDF(contract, buyer, consignee) {
     doc.setFillColor(...navy); doc.rect(0, 288, 210, 9, "F");
     doc.setFontSize(6.5); doc.setTextColor(...white); doc.setFont(undefined, "normal");
     doc.text(seller.name + (seller.phone?" |  "+seller.phone:"") + (seller.email?"  |  "+seller.email:"") + (seller.web?"  |  "+seller.web:"") + (seller.gstin?"  |  "+seller.gstin:""), 105, 294, { align: "center" });
-    addWatermark();
   };
 
   // ── Section heading ───────────────────────────────────────────────────────
@@ -3619,7 +3618,6 @@ function exportContractPDF(contract, buyer, consignee) {
   // ═══════════════════════════════════════════════════════
   // PAGE 1 HEADER
   // ═══════════════════════════════════════════════════════
-  addWatermark();
 
   // ── Header: light blue background (matches brand) ─────────────────────────
   // Main header bg — light blue
@@ -3927,10 +3925,21 @@ function exportContractPDF(contract, buyer, consignee) {
   drawSigBox(M, "SELLER", seller.name);
   drawSigBox(M + sigW + 8, "BUYER", contract.buyer_name || "");
 
-  // ── FOOTER on every page ──────────────────────────────────────────────────
+  // ── WATERMARK + FOOTER on every page (watermark drawn last so it overlays tables) ─
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
+    // Draw watermark on top of all content
+    try {
+      if(seller === COMPANIES.vjra){
+        try{ doc.saveGraphicsState(); doc.setGState(new doc.GState({opacity:0.12})); }catch(e){}
+        doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
+        try{ doc.restoreGraphicsState(); }catch(e){}
+      } else {
+        doc.addImage(WATERMARK_B64,"PNG",45,85,120,90);
+      }
+    } catch(e){}
+    // Footer on top of watermark
     doc.setFillColor(...navy); doc.rect(0, 290, 210, 7, "F");
     doc.setFontSize(6.5); doc.setTextColor(...white); doc.setFont(undefined, "normal");
     doc.text(seller.name + (seller.phone?" |  "+seller.phone:"") + (seller.email?"  |  "+seller.email:"") + (seller.web?"  |  "+seller.web:"") + (seller.gstin?"  |  "+seller.gstin:""), 105, 293.5, { align: "center" });
