@@ -3541,13 +3541,14 @@ function exportContractPDF(contract, buyer, consignee) {
 
   const addWatermark = () => {
     // Use actual watermark PNG centered on page
+    const wmLogo = (seller === COMPANIES.vjra) ? VJRA_LOGO_B64_PNG : WATERMARK_B64;
     try {
-      doc.addImage(WATERMARK_B64, "PNG", 45, 85, 120, 90);
+      doc.addImage(wmLogo, "PNG", 45, 85, 120, 90);
     } catch(e) {
       // Fallback text watermark
       doc.setFontSize(38); doc.setFont(undefined, "bold");
       doc.setTextColor(235, 237, 242);
-      doc.text("DEVRATAN", 108, 162, { align: "center", angle: 38 });
+      doc.text(seller.name.split(" ")[0], 108, 162, { align: "center", angle: 38 });
     }
     doc.setTextColor(0, 0, 0);
   };
