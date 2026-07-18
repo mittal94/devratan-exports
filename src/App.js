@@ -3664,12 +3664,7 @@ function exportContractPDF(contract, buyer, consignee) {
   doc.setFontSize(7); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
   doc.text("Date: " + (contract.contract_date || ""), 210 - M, 33.5, { align: "right" });
 
-  // Status badge
-  if (contract.status === "final") {
-    doc.setFillColor(22, 163, 74); doc.roundedRect(210 - M - 20, 36, 20, 6, 1.5, 1.5, "F");
-    doc.setFontSize(7); doc.setFont(undefined, "bold"); doc.setTextColor(255, 255, 255);
-    doc.text("FINAL", 210 - M - 10, 40.5, { align: "center" });
-  }
+  // Status badge removed — not shown on PDF
 
   doc.setTextColor(0, 0, 0);
   let y = 50;
