@@ -3541,9 +3541,15 @@ function exportContractPDF(contract, buyer, consignee) {
 
   const addWatermark = () => {
     // Use actual watermark PNG centered on page
-    const wmLogo = (seller === COMPANIES.vjra) ? VJRA_LOGO_B64_PNG : WATERMARK_B64;
     try {
-      doc.addImage(wmLogo, "PNG", 45, 85, 120, 90);
+      if(seller === COMPANIES.vjra){
+        // VJRA logo — apply low opacity to make it a light watermark
+        try{ doc.saveGraphicsState(); doc.setGState(new doc.GState({opacity:0.12})); }catch(e){}
+        doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
+        try{ doc.restoreGraphicsState(); }catch(e){}
+      } else {
+        doc.addImage(WATERMARK_B64,"PNG",45,85,120,90);
+      }
     } catch(e) {
       // Fallback text watermark
       doc.setFontSize(38); doc.setFont(undefined, "bold");
