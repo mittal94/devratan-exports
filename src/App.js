@@ -3929,15 +3929,16 @@ function exportContractPDF(contract, buyer, consignee) {
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    // Draw watermark on top of all content
+    // Draw watermark on top of all content — both at low opacity
     try {
+      doc.saveGraphicsState();
+      doc.setGState(new doc.GState({opacity:0.10}));
       if(seller === COMPANIES.vjra){
-        try{ doc.saveGraphicsState(); doc.setGState(new doc.GState({opacity:0.12})); }catch(e){}
         doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
-        try{ doc.restoreGraphicsState(); }catch(e){}
       } else {
         doc.addImage(WATERMARK_B64,"PNG",45,85,120,90);
       }
+      doc.restoreGraphicsState();
     } catch(e){}
     // Footer on top of watermark
     doc.setFillColor(...navy); doc.rect(0, 290, 210, 7, "F");
@@ -4034,6 +4035,17 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
           + (seller.gstin ? "   |   GSTIN: " + seller.gstin : ""),
         105, 294, { align:"center" }
       );
+      // Watermark under footer content
+      try {
+        doc.saveGraphicsState();
+        doc.setGState(new doc.GState({opacity:0.10}));
+        if(seller === COMPANIES.vjra){
+          doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
+        } else {
+          doc.addImage(WATERMARK_B64,"PNG",45,85,120,90);
+        }
+        doc.restoreGraphicsState();
+      } catch(e){}
       doc.setFillColor(...gold);
       doc.roundedRect(M + pw - 18, 283, 18, 7, 1.5, 1.5, "F");
       doc.setFontSize(7); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
@@ -6479,6 +6491,12 @@ function InvoicingTab({buyers}){
     const tp=doc.getNumberOfPages();
     for(let i=1;i<=tp;i++){
       doc.setPage(i);
+      try{
+        doc.saveGraphicsState();
+        doc.setGState(new doc.GState({opacity:0.10}));
+        doc.addImage(WATERMARK_B64,"PNG",45,85,120,90);
+        doc.restoreGraphicsState();
+      }catch(e){}
       doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
       doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...white);
       doc.text(COMPANIES.devratan.name+"  |  "+COMPANIES.devratan.phone+"  |  "+COMPANIES.devratan.email,105,293,{align:"center"});
@@ -7377,9 +7395,10 @@ function VJRAInvoicingTab({buyers}){
 
   const addVJRAHeader=(doc,title)=>{
     const navy=[18,52,96],steel=[70,130,180],ltblue=[220,235,250],gold=[162,120,50],white=[255,255,255];
-    // Header with logo — mirrors Devratan layout
+    // Header with logo — white bg behind logo for clarity, ltblue rest
     doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
-    try{if(VJRA_LOGO_B64_PNG)doc.addImage(VJRA_LOGO_B64_PNG,"PNG",10,3,38,38);}catch(e){}
+    doc.setFillColor(...white); doc.rect(0,0,53,46,"F"); // white behind logo
+    try{if(VJRA_LOGO_B64_PNG)doc.addImage(VJRA_LOGO_B64_PNG,"PNG",7,4,40,38);}catch(e){}
     doc.setDrawColor(...steel); doc.setLineWidth(0.4);
     doc.line(52,6,52,40);
     doc.setFontSize(13); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
@@ -7405,6 +7424,13 @@ function VJRAInvoicingTab({buyers}){
     const tp=doc.getNumberOfPages();
     for(let i=1;i<=tp;i++){
       doc.setPage(i);
+      // VJRA watermark drawn over content
+      try{
+        doc.saveGraphicsState();
+        doc.setGState(new doc.GState({opacity:0.10}));
+        doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
+        doc.restoreGraphicsState();
+      }catch(e){}
       doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
       doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...white);
       doc.text(vjraCo.name+"  |  "+vjraCo.phone+"  |  "+vjraCo.email,105,293,{align:"center"});
