@@ -4612,6 +4612,7 @@ function AdvancePaymentForm({ships, buyers}){
     NF(false,7.5);
     y=WRAP("(In case of Restricted goods, enclose original Exchange Control Copy of Export License issued by DGFT, if obtained)",M,y,RW,4);
     y+=1;
+    y=chkPg(y,22);
     NF(false,8); doc.text("Export License Details (for restricted goods):",M,y); y+=4;
     const licH=[["License No",36],["Date of Issue",36],["Date of Expiry",36],["License Value",36],["Amount Utilised",36]];
     let lx=M; NF(false,7.5);
