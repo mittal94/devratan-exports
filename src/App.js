@@ -3548,7 +3548,7 @@ function exportContractPDF(contract, buyer, consignee) {
         doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
         try{ doc.restoreGraphicsState(); }catch(e){}
       } else {
-        doc.addImage(WATERMARK_B64,"PNG",45,85,120,90);
+        doc.addImage(LOGO_B64,"PNG",45,85,120,90);
       }
     } catch(e) {
       // Fallback text watermark
@@ -3622,12 +3622,12 @@ function exportContractPDF(contract, buyer, consignee) {
   // ── Header: light blue background (matches brand) ─────────────────────────
   // Main header bg — light blue
   doc.setFillColor(...ltblue); doc.rect(0, 0, 210, 46, "F");
+  if(seller === COMPANIES.vjra){ doc.setFillColor(255,255,255); doc.rect(0,0,53,46,"F"); }
 
-
-  // Logo — directly on light blue, no box needed (blue eagle on light bg)
+  // Logo — directly on light blue (Devratan) or white bg (VJRA)
   const ctLogo = (seller === COMPANIES.vjra) ? VJRA_LOGO_B64_PNG : LOGO_B64;
   try {
-    if (ctLogo) doc.addImage(ctLogo, "PNG", 10, 3, 38, 38);
+    if (ctLogo) doc.addImage(ctLogo, "PNG", 7, 4, 40, 38);
   } catch(e) {
     doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
     doc.text(seller.name.split(" ")[0], 28, 18, { align: "center" });
@@ -3915,6 +3915,12 @@ function exportContractPDF(contract, buyer, consignee) {
       doc.line(nx2 - nw / 2, ny + 1.5, nx2 + nw / 2, ny + 1.5);
       ny += 5.5;
     });
+    // Seal + sign image (only for SELLER box = first call)
+    if(label === "SELLER"){
+      const sealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
+      const sealType = (seller === COMPANIES.vjra) ? "PNG" : "JPEG";
+      try{ if(sealImg) doc.addImage(sealImg, sealType, x + sigW/2 - 16, y + 12, 32, 20); }catch(e){}
+    }
     // Signature line
     doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
     doc.line(x + 8, y + 40, x + sigW - 8, y + 40);
@@ -3932,11 +3938,11 @@ function exportContractPDF(contract, buyer, consignee) {
     // Draw watermark on top of all content — both at low opacity
     try {
       doc.saveGraphicsState();
-      doc.setGState(new doc.GState({opacity:0.10}));
+      doc.setGState(new doc.GState({opacity:0.18}));
       if(seller === COMPANIES.vjra){
         doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
       } else {
-        doc.addImage(WATERMARK_B64,"PNG",45,85,120,90);
+        doc.addImage(LOGO_B64,"PNG",45,85,120,90);
       }
       doc.restoreGraphicsState();
     } catch(e){}
@@ -4038,7 +4044,7 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
       // Watermark under footer content
       try {
         doc.saveGraphicsState();
-        doc.setGState(new doc.GState({opacity:0.10}));
+        doc.setGState(new doc.GState({opacity:0.18}));
         if(seller === COMPANIES.vjra){
           doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
         } else {
@@ -4055,9 +4061,10 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
 
   // ── HEADER ────────────────────────────────────────────────────────────────
   doc.setFillColor(...ltblue); doc.rect(0, 0, 210, 46, "F");
+  if(seller === COMPANIES.vjra){ doc.setFillColor(...white); doc.rect(0,0,53,46,"F"); }
   const piLogoB64 = (seller === COMPANIES.vjra) ? VJRA_LOGO_B64_PNG : LOGO_B64;
   const piLogoType = (seller === COMPANIES.vjra) ? "PNG" : "PNG";
-  try { if (piLogoB64) doc.addImage(piLogoB64, piLogoType, 10, 3, 38, 38); } catch(e) {}
+  try { if (piLogoB64) doc.addImage(piLogoB64, piLogoType, 7, 4, 40, 38); } catch(e) {}
   doc.setDrawColor(...steel); doc.setLineWidth(0.4);
   doc.line(52, 6, 52, 40);
   doc.setFontSize(12); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
@@ -4345,16 +4352,20 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
   const sigW = pw * 0.46;
   const sigX = M + pw - sigW;
   doc.setFillColor(...white); doc.setDrawColor(...gold); doc.setLineWidth(0.7);
-  doc.roundedRect(sigX, y, sigW, 34, 2, 2, "FD");
+  doc.roundedRect(sigX, y, sigW, 42, 2, 2, "FD");
   doc.setFillColor(...navy);
   doc.roundedRect(sigX, y, sigW, 9, 2, 2, "F");
   doc.rect(sigX, y + 5, sigW, 4, "F");
   doc.setFontSize(8.5); doc.setFont(undefined,"bold"); doc.setTextColor(...white);
   doc.text("FOR " + seller.name, sigX + sigW / 2, y + 6.2, { align:"center", maxWidth:sigW - 8 });
+  // Seal image
+  const piSealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
+  const piSealType = (seller === COMPANIES.vjra) ? "PNG" : "JPEG";
+  try{ if(piSealImg) doc.addImage(piSealImg, piSealType, sigX + sigW/2 - 16, y + 12, 32, 20); }catch(e){}
   doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
-  doc.line(sigX + 10, y + 26, sigX + sigW - 10, y + 26);
+  doc.line(sigX + 10, y + 34, sigX + sigW - 10, y + 34);
   doc.setFont(undefined,"normal"); doc.setFontSize(7.5); doc.setTextColor(100,100,100);
-  doc.text("Authorized Signatory", sigX + sigW / 2, y + 31, { align:"center" });
+  doc.text("Authorized Signatory", sigX + sigW / 2, y + 39, { align:"center" });
 
   drawFooter();
   doc.save("PI_" + (piNo || contract.contract_no || "draft") + ".pdf");
@@ -6493,8 +6504,8 @@ function InvoicingTab({buyers}){
       doc.setPage(i);
       try{
         doc.saveGraphicsState();
-        doc.setGState(new doc.GState({opacity:0.10}));
-        doc.addImage(WATERMARK_B64,"PNG",45,85,120,90);
+        doc.setGState(new doc.GState({opacity:0.18}));
+        doc.addImage(LOGO_B64,"PNG",45,85,120,90);
         doc.restoreGraphicsState();
       }catch(e){}
       doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
@@ -7427,7 +7438,7 @@ function VJRAInvoicingTab({buyers}){
       // VJRA watermark drawn over content
       try{
         doc.saveGraphicsState();
-        doc.setGState(new doc.GState({opacity:0.10}));
+        doc.setGState(new doc.GState({opacity:0.18}));
         doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
         doc.restoreGraphicsState();
       }catch(e){}
