@@ -3893,39 +3893,39 @@ function exportContractPDF(contract, buyer, consignee) {
 
   const sigW = pw / 2 - 4;
   const drawSigBox = (x, label, name) => {
-    // White background box with gold border
+    // White background box with gold border — 58mm tall to fit name + seal + line
     doc.setFillColor(255, 255, 255); doc.setDrawColor(...gold); doc.setLineWidth(0.7);
-    doc.roundedRect(x, y, sigW, 50, 2, 2, "FD");
+    doc.roundedRect(x, y, sigW, 58, 2, 2, "FD");
     // Navy label header bar
     doc.setFillColor(...navy);
     doc.roundedRect(x, y, sigW, 9, 2, 2, "F");
     doc.rect(x, y + 5, sigW, 4, "F"); // flatten bottom corners of header
     doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(255, 255, 255);
     doc.text(label, x + sigW / 2, y + 6.5, { align: "center" });
-    // Name — bold, navy, centered, underlined
+    // Name — bold, navy, centered, underlined — at top of box
     doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
     const nameLines = doc.splitTextToSize(name, sigW - 10);
-    let ny = y + 18;
+    let ny = y + 16;
     nameLines.forEach(nl => {
       const nw = doc.getTextWidth(nl);
       const nx2 = x + sigW / 2;
       doc.text(nl, nx2, ny, { align: "center" });
-      // Underline each name line
       doc.setDrawColor(...navy); doc.setLineWidth(0.45);
       doc.line(nx2 - nw / 2, ny + 1.5, nx2 + nw / 2, ny + 1.5);
       ny += 5.5;
     });
-    // Seal + sign image (only for SELLER box = first call)
+    // Seal — placed BELOW the name block
     if(label === "SELLER"){
       const sealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
       const sealType = (seller === COMPANIES.vjra) ? "PNG" : "JPEG";
-      try{ if(sealImg) doc.addImage(sealImg, sealType, x + sigW/2 - 16, y + 12, 32, 20); }catch(e){}
+      const sealY = y + 26; // always below name block
+      try{ if(sealImg) doc.addImage(sealImg, sealType, x + sigW/2 - 16, sealY, 32, 20); }catch(e){}
     }
     // Signature line
     doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
-    doc.line(x + 8, y + 40, x + sigW - 8, y + 40);
+    doc.line(x + 8, y + 49, x + sigW - 8, y + 49);
     doc.setFont(undefined, "normal"); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
-    doc.text("Authorized Signature & Stamp", x + sigW / 2, y + 46, { align: "center" });
+    doc.text("Authorized Signature & Stamp", x + sigW / 2, y + 55, { align: "center" });
   };
 
   drawSigBox(M, "SELLER", seller.name);
@@ -4048,7 +4048,7 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
         if(seller === COMPANIES.vjra){
           doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
         } else {
-          doc.addImage(WATERMARK_B64,"PNG",45,85,120,90);
+          doc.addImage(LOGO_B64,"PNG",45,85,120,90);
         }
         doc.restoreGraphicsState();
       } catch(e){}
@@ -4352,20 +4352,23 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
   const sigW = pw * 0.46;
   const sigX = M + pw - sigW;
   doc.setFillColor(...white); doc.setDrawColor(...gold); doc.setLineWidth(0.7);
-  doc.roundedRect(sigX, y, sigW, 42, 2, 2, "FD");
+  doc.roundedRect(sigX, y, sigW, 50, 2, 2, "FD");
   doc.setFillColor(...navy);
   doc.roundedRect(sigX, y, sigW, 9, 2, 2, "F");
   doc.rect(sigX, y + 5, sigW, 4, "F");
   doc.setFontSize(8.5); doc.setFont(undefined,"bold"); doc.setTextColor(...white);
   doc.text("FOR " + seller.name, sigX + sigW / 2, y + 6.2, { align:"center", maxWidth:sigW - 8 });
-  // Seal image
+  // Company name below header
+  doc.setFontSize(8); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
+  doc.text(seller.name, sigX + sigW / 2, y + 16, { align:"center", maxWidth:sigW - 8 });
+  // Seal image — placed below name, not overlapping
   const piSealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
   const piSealType = (seller === COMPANIES.vjra) ? "PNG" : "JPEG";
-  try{ if(piSealImg) doc.addImage(piSealImg, piSealType, sigX + sigW/2 - 16, y + 12, 32, 20); }catch(e){}
+  try{ if(piSealImg) doc.addImage(piSealImg, piSealType, sigX + sigW/2 - 16, y + 22, 32, 20); }catch(e){}
   doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
-  doc.line(sigX + 10, y + 34, sigX + sigW - 10, y + 34);
+  doc.line(sigX + 10, y + 43, sigX + sigW - 10, y + 43);
   doc.setFont(undefined,"normal"); doc.setFontSize(7.5); doc.setTextColor(100,100,100);
-  doc.text("Authorized Signatory", sigX + sigW / 2, y + 39, { align:"center" });
+  doc.text("Authorized Signatory", sigX + sigW / 2, y + 48, { align:"center" });
 
   drawFooter();
   doc.save("PI_" + (piNo || contract.contract_no || "draft") + ".pdf");
