@@ -8473,9 +8473,23 @@ export default function App(){
     const s=ships.find(x=>x.invoice_no===inv);
     if(!s){setPF("invoice_no",inv);return;}
     const c=calcShip(s);
+    // Method 1: calcEffectivePaid using standalone BRCs (have irm_allocations structure)
     const _allBRCs=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
     const _allIRMs=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
-    const {paidINR}=calcEffectivePaid(inv,_allBRCs,_allIRMs);
+    let {paidINR}=calcEffectivePaid(inv,_allBRCs,_allIRMs);
+    // Method 2 fallback: sum irm_entries INR directly from BCs linked to this invoice
+    if(!paidINR){
+      bcs.filter(b=>(b.linked_invoices||[]).includes(inv)).forEach(bc=>{
+        (bc.irm_entries||[]).forEach(irm=>{
+          paidINR += n(irm.irm_amt_inr) || (n(irm.irm_amt_usd)*n(irm.exchange_rate));
+        });
+      });
+    }
+    // Method 3 fallback: use bc.total_amt_inr if still zero
+    if(!paidINR){
+      const bc=bcs.find(b=>(b.linked_invoices||[]).includes(inv));
+      if(bc) paidINR=n(bc.total_amt_inr)||0;
+    }
     setProfitForm(f=>({...f,invoice_no:inv,invoice_date:s.invoice_date,buyer_name:s.buyer_name,port_of_discharge:s.port_of_discharge,invoice_amt_inr:c.invoiceAmtINR,payment_received_inr:Math.round(paidINR)}));
   };
 
