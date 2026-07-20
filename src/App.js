@@ -3507,12 +3507,18 @@ function calcEffectivePaid(invoiceNo, allBRCs, allIRMs) {
       if (!irm) return;
       const util = n(a.irmUtilAmt);
       const rate = n(irm.exchange_rate);
-      // Absorb charges if this invoice is the last linked to this IRM
-      const charges = irmLastInvoice[String(a.irmId)] === invoiceNo
-        ? n(irm.intermediary_charges_usd || 0)
-        : 0;
-      paidUSD += util + charges;
-      paidINR += (util + charges) * rate;
+      // irm_amt_inr is the actual INR credited (after bank deductions) — use it directly if available
+      if(irm.irm_amt_inr){
+        paidUSD += util;
+        paidINR += n(irm.irm_amt_inr) * (util / (n(irm.irm_total_usd)||util||1));
+      } else {
+        // Intermediary charges are deducted from received amount
+        const charges = irmLastInvoice[String(a.irmId)] === invoiceNo
+          ? n(irm.intermediary_charges_usd || 0)
+          : 0;
+        paidUSD += util;
+        paidINR += (util - charges) * rate;
+      }
     });
   });
   return { paidUSD, paidINR };
