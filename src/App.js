@@ -7541,17 +7541,32 @@ function VJRAInvoicingTab({buyers}){
 
   const vjraInfoRow=(doc,M,y,RW)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
-    const cols=[["HSN Code",form.hsn],["Port of Loading",form.port_loading],["Country of Origin",form.country_origin],["Port of Discharge",form.port_discharge],["Country of Destination",form.country_dest],["Delivery Terms",form.delivery_terms],["Payment Terms",form.payment_terms]];
-    const cw=RW/cols.length;
-    cols.forEach(([l,v],i)=>{
-      doc.setDrawColor(100,100,100); doc.setLineWidth(0.2); doc.rect(M+i*cw,y,cw,10);
-      doc.setFillColor(...lgray); doc.rect(M+i*cw,y,cw,4.5,"F");
-      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(6.5);
-      doc.text(l,M+i*cw+0.5,y+3.5,{maxWidth:cw-1});
-      doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0);
-      doc.text(String(v||"—"),M+i*cw+0.5,y+8,{maxWidth:cw-1});
+    // Fixed widths: give extra space to Payment Terms (last col)
+    const cols=[
+      ["HSN Code",      form.hsn,              22],
+      ["Port of Loading",form.port_loading,     26],
+      ["Country of Origin",form.country_origin, 22],
+      ["Port of Discharge",form.port_discharge, 26],
+      ["Country of Destination",form.country_dest,26],
+      ["Delivery Terms",form.delivery_terms,    20],
+      ["Payment Terms", form.payment_terms,     RW-22-26-22-26-26-20],
+    ];
+    let cx=M;
+    cols.forEach(([l,v,w])=>{
+      // Calculate row height based on Payment Terms text wrap
+      const lines=doc.splitTextToSize(String(v||"—"),w-2);
+      const rowH=Math.max(14, 5+lines.length*4);
+      doc.setDrawColor(100,100,100); doc.setLineWidth(0.2); doc.rect(cx,y,w,rowH);
+      doc.setFillColor(...lgray); doc.rect(cx,y,w,5,"F");
+      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(6);
+      doc.text(l,cx+0.8,y+3.5,{maxWidth:w-1.5});
+      doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(0,0,0);
+      doc.text(lines,cx+0.8,y+8.5);
+      cx+=w;
     });
-    return y+10;
+    // Calculate final row height for return value
+    const ptLines=doc.splitTextToSize(String(form.payment_terms||"—"),RW-22-26-22-26-26-20-2);
+    return y+Math.max(14,5+ptLines.length*4);
   };
 
   const vjraItemsTable=(doc,M,y,RW,showPrice)=>{
