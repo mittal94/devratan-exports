@@ -3490,29 +3490,32 @@ async function exportProformaInvoiceWord(contract, buyer, piNo, validityDate, ad
 }
 
 // ─── Compute effective payment for an invoice ─────────────────────────────────
-// Handles two payment paths:
-// 1. Bill Collections (bcs) → irm_entries[] — bc.linked_invoices includes invoiceNo
-// 2. Standalone BRCs (brc_entries with bc_id=null) → irm_allocations[] — brc.linked_invoice_no === invoiceNo
+// RULES:
+// paidUSD = util + charges (charges absorbed by LAST invoice linked to this IRM)
+// paidINR = util * exchange_rate (never affected by charges)
 function calcEffectivePaid(invoiceNo, allBRCs, allIRMs, allBCs) {
   let paidUSD = 0, paidINR = 0;
 
+  // Build map: irmId -> last invoice linked to it (for charge absorption)
+  const irmLastInvoice = {};
+  allBRCs.forEach(brc => {
+    if(!brc.linked_invoice_no) return;
+    (brc.irm_allocations||[]).forEach(a => {
+      if(a.irmId) irmLastInvoice[String(a.irmId)] = brc.linked_invoice_no;
+    });
+  });
+
   // ── Path 1: Bill Collections with irm_entries ─────────────────────────────
-  // allBCs is passed when available (from the React state bcs[])
   if(allBCs && allBCs.length){
     allBCs.filter(bc=>(bc.linked_invoices||[]).includes(invoiceNo)).forEach(bc=>{
       (bc.irm_entries||[]).forEach(irm=>{
         const irmUSD = n(irm.irm_total_usd||irm.irm_amt_usd||0);
-        const irmINR = n(irm.irm_amt_inr||0);
-        const charges = n(irm.intermediary_charges_usd||0);
         const rate = n(irm.exchange_rate||0);
-        // irm_amt_inr is the actual INR after all deductions — use directly if set
-        if(irmINR > 0){
-          paidUSD += irmUSD - charges;
-          paidINR += irmINR;
-        } else if(irmUSD > 0 && rate > 0){
-          paidUSD += irmUSD - charges;
-          paidINR += (irmUSD - charges) * rate;
-        }
+        const charges = n(irm.intermediary_charges_usd||0);
+        // paidUSD: full IRM + charges absorbed here
+        paidUSD += irmUSD + charges;
+        // paidINR: always IRM amount × exchange rate, no charges
+        paidINR += irmUSD * rate;
       });
     });
   }
@@ -3520,21 +3523,20 @@ function calcEffectivePaid(invoiceNo, allBRCs, allIRMs, allBCs) {
   // ── Path 2: Standalone BRCs with irm_allocations ─────────────────────────
   const sBRCs = allBRCs.filter(b => b.linked_invoice_no === invoiceNo);
   sBRCs.forEach(brc => {
-    (brc.irm_allocations || []).forEach(a => {
+    (brc.irm_allocations||[]).forEach(a => {
       const irm = allIRMs.find(i => String(i.id) === String(a.irmId));
-      if (!irm) return;
+      if(!irm) return;
       const util = n(a.irmUtilAmt);
       const rate = n(irm.exchange_rate);
-      const irmINR = n(irm.irm_amt_inr||0);
       const irmTotal = n(irm.irm_total_usd||util||1);
-      const chargesProp = n(irm.intermediary_charges_usd||0) * (util / irmTotal);
-      // paidUSD = what buyer sent minus bank charges = net received
-      paidUSD += util - chargesProp;
-      if(irmINR > 0){
-        paidINR += irmINR * (util / irmTotal);
-      } else {
-        paidINR += (util - chargesProp) * rate;
-      }
+      const charges = n(irm.intermediary_charges_usd||0);
+      // Charges absorbed only by last invoice linked to this IRM
+      const absorbCharges = irmLastInvoice[String(a.irmId)] === invoiceNo;
+      const chargesProp = absorbCharges ? charges * (util / irmTotal) : 0;
+      // paidUSD: util + proportional charges if this is last invoice
+      paidUSD += util + chargesProp;
+      // paidINR: always util × rate, no charges
+      paidINR += util * rate;
     });
   });
 
