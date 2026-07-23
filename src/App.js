@@ -8331,20 +8331,28 @@ export default function App(){
   const getPaid=s=>paidMap[s.invoice_no]||{paidUSD:0,paidINR:0};
 
   const debugPayment=(invoiceNo)=>{
-    const _brcs=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
-    const _irms=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
     console.group("=== DEBUG PAYMENT: "+invoiceNo+" ===");
-    console.log("bcs count:", bcs.length);
     const linkedBCs=bcs.filter(b=>(b.linked_invoices||[]).includes(invoiceNo));
-    console.log("BCs linked to this invoice:", linkedBCs.length, linkedBCs.map(b=>({bc_no:b.bc_no,linked_invoices:b.linked_invoices,irm_entries_count:(b.irm_entries||[]).length,total_amt_usd:b.total_amt_usd,total_amt_inr:b.total_amt_inr})));
+    console.log("BCs linked:", linkedBCs.length);
     linkedBCs.forEach(bc=>{
-      console.log("IRM entries for BC "+bc.bc_no+":", b=>b.irm_entries);
-      (bc.irm_entries||[]).forEach(irm=>console.log("  IRM:", {irm_no:irm.irm_no,irm_total_usd:irm.irm_total_usd,irm_amt_usd:irm.irm_amt_usd,irm_amt_inr:irm.irm_amt_inr,exchange_rate:irm.exchange_rate,intermediary_charges_usd:irm.intermediary_charges_usd}));
+      console.log("BC:", bc.bc_no, "total_usd:", bc.total_amt_usd, "total_inr:", bc.total_amt_inr);
+      console.log("irm_entries count:", (bc.irm_entries||[]).length);
+      (bc.irm_entries||[]).forEach(irm=>console.log("  IRM:", JSON.stringify({
+        id:irm.id, irm_no:irm.irm_no,
+        irm_total_usd:irm.irm_total_usd, irm_amt_usd:irm.irm_amt_usd,
+        irm_amt_inr:irm.irm_amt_inr, exchange_rate:irm.exchange_rate,
+        intermediary_charges_usd:irm.intermediary_charges_usd
+      })));
     });
-    console.log("standaloneBRCs linked:", standaloneBRCs.filter(b=>b.linked_invoice_no===invoiceNo));
-    console.log("paidMap result:", paidMap[invoiceNo]);
+    const linkedStandalone=standaloneBRCs.filter(b=>b.linked_invoice_no===invoiceNo);
+    console.log("standaloneBRCs linked:", linkedStandalone.length);
+    linkedStandalone.forEach(brc=>console.log("  BRC:", JSON.stringify({
+      id:brc.id,brc_no:brc.brc_no,
+      irm_allocations:brc.irm_allocations
+    })));
+    console.log("paidMap result:", JSON.stringify(paidMap[invoiceNo]));
     console.groupEnd();
-    alert("Check browser console (F12) for debug info on "+invoiceNo);
+    alert("Debug logged to F12 Console for "+invoiceNo);
   };
 
   const allYears=useMemo(()=>{const _brcsAll=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];const _irmsAll=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];return ALL_FYS.map(f=>{const ss=ships.filter(s=>getFY(s.invoice_date)===f);return ss.reduce((a,s)=>{const c=calcShip(s);const {paidUSD}=calcEffectivePaid(s.invoice_no,_brcsAll,_irmsAll);a.count++;a.inv+=c.invoiceAmtUSD;a.fob+=n(s.fob_value_usd);a.paid+=paidUSD;a.bal+=c.invoiceAmtUSD-paidUSD;return a;},{fy:f,count:0,inv:0,fob:0,paid:0,bal:0});});}, [ships,bcs,standaloneBRCs,standaloneIRMs]);
@@ -8909,13 +8917,11 @@ export default function App(){
                     {canEdit&&<th style={{padding:"9px 10px",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",background:"#f8fafc",whiteSpace:"nowrap"}}>Actions</th>}
                   </tr></thead>
                   <tbody>
-                    {filtered.map(s=>{const c=calcShip(s),bc=getBC(s),{paidUSD:sPaidUSD,paidINR:sPaidINR}=getPaid(s),bal=c.invoiceAmtUSD-sPaidUSD;
+                    {filtered.map(s=>{const c=calcShip(s),bc=getBC(s),{paidUSD,paidINR}=getPaid(s),bal=c.invoiceAmtUSD-paidUSD;
                       const allBRCsReg=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
-                      const allIRMsReg=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
                       const sBRCs=allBRCsReg.filter(b=>b.linked_invoice_no===s.invoice_no);
                       const brcNos=sBRCs.map(b=>b.brc_no).filter(Boolean).join(", ")||"—";
                       const brcDts=sBRCs.map(b=>b.brc_date).filter(Boolean).join(", ")||"—";
-                      const {paidUSD,paidINR}=calcEffectivePaid(s.invoice_no,allBRCsReg,allIRMsReg);
                       return(
                       <tr key={s.id} style={{borderBottom:"1px solid #f1f5f9"}} onDoubleClick={()=>setViewShipId(s.id)}>
                         <td style={{padding:"7px 10px",fontWeight:600,color:"#1e3a5f",whiteSpace:"nowrap",position:"sticky",left:0,background:"#f8fafc",zIndex:5,boxShadow:"2px 0 4px rgba(0,0,0,0.06)",minWidth:130}}>{s.invoice_no}</td>
@@ -8956,6 +8962,7 @@ export default function App(){
                           <button onClick={()=>exportShipmentPDF(s,getBC(s),[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs],[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs])} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📄</button>
                           <button onClick={()=>setShipDocsId(s.id)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📁</button>
                           <button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📱</button>
+                          <button onClick={()=>debugPayment(s.invoice_no)} style={{background:"#fef9c3",color:"#854d0e",border:"none",borderRadius:5,padding:"3px 6px",cursor:"pointer",fontSize:10,marginRight:3}}>🐛</button>
                           {canDelete&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
                         </td>}
                       </tr>
