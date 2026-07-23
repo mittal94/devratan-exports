@@ -376,12 +376,13 @@ const pdfHeader = (doc, title, subtitle) => {
   return subtitle ? 36 : 32;
 };
 
-const exportShipmentPDF = (s, bc) => {
+const exportShipmentPDF = (s, bc, allBRCs=[], allIRMs=[]) => {
   const JPDF = getPDF();
   if(!JPDF){ alert("PDF library not loaded. Please refresh the page."); return; }
   const doc = new JPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const c = calcShip(s);
-  const bal = c.invoiceAmtUSD - (bc ? bc.total_amt_usd : 0);
+  const {paidUSD:sPaidUSD,paidINR:sPaidINR}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs);
+  const bal = c.invoiceAmtUSD - sPaidUSD;
   let y = pdfHeader(doc, "Shipment Detail", `Invoice: ${s.invoice_no} | Date: ${s.invoice_date}`);
   y += 4;
   const rows = [
@@ -398,8 +399,8 @@ const exportShipmentPDF = (s, bc) => {
     ["RODTEP Status", s.rodtep_status||"—"], ["GST Status", s.gst_status||"—"],
     ["Bill Collection No", bc?bc.bc_no:"—"], ["BC Date", bc?bc.bc_date:"—"],
     ["BRC No(s)", bc?bc.brc_entries?.map(b=>b.brc_no).filter(Boolean).join(", ")||"—":"—"],
-    ["Payment Rcvd (USD)", bc?fU(bc.total_amt_usd):"—"],
-    ["Payment Rcvd (INR)", bc?pdfINR(bc.total_amt_inr):"—"],
+    ["Payment Rcvd (USD)", sPaidUSD>0?fU(sPaidUSD):"—"],
+    ["Payment Rcvd (INR)", sPaidINR>0?pdfINR(sPaidINR):"—"],
     ["Balance (USD)", fU(bal)], ["Remarks", s.remarks||"—"]
   ];
   doc.autoTable({
@@ -495,7 +496,7 @@ const exportBCPDF = (bc) => {
 };
 
 // ─── Export Modal ─────────────────────────────────────────────────────────────
-function ExportModal({ type, data, onClose, getBC }) {
+function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[] }) {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [fmt, setFmt] = useState("csv");
@@ -518,8 +519,10 @@ function ExportModal({ type, data, onClose, getBC }) {
       } else {
         const hdrs = ["Invoice No","Date","Buyer","Country","Product","Port Load","Port Disch","SB No","SB Date","Port Code","BL No","BL Date","Qty(MT)","Rate/MT(USD)","Terms","Inv(USD)","ExRate","Inv(INR)","IGST","Gross(INR)","FOB(USD)","FOB(INR)","RODTEP(INR)","RODTEP St","GST St","BC No","BC Bank","BRC No(s)","Pmt(USD)","Pmt(INR)","Balance(USD)"];
         const rows = filtered.map(s => {
-          const c = calcShip(s), bc = getBC(s), bal = c.invoiceAmtUSD - (bc ? bc.total_amt_usd : 0);
-          return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.port_code||"",s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.bank_name:"",bc?bc.brc_entries?.map(b=>b.brc_no).join("; "):"",bc?fi(bc.total_amt_usd):"",bc?fi(bc.total_amt_inr):"",fi(bal)];
+          const c = calcShip(s), bc = getBC(s);
+          const {paidUSD:csvPaidUSD,paidINR:csvPaidINR}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs);
+          const bal=c.invoiceAmtUSD-csvPaidUSD;
+          return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.port_code||"",s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.bank_name:"",bc?bc.brc_entries?.map(b=>b.brc_no).join("; "):"",fi(csvPaidUSD),fi(csvPaidINR),fi(bal)];
         });
         dlCSV(`Devratan_Shipments_${fromDate||"all"}_to_${toDate||"all"}.csv`, toCSV(hdrs, rows));
       }
@@ -559,8 +562,10 @@ function ExportModal({ type, data, onClose, getBC }) {
       startY: y,
       head: [["Invoice No","Date","Buyer","Country","Qty(MT)","Rate/MT","Terms","Inv(USD)","FOB(USD)","RODTEP","BC No","Pmt(USD)","Balance"]],
       body: ships.map(s => {
-        const c = calcShip(s), bc = getBC(s), bal = c.invoiceAmtUSD - (bc ? bc.total_amt_usd : 0);
-        return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,fi(s.qty,0),fi(s.rate_per_mt),s.delivery_terms,fU(c.invoiceAmtUSD),fU(s.fob_value_usd),s.rodtep_status,bc?bc.bc_no:"—",bc?fU(bc.total_amt_usd):"—",fU(bal)];
+        const c = calcShip(s), bc = getBC(s);
+        const {paidUSD:csvPaid}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs);
+        const bal=c.invoiceAmtUSD-csvPaid;
+        return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,fi(s.qty,0),fi(s.rate_per_mt),s.delivery_terms,fU(c.invoiceAmtUSD),fU(s.fob_value_usd),s.rodtep_status,bc?bc.bc_no:"—",fU(csvPaid),fU(c.invoiceAmtUSD-csvPaid)];
       }),
       styles:{fontSize:7,cellPadding:2},
       headStyles:{fillColor:[30,58,95],textColor:255,fontStyle:'bold'},
@@ -654,8 +659,10 @@ function ExportModal({ type, data, onClose, getBC }) {
         startY: y,
         head: [["Invoice No","Date","Buyer","Inv(USD)","Pmt(USD)","Balance","RODTEP","GST"]],
         body: fyShips.map(s => {
-          const c = calcShip(s), bc = getBC(s), bal = c.invoiceAmtUSD - (bc?bc.total_amt_usd:0);
-          return [s.invoice_no,s.invoice_date,s.buyer_name,fU(c.invoiceAmtUSD),bc?fU(bc.total_amt_usd):"—",fU(bal),s.rodtep_status,s.gst_status];
+          const c = calcShip(s), bc = getBC(s);
+          const {paidUSD:fyPaid}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs);
+          const bal=c.invoiceAmtUSD-fyPaid;
+          return [s.invoice_no,s.invoice_date,s.buyer_name,fU(c.invoiceAmtUSD),fyPaid>0?fU(fyPaid):"—",fU(c.invoiceAmtUSD-fyPaid),s.rodtep_status,s.gst_status];
         }),
         styles:{fontSize:8,cellPadding:2},
         headStyles:{fillColor:[22,163,74],textColor:255,fontStyle:'bold'},
@@ -8298,6 +8305,20 @@ export default function App(){
     },{count:0,invUSD:0,invINR:0,fobUSD:0,fobINR:0,gross:0,paidUSD:0,paidINR:0,bal:0,brcPend:0,rodPend:0,gstPend:0});
   },[fyShips,bcs,standaloneBRCs,standaloneIRMs]);
 
+  // Pre-compute effective paid amounts for all ships (using calcEffectivePaid with intermediary charges)
+  const paidMap=useMemo(()=>{
+    const _brcs=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
+    const _irms=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
+    const map={};
+    ships.forEach(s=>{
+      map[s.invoice_no]=calcEffectivePaid(s.invoice_no,_brcs,_irms);
+    });
+    return map;
+  },[ships,bcs,standaloneBRCs,standaloneIRMs]);
+
+  // Helper: get effective paid for a ship
+  const getPaid=s=>paidMap[s.invoice_no]||{paidUSD:0,paidINR:0};
+
   const allYears=useMemo(()=>{const _brcsAll=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];const _irmsAll=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];return ALL_FYS.map(f=>{const ss=ships.filter(s=>getFY(s.invoice_date)===f);return ss.reduce((a,s)=>{const c=calcShip(s);const {paidUSD}=calcEffectivePaid(s.invoice_no,_brcsAll,_irmsAll);a.count++;a.inv+=c.invoiceAmtUSD;a.fob+=n(s.fob_value_usd);a.paid+=paidUSD;a.bal+=c.invoiceAmtUSD-paidUSD;return a;},{fy:f,count:0,inv:0,fob:0,paid:0,bal:0});});}, [ships,bcs,standaloneBRCs,standaloneIRMs]);
 
   const filtered=useMemo(()=>{
@@ -8555,7 +8576,7 @@ export default function App(){
   const selectedBC=bcs.find(b=>b.id===shipForm.bc_id)||null;
   const viewShip=ships.find(s=>s.id===viewShipId)||null;
 
-  const shareShip=s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);setShareText(`${COMPANY.name}\nShipment: ${s.invoice_no}\nDate: ${s.invoice_date}\nBuyer: ${s.buyer_name} (${s.buyer_country})\nProduct: ${s.product}\nQty: ${s.qty} MT @ $${s.rate_per_mt}/MT | ${s.delivery_terms}\nInvoice: ${fU(c.invoiceAmtUSD)}\nPayment: ${bc?fU(bc.total_amt_usd):"Pending"}\nBalance: ${fU(bal)}\nRODTEP: ${s.rodtep_status} | GST: ${s.gst_status}\n${COMPANY.address}`);};
+  const shareShip=s=>{const c=calcShip(s),bc=getBC(s),{paidUSD:sPaidUSD}=getPaid(s),bal=c.invoiceAmtUSD-sPaidUSD;setShareText(`${COMPANY.name}\nShipment: ${s.invoice_no}\nDate: ${s.invoice_date}\nBuyer: ${s.buyer_name} (${s.buyer_country})\nProduct: ${s.product}\nQty: ${s.qty} MT @ $${s.rate_per_mt}/MT | ${s.delivery_terms}\nInvoice: ${fU(c.invoiceAmtUSD)}\nPayment: ${sPaidUSD>0?fU(sPaidUSD):"Pending"}\nBalance: ${fU(bal)}\nRODTEP: ${s.rodtep_status} | GST: ${s.gst_status}\n${COMPANY.address}`);};
   const shareAll=()=>setShareText(`${COMPANY.name}\nFY ${fy} Summary\nShipments: ${totals.count}\nInvoice: ${fU(totals.invUSD)}\nPayment: ${fU(totals.paidUSD)}\nBalance: ${fU(totals.bal)}\nBRC Pending: ${totals.brcPend}\n${COMPANY.address}`);
 
   const doImport=rows=>{
@@ -8769,7 +8790,7 @@ export default function App(){
             <div style={{background:"#fff",borderRadius:12,overflow:"auto",boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:500}}>
                 <thead><tr style={{background:"#f8fafc"}}>{["Invoice No","Buyer","Inv.(USD)","Balance",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:11,borderBottom:"1px solid #e2e8f0"}}>{h}</th>)}</tr></thead>
-                <tbody>{fyShips.slice(0,8).map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);return(
+                <tbody>{fyShips.slice(0,8).map(s=>{const c=calcShip(s),bc=getBC(s),{paidUSD:sPaidUSD}=getPaid(s),bal=c.invoiceAmtUSD-sPaidUSD;return(
                   <tr key={s.id} style={{borderBottom:"1px solid #f1f5f9"}}>
                     <td style={{padding:"8px 10px",fontWeight:600,color:"#1e3a5f",fontSize:11}}>{s.invoice_no}</td>
                     <td style={{padding:"8px 10px",fontSize:11}}>{s.buyer_name}</td>
@@ -8857,7 +8878,7 @@ export default function App(){
                     {canEdit&&<th style={{padding:"9px 10px",color:"#64748b",fontWeight:600,fontSize:11.5,borderBottom:"1px solid #e2e8f0",background:"#f8fafc",whiteSpace:"nowrap"}}>Actions</th>}
                   </tr></thead>
                   <tbody>
-                    {filtered.map(s=>{const c=calcShip(s),bc=getBC(s),bal=c.invoiceAmtUSD-(bc?bc.total_amt_usd:0);
+                    {filtered.map(s=>{const c=calcShip(s),bc=getBC(s),{paidUSD:sPaidUSD,paidINR:sPaidINR}=getPaid(s),bal=c.invoiceAmtUSD-sPaidUSD;
                       const allBRCsReg=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
                       const allIRMsReg=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
                       const sBRCs=allBRCsReg.filter(b=>b.linked_invoice_no===s.invoice_no);
@@ -8901,7 +8922,7 @@ export default function App(){
                         <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:(c.invoiceAmtUSD-paidUSD)>0.01?"#dc2626":"#16a34a"}}>{fU(c.invoiceAmtUSD-paidUSD)}</td>
                         {(canAddShipment)&&<td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
                           {canEditShipment&&<button onClick={()=>openEditShip(s)} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>Edit</button>}
-                          <button onClick={()=>exportShipmentPDF(s,getBC(s))} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📄</button>
+                          <button onClick={()=>exportShipmentPDF(s,getBC(s),[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs],[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs])} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📄</button>
                           <button onClick={()=>setShipDocsId(s.id)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📁</button>
                           <button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📱</button>
                           {canDelete&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
@@ -9387,6 +9408,8 @@ export default function App(){
           data={exportData}
           getBC={getBC}
           onClose={()=>setExportModal(null)}
+          allBRCs={[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs]}
+          allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]}
         />
       )}
 
