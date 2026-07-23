@@ -8330,30 +8330,7 @@ export default function App(){
   // Helper: get effective paid for a ship
   const getPaid=s=>paidMap[s.invoice_no]||{paidUSD:0,paidINR:0};
 
-  const debugPayment=(invoiceNo)=>{
-    console.group("=== DEBUG PAYMENT: "+invoiceNo+" ===");
-    const linkedBCs=bcs.filter(b=>(b.linked_invoices||[]).includes(invoiceNo));
-    console.log("BCs linked:", linkedBCs.length);
-    linkedBCs.forEach(bc=>{
-      console.log("BC:", bc.bc_no, "total_usd:", bc.total_amt_usd, "total_inr:", bc.total_amt_inr);
-      console.log("irm_entries count:", (bc.irm_entries||[]).length);
-      (bc.irm_entries||[]).forEach(irm=>console.log("  IRM:", JSON.stringify({
-        id:irm.id, irm_no:irm.irm_no,
-        irm_total_usd:irm.irm_total_usd, irm_amt_usd:irm.irm_amt_usd,
-        irm_amt_inr:irm.irm_amt_inr, exchange_rate:irm.exchange_rate,
-        intermediary_charges_usd:irm.intermediary_charges_usd
-      })));
-    });
-    const linkedStandalone=standaloneBRCs.filter(b=>b.linked_invoice_no===invoiceNo);
-    console.log("standaloneBRCs linked:", linkedStandalone.length);
-    linkedStandalone.forEach(brc=>console.log("  BRC:", JSON.stringify({
-      id:brc.id,brc_no:brc.brc_no,
-      irm_allocations:brc.irm_allocations
-    })));
-    console.log("paidMap result:", JSON.stringify(paidMap[invoiceNo]));
-    console.groupEnd();
-    alert("Debug logged to F12 Console for "+invoiceNo);
-  };
+
 
   const allYears=useMemo(()=>{const _brcsAll=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];const _irmsAll=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];return ALL_FYS.map(f=>{const ss=ships.filter(s=>getFY(s.invoice_date)===f);return ss.reduce((a,s)=>{const c=calcShip(s);const {paidUSD}=calcEffectivePaid(s.invoice_no,_brcsAll,_irmsAll);a.count++;a.inv+=c.invoiceAmtUSD;a.fob+=n(s.fob_value_usd);a.paid+=paidUSD;a.bal+=c.invoiceAmtUSD-paidUSD;return a;},{fy:f,count:0,inv:0,fob:0,paid:0,bal:0});});}, [ships,bcs,standaloneBRCs,standaloneIRMs]);
 
@@ -8962,8 +8939,7 @@ export default function App(){
                           <button onClick={()=>exportShipmentPDF(s,getBC(s),[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs],[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs])} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📄</button>
                           <button onClick={()=>setShipDocsId(s.id)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📁</button>
                           <button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📱</button>
-                          <button onClick={()=>debugPayment(s.invoice_no)} style={{background:"#fef9c3",color:"#854d0e",border:"none",borderRadius:5,padding:"3px 6px",cursor:"pointer",fontSize:10,marginRight:3}}>🐛</button>
-                          {canDelete&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
+{canDelete&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
                         </td>}
                       </tr>
                     );})}
