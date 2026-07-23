@@ -496,7 +496,7 @@ const exportBCPDF = (bc) => {
 };
 
 // ─── Export Modal ─────────────────────────────────────────────────────────────
-function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[] }) {
+function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[], allBCs=[] }) {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [fmt, setFmt] = useState("csv");
@@ -520,7 +520,7 @@ function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[] }) {
         const hdrs = ["Invoice No","Date","Buyer","Country","Product","Port Load","Port Disch","SB No","SB Date","Port Code","BL No","BL Date","Qty(MT)","Rate/MT(USD)","Terms","Inv(USD)","ExRate","Inv(INR)","IGST","Gross(INR)","FOB(USD)","FOB(INR)","RODTEP(INR)","RODTEP St","GST St","BC No","BC Bank","BRC No(s)","Pmt(USD)","Pmt(INR)","Balance(USD)"];
         const rows = filtered.map(s => {
           const c = calcShip(s), bc = getBC(s);
-          const {paidUSD:csvPaidUSD,paidINR:csvPaidINR}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs);
+          const {paidUSD:csvPaidUSD,paidINR:csvPaidINR}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs,allBCs);
           const bal=c.invoiceAmtUSD-csvPaidUSD;
           return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.port_code||"",s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.bank_name:"",bc?bc.brc_entries?.map(b=>b.brc_no).join("; "):"",fi(csvPaidUSD),fi(csvPaidINR),fi(bal)];
         });
@@ -563,7 +563,7 @@ function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[] }) {
       head: [["Invoice No","Date","Buyer","Country","Qty(MT)","Rate/MT","Terms","Inv(USD)","FOB(USD)","RODTEP","BC No","Pmt(USD)","Balance"]],
       body: ships.map(s => {
         const c = calcShip(s), bc = getBC(s);
-        const {paidUSD:csvPaid}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs);
+        const {paidUSD:csvPaid}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs,allBCs);
         const bal=c.invoiceAmtUSD-csvPaid;
         return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,fi(s.qty,0),fi(s.rate_per_mt),s.delivery_terms,fU(c.invoiceAmtUSD),fU(s.fob_value_usd),s.rodtep_status,bc?bc.bc_no:"—",fU(csvPaid),fU(c.invoiceAmtUSD-csvPaid)];
       }),
@@ -660,7 +660,7 @@ function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[] }) {
         head: [["Invoice No","Date","Buyer","Inv(USD)","Pmt(USD)","Balance","RODTEP","GST"]],
         body: fyShips.map(s => {
           const c = calcShip(s), bc = getBC(s);
-          const {paidUSD:fyPaid}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs);
+          const {paidUSD:fyPaid}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs,allBCs);
           const bal=c.invoiceAmtUSD-fyPaid;
           return [s.invoice_no,s.invoice_date,s.buyer_name,fU(c.invoiceAmtUSD),fyPaid>0?fU(fyPaid):"—",fU(c.invoiceAmtUSD-fyPaid),s.rodtep_status,s.gst_status];
         }),
@@ -3490,44 +3490,55 @@ async function exportProformaInvoiceWord(contract, buyer, piNo, validityDate, ad
 }
 
 // ─── Compute effective payment for an invoice ─────────────────────────────────
-// Rule: IRM bank charges are absorbed by the FIRST invoice linked to that IRM
-// (first = earliest BRC insertion order in irm_allocations array order)
-function calcEffectivePaid(invoiceNo, allBRCs, allIRMs) {
-  // Build a map: irmId -> last invoice that uses it (by BRC array order)
-  // allBRCs is ordered by insertion (DB order preserved in fetch)
-  const irmLastInvoice = {};
-  allBRCs.forEach(brc => {
-    if (!brc.linked_invoice_no) return;
-    (brc.irm_allocations || []).forEach(a => {
-      if (a.irmId) {
-        irmLastInvoice[String(a.irmId)] = brc.linked_invoice_no;
-      }
-    });
-  });
-
-  // Now sum payments for this invoice
-  const sBRCs = allBRCs.filter(b => b.linked_invoice_no === invoiceNo);
+// Handles two payment paths:
+// 1. Bill Collections (bcs) → irm_entries[] — bc.linked_invoices includes invoiceNo
+// 2. Standalone BRCs (brc_entries with bc_id=null) → irm_allocations[] — brc.linked_invoice_no === invoiceNo
+function calcEffectivePaid(invoiceNo, allBRCs, allIRMs, allBCs) {
   let paidUSD = 0, paidINR = 0;
+
+  // ── Path 1: Bill Collections with irm_entries ─────────────────────────────
+  // allBCs is passed when available (from the React state bcs[])
+  if(allBCs && allBCs.length){
+    allBCs.filter(bc=>(bc.linked_invoices||[]).includes(invoiceNo)).forEach(bc=>{
+      (bc.irm_entries||[]).forEach(irm=>{
+        const irmUSD = n(irm.irm_total_usd||irm.irm_amt_usd||0);
+        const irmINR = n(irm.irm_amt_inr||0);
+        const charges = n(irm.intermediary_charges_usd||0);
+        const rate = n(irm.exchange_rate||0);
+        // irm_amt_inr is the actual INR after all deductions — use directly if set
+        if(irmINR > 0){
+          paidUSD += irmUSD - charges;
+          paidINR += irmINR;
+        } else if(irmUSD > 0 && rate > 0){
+          paidUSD += irmUSD - charges;
+          paidINR += (irmUSD - charges) * rate;
+        }
+      });
+    });
+  }
+
+  // ── Path 2: Standalone BRCs with irm_allocations ─────────────────────────
+  const sBRCs = allBRCs.filter(b => b.linked_invoice_no === invoiceNo);
   sBRCs.forEach(brc => {
     (brc.irm_allocations || []).forEach(a => {
       const irm = allIRMs.find(i => String(i.id) === String(a.irmId));
       if (!irm) return;
       const util = n(a.irmUtilAmt);
       const rate = n(irm.exchange_rate);
-      // irm_amt_inr is the actual INR credited (after bank deductions) — use it directly if available
-      if(irm.irm_amt_inr){
+      const irmINR = n(irm.irm_amt_inr||0);
+      const irmTotal = n(irm.irm_total_usd||util||1);
+      if(irmINR > 0){
+        // Use actual INR proportional to utilised amount
         paidUSD += util;
-        paidINR += n(irm.irm_amt_inr) * (util / (n(irm.irm_total_usd)||util||1));
+        paidINR += irmINR * (util / irmTotal);
       } else {
-        // Intermediary charges are deducted from received amount
-        const charges = irmLastInvoice[String(a.irmId)] === invoiceNo
-          ? n(irm.intermediary_charges_usd || 0)
-          : 0;
+        const charges = n(irm.intermediary_charges_usd||0) * (util / irmTotal);
         paidUSD += util;
         paidINR += (util - charges) * rate;
       }
     });
   });
+
   return { paidUSD, paidINR };
 }
 
@@ -8294,7 +8305,7 @@ export default function App(){
     return fyShips.reduce((a,s)=>{
       const c=calcShip(s);
       const sBRCs=_brcs.filter(b=>b.linked_invoice_no===s.invoice_no);
-      const {paidUSD:pU,paidINR:pI}=calcEffectivePaid(s.invoice_no,_brcs,_irms);
+      const {paidUSD:pU,paidINR:pI}=calcEffectivePaid(s.invoice_no,_brcs,_irms,bcs);
       a.count++;a.invUSD+=c.invoiceAmtUSD;a.invINR+=c.invoiceAmtINR;
       a.fobUSD+=n(s.fob_value_usd);a.fobINR+=c.fobValueINR;a.gross+=c.grossTotal;
       a.paidUSD+=pU;a.paidINR+=pI;
@@ -8311,7 +8322,7 @@ export default function App(){
     const _irms=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
     const map={};
     ships.forEach(s=>{
-      map[s.invoice_no]=calcEffectivePaid(s.invoice_no,_brcs,_irms);
+      map[s.invoice_no]=calcEffectivePaid(s.invoice_no,_brcs,_irms,bcs);
     });
     return map;
   },[ships,bcs,standaloneBRCs,standaloneIRMs]);
@@ -8518,7 +8529,7 @@ export default function App(){
     // Method 1: calcEffectivePaid using standalone BRCs (have irm_allocations structure)
     const _allBRCs=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
     const _allIRMs=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
-    let {paidINR}=calcEffectivePaid(inv,_allBRCs,_allIRMs);
+    let {paidINR}=calcEffectivePaid(inv,_allBRCs,_allIRMs,bcs);
     // Method 2 fallback: sum irm_entries INR directly from BCs linked to this invoice
     if(!paidINR){
       bcs.filter(b=>(b.linked_invoices||[]).includes(inv)).forEach(bc=>{
@@ -9410,6 +9421,7 @@ export default function App(){
           onClose={()=>setExportModal(null)}
           allBRCs={[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs]}
           allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]}
+          allBCs={bcs}
         />
       )}
 
