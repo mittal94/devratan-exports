@@ -3527,14 +3527,13 @@ function calcEffectivePaid(invoiceNo, allBRCs, allIRMs, allBCs) {
       const rate = n(irm.exchange_rate);
       const irmINR = n(irm.irm_amt_inr||0);
       const irmTotal = n(irm.irm_total_usd||util||1);
+      const chargesProp = n(irm.intermediary_charges_usd||0) * (util / irmTotal);
+      // paidUSD = what buyer sent minus bank charges = net received
+      paidUSD += util - chargesProp;
       if(irmINR > 0){
-        // Use actual INR proportional to utilised amount
-        paidUSD += util;
         paidINR += irmINR * (util / irmTotal);
       } else {
-        const charges = n(irm.intermediary_charges_usd||0) * (util / irmTotal);
-        paidUSD += util;
-        paidINR += (util - charges) * rate;
+        paidINR += (util - chargesProp) * rate;
       }
     });
   });
