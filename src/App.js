@@ -8331,6 +8331,30 @@ export default function App(){
   // Helper: get effective paid for a ship
   const getPaid=s=>paidMap[s.invoice_no]||{paidUSD:0,paidINR:0};
 
+  const debugPayment=(invoiceNo)=>{
+    const _brcs=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
+    const _irms=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
+    console.group("=== DEBUG: "+invoiceNo+" ===");
+    // Path 1: BCs
+    const linkedBCs=bcs.filter(b=>(b.linked_invoices||[]).includes(invoiceNo));
+    console.log("Path1 BCs linked:", linkedBCs.length);
+    linkedBCs.forEach(bc=>{
+      console.log("  BC:",bc.bc_no,"irm_entries:",(bc.irm_entries||[]).length);
+      (bc.irm_entries||[]).forEach(irm=>console.log("    IRM:",JSON.stringify({irm_no:irm.irm_no,irm_total_usd:irm.irm_total_usd,irm_amt_usd:irm.irm_amt_usd,exchange_rate:irm.exchange_rate,intermediary_charges_usd:irm.intermediary_charges_usd})));
+    });
+    // Path 2: standalone BRCs
+    const sBRCs=_brcs.filter(b=>b.linked_invoice_no===invoiceNo);
+    console.log("Path2 standaloneBRCs linked:", sBRCs.length);
+    sBRCs.forEach(brc=>console.log("  BRC:",JSON.stringify({brc_no:brc.brc_no,irm_allocations:brc.irm_allocations})));
+    // irmLastInvoice map for IRMs used by this invoice
+    const irmLastInvoice={};
+    _brcs.forEach(brc=>{if(!brc.linked_invoice_no)return;(brc.irm_allocations||[]).forEach(a=>{if(a.irmId)irmLastInvoice[String(a.irmId)]=brc.linked_invoice_no;});});
+    sBRCs.forEach(brc=>(brc.irm_allocations||[]).forEach(a=>{const irm=_irms.find(i=>String(i.id)===String(a.irmId));if(irm)console.log("  IRM",a.irmId,"lastInvoice:",irmLastInvoice[String(a.irmId)],"charges:",irm.intermediary_charges_usd,"absorbHere:",irmLastInvoice[String(a.irmId)]===invoiceNo);}));
+    console.log("paidMap:", JSON.stringify(paidMap[invoiceNo]));
+    console.groupEnd();
+    alert("Check F12 Console for "+invoiceNo);
+  };
+
 
 
   const allYears=useMemo(()=>{const _brcsAll=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];const _irmsAll=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];return ALL_FYS.map(f=>{const ss=ships.filter(s=>getFY(s.invoice_date)===f);return ss.reduce((a,s)=>{const c=calcShip(s);const {paidUSD}=calcEffectivePaid(s.invoice_no,_brcsAll,_irmsAll);a.count++;a.inv+=c.invoiceAmtUSD;a.fob+=n(s.fob_value_usd);a.paid+=paidUSD;a.bal+=c.invoiceAmtUSD-paidUSD;return a;},{fy:f,count:0,inv:0,fob:0,paid:0,bal:0});});}, [ships,bcs,standaloneBRCs,standaloneIRMs]);
@@ -8940,6 +8964,7 @@ export default function App(){
                           <button onClick={()=>exportShipmentPDF(s,getBC(s),[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs],[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs])} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📄</button>
                           <button onClick={()=>setShipDocsId(s.id)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📁</button>
                           <button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11,marginRight:3}}>📱</button>
+                          <button onClick={()=>debugPayment(s.invoice_no)} style={{background:"#fef9c3",color:"#854d0e",border:"none",borderRadius:5,padding:"3px 6px",cursor:"pointer",fontSize:10,marginRight:3}}>🐛</button>
 {canDelete&&<button onClick={()=>setDeleteId(s.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
                         </td>}
                       </tr>
