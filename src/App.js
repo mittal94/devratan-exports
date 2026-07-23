@@ -8330,6 +8330,23 @@ export default function App(){
   // Helper: get effective paid for a ship
   const getPaid=s=>paidMap[s.invoice_no]||{paidUSD:0,paidINR:0};
 
+  const debugPayment=(invoiceNo)=>{
+    const _brcs=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];
+    const _irms=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];
+    console.group("=== DEBUG PAYMENT: "+invoiceNo+" ===");
+    console.log("bcs count:", bcs.length);
+    const linkedBCs=bcs.filter(b=>(b.linked_invoices||[]).includes(invoiceNo));
+    console.log("BCs linked to this invoice:", linkedBCs.length, linkedBCs.map(b=>({bc_no:b.bc_no,linked_invoices:b.linked_invoices,irm_entries_count:(b.irm_entries||[]).length,total_amt_usd:b.total_amt_usd,total_amt_inr:b.total_amt_inr})));
+    linkedBCs.forEach(bc=>{
+      console.log("IRM entries for BC "+bc.bc_no+":", b=>b.irm_entries);
+      (bc.irm_entries||[]).forEach(irm=>console.log("  IRM:", {irm_no:irm.irm_no,irm_total_usd:irm.irm_total_usd,irm_amt_usd:irm.irm_amt_usd,irm_amt_inr:irm.irm_amt_inr,exchange_rate:irm.exchange_rate,intermediary_charges_usd:irm.intermediary_charges_usd}));
+    });
+    console.log("standaloneBRCs linked:", standaloneBRCs.filter(b=>b.linked_invoice_no===invoiceNo));
+    console.log("paidMap result:", paidMap[invoiceNo]);
+    console.groupEnd();
+    alert("Check browser console (F12) for debug info on "+invoiceNo);
+  };
+
   const allYears=useMemo(()=>{const _brcsAll=[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs];const _irmsAll=[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs];return ALL_FYS.map(f=>{const ss=ships.filter(s=>getFY(s.invoice_date)===f);return ss.reduce((a,s)=>{const c=calcShip(s);const {paidUSD}=calcEffectivePaid(s.invoice_no,_brcsAll,_irmsAll);a.count++;a.inv+=c.invoiceAmtUSD;a.fob+=n(s.fob_value_usd);a.paid+=paidUSD;a.bal+=c.invoiceAmtUSD-paidUSD;return a;},{fy:f,count:0,inv:0,fob:0,paid:0,bal:0});});}, [ships,bcs,standaloneBRCs,standaloneIRMs]);
 
   const filtered=useMemo(()=>{
@@ -8807,7 +8824,10 @@ export default function App(){
                     <td style={{padding:"8px 10px",fontSize:11}}>{s.buyer_name}</td>
                     <td style={{padding:"8px 10px",fontWeight:600,fontSize:11}}>{fU(c.invoiceAmtUSD)}</td>
                     <td style={{padding:"8px 10px",fontWeight:600,color:bal>0?"#dc2626":"#16a34a",fontSize:11}}>{fU(bal)}</td>
-                    <td style={{padding:"8px 10px"}}><button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>📱</button></td>
+                    <td style={{padding:"8px 10px"}}>
+                      <button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>📱</button>
+                      <button onClick={()=>debugPayment(s.invoice_no)} style={{background:"#fef9c3",color:"#854d0e",border:"none",borderRadius:5,padding:"3px 6px",cursor:"pointer",fontSize:10,marginLeft:3}}>🐛</button>
+                    </td>
                   </tr>
                 );})}
                 </tbody>
