@@ -6609,25 +6609,33 @@ function InvoicingTab({buyers}){
   // Common header info row (HSN, ports, delivery, payment)
   const renderInfoRow=(doc,M,y,RW)=>{
     const navy=[18,52,96];
+    // Fixed widths — Payment Terms gets remaining space to avoid overflow
     const cols=[
-      ["HSN Code",form.hsn],
-      ["Port of Loading",form.port_loading],
-      ["Country of Origin",form.country_origin],
-      ["Port of Discharge",form.port_discharge],
-      ["Country of Destination",form.country_dest],
-      ["Delivery Terms",form.delivery_terms],
-      ["Payment Terms",form.payment_terms],
+      ["HSN Code",        form.hsn,              20],
+      ["Port of Loading", form.port_loading,      26],
+      ["Country of Origin",form.country_origin,   22],
+      ["Port of Discharge",form.port_discharge,   26],
+      ["Country of Destination",form.country_dest,26],
+      ["Delivery Terms",  form.delivery_terms,    20],
+      ["Payment Terms",   form.payment_terms,     RW-20-26-22-26-26-20],
     ];
-    const cw=RW/cols.length;
-    cols.forEach(([l,v],i)=>{
-      invRECT(doc,M+i*cw,y,cw,10);
-      doc.setFillColor(230,239,250); doc.rect(M+i*cw,y,cw,4.5,"F");
-      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(6.5);
-      doc.text(l,M+i*cw+0.5,y+3.5,{maxWidth:cw-1});
-      invNF(doc,false,7.5); doc.setTextColor(0,0,0);
-      doc.text(String(v||"—"),M+i*cw+0.5,y+8,{maxWidth:cw-1});
+    // Row height based on tallest wrapped cell
+    const rowH=cols.reduce((maxH,[l,v,w])=>{
+      const lines=doc.splitTextToSize(String(v||"—"),w-2);
+      return Math.max(maxH, 5+lines.length*4);
+    },10);
+    let cx=M;
+    cols.forEach(([l,v,w])=>{
+      invRECT(doc,cx,y,w,rowH);
+      doc.setFillColor(230,239,250); doc.rect(cx,y,w,4.5,"F");
+      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(6);
+      doc.text(l,cx+0.5,y+3.5,{maxWidth:w-1});
+      invNF(doc,false,7); doc.setTextColor(0,0,0);
+      const lines=doc.splitTextToSize(String(v||"—"),w-1.5);
+      doc.text(lines,cx+0.5,y+8);
+      cx+=w;
     });
-    return y+10;
+    return y+rowH;
   };
 
   // Items table
