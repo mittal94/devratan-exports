@@ -7565,21 +7565,23 @@ function VJRAInvoicingTab({buyers}){
 
   const vjraInfoRow=(doc,M,y,RW)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
-    // Fixed widths: give extra space to Payment Terms (last col)
     const cols=[
-      ["HSN Code",      form.hsn,              22],
-      ["Port of Loading",form.port_loading,     26],
-      ["Country of Origin",form.country_origin, 22],
-      ["Port of Discharge",form.port_discharge, 26],
+      ["HSN Code",         form.hsn,           22],
+      ["Port of Loading",  form.port_loading,  26],
+      ["Country of Origin",form.country_origin,22],
+      ["Port of Discharge",form.port_discharge,26],
       ["Country of Destination",form.country_dest,26],
-      ["Delivery Terms",form.delivery_terms,    20],
-      ["Payment Terms", form.payment_terms,     RW-22-26-22-26-26-20],
+      ["Delivery Terms",   form.delivery_terms,20],
+      ["Payment Terms",    form.payment_terms, RW-22-26-22-26-26-20],
     ];
+    // Calculate uniform row height from tallest column
+    const rowH=cols.reduce((maxH,[l,v,w])=>{
+      const lines=doc.splitTextToSize(String(v||"—"),w-1.5);
+      return Math.max(maxH, 5+lines.length*4);
+    },10);
     let cx=M;
     cols.forEach(([l,v,w])=>{
-      // Calculate row height based on Payment Terms text wrap
-      const lines=doc.splitTextToSize(String(v||"—"),w-2);
-      const rowH=Math.max(14, 5+lines.length*4);
+      const lines=doc.splitTextToSize(String(v||"—"),w-1.5);
       doc.setDrawColor(100,100,100); doc.setLineWidth(0.2); doc.rect(cx,y,w,rowH);
       doc.setFillColor(...lgray); doc.rect(cx,y,w,5,"F");
       doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(6);
@@ -7588,9 +7590,7 @@ function VJRAInvoicingTab({buyers}){
       doc.text(lines,cx+0.8,y+8.5);
       cx+=w;
     });
-    // Calculate final row height for return value
-    const ptLines=doc.splitTextToSize(String(form.payment_terms||"—"),RW-22-26-22-26-26-20-2);
-    return y+Math.max(14,5+ptLines.length*4);
+    return y+rowH;
   };
 
   const vjraItemsTable=(doc,M,y,RW,showPrice)=>{
