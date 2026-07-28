@@ -6715,12 +6715,12 @@ function InvoicingTab({buyers}){
     const cCols=[["S.No.",12],["Container No.",50],["Seal No.",40],["No. of Pkgs",30],["Gross Wt (Kgs)",34],["Net Wt (Kgs)",RW-12-50-40-30-34]];
     let hx=M;
     cCols.forEach(([h,w])=>{
-      invRECT(doc,hx,y,w,7); doc.setFillColor(...lgray); doc.rect(hx,y,w,7,"F");
-      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.text(h,hx+0.5,y+4.5,{maxWidth:w-1});
+      invRECT(doc,hx,y,w,6); doc.setFillColor(...lgray); doc.rect(hx,y,w,6,"F");
+      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(6.5);
+      doc.text(h,hx+0.5,y+4,{maxWidth:w-1});
       hx+=w;
     });
-    y+=7;
+    y+=6;
     form.containers.forEach((c,i)=>{
       const bags=n(c.bags);
       const cItm=form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"};
@@ -6728,21 +6728,21 @@ function InvoicingTab({buyers}){
       const net=Math.round(bags*n(cItm.bag_net_wt)*100)/100;
       const rowData=[String(i+1),c.cont_no||"",c.seal_no||"",bags?bags+" BAGS":"",gross?gross.toFixed(2):"",net?net.toFixed(2):""];
       let rx=M;
-      y=invChkPg(doc,y,7,null,null);
+      y=invChkPg(doc,y,28,null,null); // ensure sign block fits after last row
       cCols.forEach(([h,w],ci)=>{
-        invRECT(doc,rx,y,w,6); invNF(doc,false,7.5); doc.setTextColor(0,0,0);
-        doc.text(rowData[ci],rx+0.5,y+4,{maxWidth:w-1});
+        invRECT(doc,rx,y,w,5); invNF(doc,false,7); doc.setTextColor(0,0,0);
+        doc.text(rowData[ci],rx+0.5,y+3.5,{maxWidth:w-1});
         rx+=w;
       });
-      y+=6;
+      y+=5;
     });
     // Totals
     const rowData=["","TOTAL","",contTotBags?contTotBags+" BAGS":"",contTotGross?contTotGross.toFixed(2):"",contTotNet?contTotNet.toFixed(2):""];
     let tx=M;
     cCols.forEach(([h,w],ci)=>{
-      invRECT(doc,tx,y,w,7); doc.setFillColor(...lgray); doc.rect(tx,y,w,7,"F");
-      invNF(doc,true,7.5); doc.setTextColor(...navy);
-      doc.text(rowData[ci],tx+0.5,y+4.5,{maxWidth:w-1});
+      invRECT(doc,tx,y,w,6); doc.setFillColor(...lgray); doc.rect(tx,y,w,6,"F");
+      invNF(doc,true,7); doc.setTextColor(...navy);
+      doc.text(rowData[ci],tx+0.5,y+4,{maxWidth:w-1});
       tx+=w;
     });
     doc.setTextColor(0,0,0);
@@ -6974,12 +6974,12 @@ function InvoicingTab({buyers}){
     y=renderParties(doc,form.parties.pl,M,y,RW,false,"","");
     y+=2; y=renderInfoRow(doc,M,y,RW); y+=3;
 
-    invNF(doc,true,8.5); doc.text("Items:",M,y); y+=4;
+    invNF(doc,true,8); doc.text("Items:",M,y); y+=3;
     const {y:y2,totalGross:plGross,totalNet:plNet}=renderItemsTable(doc,M,y,RW,false);
-    y=y2+3;
+    y=y2+2;
 
-    invNF(doc,true,8.5); doc.text("Container Details:",M,y); y+=4;
-    y=renderContainerTable(doc,M,y,RW); y+=3;
+    invNF(doc,true,8); doc.text("Container Details:",M,y); y+=3;
+    y=renderContainerTable(doc,M,y,RW); y+=2;
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
