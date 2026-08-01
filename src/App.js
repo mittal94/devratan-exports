@@ -6074,15 +6074,15 @@ function IBLForm({ships, buyers}){
 
 function EPCForm({ships}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
-  const toDisplay=iso=>{if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
-  const toISO=dd=>{if(!dd||!dd.includes("."))return"";const[d,m,y]=dd.split(".");return`${y}-${m}-${d}`;};
+  const toDisplay=iso=>{if(!iso)return "";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
+  const toISO=dd=>{if(!dd||!dd.includes("."))return "";const[d,m,y]=dd.split(".");return`${y}-${m}-${d}`;};
   const numWords=amt=>{
-    if(!amt||isNaN(Number(amt)))return"";
+    if(!amt||isNaN(Number(amt)))return "";
     const num=Math.round(Number(amt));
     const ones=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
     const tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
     const toWords=n=>{
-      if(n===0)return"";
+      if(n===0)return "";
       if(n<20)return ones[n]+" ";
       if(n<100)return tens[Math.floor(n/10)]+" "+(n%10?ones[n%10]+" ":"");
       if(n<1000)return ones[Math.floor(n/100)]+" Hundred "+(n%100?toWords(n%100):"");
@@ -6099,42 +6099,45 @@ function EPCForm({ships}){
     ref_serial:"",
     date:today,
     order_no:"", order_date:"",
-    cif_value_usd:"", fob_value_usd:"",
+    ccy:"USD",
+    lc_po_value:"", fob_value:"",
     exchange_rate:"85",
-
+    margin_pct:"10",
     epc_availed:"0.00",
     epc_release:"",
     uin_no:"EPMIES150626012081", uin_date:"15.06.2026",
     hsn:"10063019",
+    commodity:"INDIAN PARBOILED RICE",
     epc_account:"41269117338",
     cc_account:"41289547389",
+    // New fields
+    facility_type:"running",
+    tenor:"",
+    buyer_name:"",
+    lc_po_details:"",
+    expected_shipment_date:"",
+    shipment_from_port:"", shipment_from_country:"INDIA",
+    shipment_to_port:"", shipment_to_country:"",
   });
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
 
-  // Auto calculations
-  const fobINR   = Math.round(n(f.fob_value_usd)*n(f.exchange_rate));
-  const margin   = Math.round(fobINR*0.10); // Fixed at 10%
+  // Auto calculations — FOB and exchange rate use selected CCY
+  const fobINR   = Math.round(n(f.fob_value)*n(f.exchange_rate));
+  const margin   = Math.round(fobINR*(n(f.margin_pct)/100));
   const eligible = fobINR - margin;
   const epcAvailed = n(f.epc_availed);
   const epcRelease = n(f.epc_release);
   const balance  = eligible - epcAvailed - epcRelease;
 
-  const exportPDF=()=>{
-    const missing=[];
-    if(!f.ref_serial) missing.push("Ref No (serial number)");
-    if(!f.order_no) missing.push("Export Order No.");
-    if(!f.order_date) missing.push("Order Date");
-    if(!f.cif_value_usd) missing.push("CIF Value (USD)");
-    if(!f.fob_value_usd) missing.push("FOB Value (USD)");
-    if(!f.exchange_rate) missing.push("Exchange Rate");
-    if(!f.epc_release) missing.push("EPC Release Today");
-    if(missing.length){alert("Please fill mandatory fields before exporting PDF:\n• "+missing.join("\n• "));return;}
-    const JPDF=getPDF(); if(!JPDF) return;
-    const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const DateInput=({value,onChange})=>(
+    <input type="date" value={toISO(value)} onChange={e=>onChange(toDisplay(e.target.value))} style={{...iS,fontSize:12}}/>
+  );
+
+  // ── PDF 1: EPC Release Request Letter (original) ──────────────────────────
+  const exportEPCLetter=(doc)=>{
     const M=20, RW=170;
     const navy=[18,52,96], steel=[70,130,180], ltblue=[220,235,250], gold=[162,120,50], white=[255,255,255];
     const seller=COMPANIES.devratan;
-
     const NF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||9);doc.setTextColor(0,0,0);};
     const TW=(t,sz)=>doc.getStringUnitWidth(String(t))*(sz||9)/doc.internal.scaleFactor;
     const WRAP=(t,x,y,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y);return y+ls.length*(lh||4.5);};
@@ -6157,44 +6160,37 @@ function EPCForm({ships}){
     doc.setTextColor(0,0,0);
 
     let y=50;
-
-    // Ref + Date right aligned
-    NF(false,9);
     const refNo="DEV/"+getFY()+"/EPC/"+(f.ref_serial||"__");
+    NF(false,9);
     doc.text("Ref No: "+refNo,M,y);
-    doc.text("Date: "+f.date,M+RW-TW("Date: "+f.date,9),y);
-    y+=7;
+    doc.text("Date: "+f.date,M+RW-TW("Date: "+f.date,9),y); y+=7;
 
-    // Address
     doc.text("To,",M,y); y+=4.5;
     doc.text("The Manager,",M,y); y+=4.5;
     doc.text("State Bank of India,",M,y); y+=4.5;
     doc.text("IFB Branch Indore (MP)",M,y); y+=7;
 
-    // Subject line bold
     NF(true,9);
     doc.text("Sub: EPC Limit A/c. No: "+f.epc_account,M,y); y+=4.5;
     doc.text("UIN No. "+f.uin_no+" Dt. "+f.uin_date,105,y,{align:"center"}); y+=7;
 
     NF(false,9); doc.text("Dear Sir,",M,y); y+=6;
 
-    // Opening line
     const openLine="With reference to above, we would like to inform you that we are submitting one export order No. "+f.order_no+" Dt. "+f.order_date;
     y=WRAP(openLine,M,y,RW,4.5); y+=5;
 
-    // Calculation table
     const tblRows=[
-      ["CIF VALUE OF ORDER", f.cif_value_usd?"USD "+Number(f.cif_value_usd).toLocaleString("en-IN",{minimumFractionDigits:2}):""],
-      ["FOB VALUE", f.fob_value_usd?"USD "+Number(f.fob_value_usd).toLocaleString("en-IN",{minimumFractionDigits:2}):""],
+      ["LC/PO VALUE OF ORDER", f.lc_po_value?f.ccy+" "+Number(f.lc_po_value).toLocaleString("en-IN",{minimumFractionDigits:2}):""],
+      ["FOB VALUE", f.fob_value?f.ccy+" "+Number(f.fob_value).toLocaleString("en-IN",{minimumFractionDigits:2}):""],
       ["FOB VALUE (IN INR) @ "+f.exchange_rate, fobINR?"INR  "+fobINR.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
-      ["LESS: 10% MARGIN", margin?"INR   "+margin.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
+      ["LESS: "+f.margin_pct+"% MARGIN", margin?"INR   "+margin.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
       ["ELIGIBLE VALUE", eligible?"INR  "+eligible.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
       ["EPC AVAILED TILL DATE", "INR   "+Number(epcAvailed).toLocaleString("en-IN",{minimumFractionDigits:2})],
       ["EPC RELEASE TODAY", epcRelease?"INR  "+epcRelease.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
       ["BALANCE OF ELIGIBLE VALUE", balance?"INR  "+balance.toLocaleString("en-IN",{minimumFractionDigits:2}):""],
     ];
     const cW=[RW*0.55, RW*0.45];
-    tblRows.forEach(([lbl,val],i)=>{
+    tblRows.forEach(([lbl,val])=>{
       const isTotal=["ELIGIBLE VALUE","EPC RELEASE TODAY","BALANCE OF ELIGIBLE VALUE"].includes(lbl);
       const rh=7;
       RECT(M,y,cW[0],rh); RECT(M+cW[0],y,cW[1],rh);
@@ -6204,46 +6200,282 @@ function EPCForm({ships}){
     });
     y+=5;
 
-    // Release instruction line
     NF(false,9);
     const releaseLine="Release today INR: "+numWords(epcRelease)+" from EPC A/c. No "+f.epc_account+" to CC A/c. No "+f.cc_account+".";
     y=WRAP(releaseLine,M,y,RW,4.5); y+=4;
 
-    // HSN
     NF(false,9); doc.text("PRODUCT HSN CODE: "+f.hsn,M,y); y+=7;
 
-    // Undertakings
     const ut1="We undertake that Our product is eligible for interest subvention scheme and we are not eligible to get any benefit or availed any benefit under PLI scheme.";
     y=WRAP(ut1,M,y,RW,4.5); y+=4;
 
     const ut2="We undertake that we shall abide by the rules and regulations for release of EPC and will hold the responsibility for any wrong information furnished by us and also for any delay in liquidation of the same. We undertake that we have not availed EPC against the same contract with other bank. We undertake that there is no order against which we have availed EPC and which are overdue for shipment and all orders are shipped as per contracted basis.";
     y=WRAP(ut2,M,y,RW,4.5); y+=10;
 
-    // Signature block
     NF(false,9); doc.text("Date: "+f.date,M,y);
     NF(true,9); doc.text("For "+seller.name,M+RW-TW("For "+seller.name,9),y); y+=5;
     NF(false,9); doc.text("Place: INDORE",M,y);
     doc.text("Authorised Signatory",M+RW-TW("Authorised Signatory",9),y); y+=6;
     NF(false,8); doc.text("(Please affix Company/Firm Stamp)",M+RW-TW("(Please affix Company/Firm Stamp)",8),y);
 
-    // Footer
     doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
     doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...white);
     doc.text(seller.name+"  |  "+seller.phone+"  |  "+seller.email,105,293,{align:"center"});
     doc.setFont("helvetica","bold"); doc.setTextColor(220,220,220);
     doc.text("Page 1 of 1",M+RW-2,293,{align:"right"});
-
-    doc.save("EPC_Release_Request_"+refNo.replace(/\//g,"-")+".pdf");
   };
 
-  const DateInput=({value,onChange})=>(
-    <input type="date" value={toISO(value)} onChange={e=>onChange(toDisplay(e.target.value))} style={{...iS,fontSize:12}}/>
-  );
+  // ── PDF 2: Bank Application Form (Annexure-I) ─────────────────────────────
+  const exportBankForm=(doc)=>{
+    const M=20, RW=170;
+    const blue=[0,112,192], navy=[18,52,96], white=[255,255,255];
+    const NF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||9);doc.setTextColor(0,0,0);};
+    const LINE=(x1,y1,x2,y2,lw)=>{doc.setDrawColor(0,0,0);doc.setLineWidth(lw||0.3);doc.line(x1,y1,x2,y2);};
+    const UL=(x,y,w)=>LINE(x,y+0.5,x+w,y+0.5);
+
+    // SBI logo area
+    let y=15;
+    doc.setFillColor(...blue); doc.ellipse(M+4,y,4,4,"F");
+    doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(...white);
+    doc.text("SBI",M+4,y+1,{align:"center"});
+    doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(0,0,0);
+    doc.text("State Bank of India",M+10,y+1);
+    y+=10;
+
+    // Title
+    doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(...blue);
+    const title="APPLICATION FOR DISBURSEMENT OF PRESHIPMENT CREDIT (EPC/PCFC)";
+    const tw=doc.getTextWidth(title);
+    doc.text(title,105,y,{align:"center"});
+    doc.setDrawColor(...blue); doc.setLineWidth(0.5);
+    doc.line(105-tw/2,y+1,105+tw/2,y+1);
+    y+=10;
+
+    // Date
+    NF(true,9); doc.text("Date: ",M+RW-45,y);
+    NF(false,9); doc.text(f.date,M+RW-45+doc.getTextWidth("Date: "),y);
+    UL(M+RW-45+doc.getTextWidth("Date: "),y,28);
+    y+=9;
+
+    // Address
+    NF(false,9);
+    doc.text("The Branch Head",M,y); y+=4.5;
+    doc.text("State Bank of India",M,y); y+=4.5;
+    UL(M,y,42);
+    doc.text("IFB, Indore",M,y);
+    doc.text("Branch",M+43,y); y+=4.5;
+    doc.text("Dear Sir / Madam,",M,y); y+=8;
+
+    // Subject
+    NF(true,9);
+    doc.text("Disbursement of EPC / PCFC",M,y);
+    const subjW=doc.getTextWidth("Disbursement of EPC / PCFC");
+    doc.setDrawColor(0); doc.setLineWidth(0.4); doc.line(M,y+1,M+subjW,y+1);
+    y+=8;
+
+    // Applicant
+    NF(false,9); doc.text("Name of the Applicant: ",M,y);
+    const ax=M+doc.getTextWidth("Name of the Applicant: ");
+    NF(true,9); doc.text("DEVRATAN ENTERPRISES LLP",ax,y);
+    UL(ax,y,RW-(ax-M)); y+=9;
+
+    // Release line
+    NF(false,9);
+    doc.text("I/We hereby request you to release EPC / PCFC - ",M,y);
+    let lx=M+doc.getTextWidth("I/We hereby request you to release EPC / PCFC - ");
+    NF(true,9); doc.text(f.ccy,lx,y); lx+=doc.getTextWidth(f.ccy)+2;
+    UL(lx-2,y,12);
+    const amtStr=epcRelease?epcRelease.toLocaleString("en-IN"):"";
+    NF(true,9); doc.text(amtStr,lx+2,y);
+    UL(lx+2,y,42);
+    NF(false,9); doc.text(" - by debit to our",lx+45,y); y+=5;
+    doc.text("EPC/PCFC Account No.",M,y);
+    const eax=M+doc.getTextWidth("EPC/PCFC Account No.")+2;
+    NF(true,9); doc.text("41269117338",eax,y);
+    UL(eax-1,y,48);
+    NF(false,9); doc.text("as per the details furnished below:",eax+50,y); y+=9;
+
+    // Type of Facility
+    NF(false,9); doc.text("Type of Facility",M,y);
+    doc.text(":",M+62,y);
+    doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M+67,y-3.5,4,4);
+    if(f.facility_type==="running"){doc.setFontSize(8);doc.setTextColor(0,0,0);doc.text("X",M+68,y-0.5);}
+    NF(false,9); doc.text("Running Account",M+73,y);
+    doc.rect(M+108,y-3.5,4,4);
+    if(f.facility_type==="order"){doc.setFontSize(8);doc.setTextColor(0,0,0);doc.text("X",M+109,y-0.5);}
+    NF(false,9); doc.text("Order Based",M+114,y);
+    y+=9;
+
+    // Field helper
+    const FIELD=(label,val,y0,labelW)=>{
+      const lw=labelW||62;
+      NF(false,9); doc.text(label,M,y0);
+      doc.text(":",M+lw,y0);
+      if(val){NF(false,9);doc.text(String(val),M+lw+4,y0,{maxWidth:RW-lw-4});}
+      UL(M+lw+2,y0,RW-lw-2);
+      return y0+7;
+    };
+
+    y=FIELD("Tenor (in days)",f.tenor,y); y+=1;
+
+    // Buyer — multi-line
+    NF(false,8.5); doc.text("Buyer Name & Address",M,y);
+    NF(false,7); doc.text("(In case of multiple Buyers / Orders,",M,y+4.5);
+    doc.text("details to be furnished as an Annexure",M,y+8.5);
+    doc.text("in tabular format)",M,y+12.5);
+    doc.text(":",M+62,y);
+    if(f.buyer_name){const bl=doc.splitTextToSize(f.buyer_name,RW-66);NF(false,9);doc.text(bl,M+66,y);}
+    UL(M+64,y,RW-64);
+    UL(M+64,y+5,RW-64);
+    y+=17;
+
+    y=FIELD("LC/Purchase Order Details\n(Ref. No. & Date etc.)",f.lc_po_details,y); y+=1;
+    y=FIELD("LC/Purchase Order Value",f.lc_po_value?f.ccy+" "+Number(f.lc_po_value).toLocaleString("en-IN",{minimumFractionDigits:2}):"",y); y+=1;
+    y=FIELD("Commodity to be exported\n(Description & HSN Code)",f.commodity+" (HSN: "+f.hsn+")",y); y+=1;
+    y=FIELD("Expected Date of Shipment",f.expected_shipment_date,y); y+=1;
+
+    // Shipment From
+    NF(false,9); doc.text("Shipment From",M,y); doc.text("(Port & Country)",M,y+4.5);
+    doc.text(":",M+62,y);
+    if(f.shipment_from_port) doc.text(f.shipment_from_port,M+66,y);
+    UL(M+64,y,38);
+    if(f.shipment_from_country) doc.text(f.shipment_from_country,M+108,y);
+    UL(M+106,y,RW-86);
+    y+=11;
+
+    // Shipment To
+    NF(false,9); doc.text("Shipment To",M,y); doc.text("(Port & Country)",M,y+4.5);
+    doc.text(":",M+62,y);
+    if(f.shipment_to_port) doc.text(f.shipment_to_port,M+66,y);
+    UL(M+64,y,38);
+    if(f.shipment_to_country) doc.text(f.shipment_to_country,M+108,y);
+    UL(M+106,y,RW-86);
+    y+=12;
+
+    // Credit proceeds
+    NF(false,9); doc.text("Credit/utilise the proceeds to/for",M,y);
+    doc.text(":",M+75,y); y+=6;
+    NF(false,7.5); doc.text("CCY",M+95,y); doc.text("Amount",M+113,y); y+=5;
+    const creditRows=[
+      ["Cash Credit Account","41289547389",f.ccy,epcRelease?epcRelease.toLocaleString("en-IN"):""],
+      ["Current Account","","",""],
+      ["DDA Account","","",""],
+      ["Import Payment","","",""],
+    ];
+    creditRows.forEach(([lbl,acc,ccy,amt])=>{
+      NF(false,9); doc.text(lbl,M,y);
+      if(acc){NF(false,8);doc.text(acc,M+46,y);}
+      UL(M+44,y,44);
+      if(ccy){NF(false,8);doc.text(ccy,M+91,y);}
+      UL(M+89,y,14);
+      if(amt){NF(false,8);doc.text(amt,M+106,y);}
+      UL(M+104,y,RW-84);
+      y+=7;
+    });
+    y+=3;
+
+    // Forward Contract table
+    NF(false,8.5); doc.text("Forward Contract Details (if any, to be utilized):",M,y); y+=4;
+    const fcCols=[["S No",12],["Forward Contract No",45],["Forward Contract Amount",45],["Forward Contract Due Date",38],["Amount to be Utilised",RW-12-45-45-38]];
+    let fx=M;
+    fcCols.forEach(([h,w])=>{
+      doc.setDrawColor(0); doc.setLineWidth(0.2); doc.rect(fx,y,w,7);
+      NF(true,6); doc.text(h,fx+1,y+4.5,{maxWidth:w-2}); fx+=w;
+    });
+    y+=7;
+    [1,2].forEach(i=>{
+      let rx=M; fcCols.forEach(([h,w])=>{doc.rect(rx,y,w,6);rx+=w;});
+      NF(false,8); doc.text(String(i),M+1,y+4); y+=6;
+    });
+    y+=5;
+
+    // Charges
+    NF(false,8.5);
+    const cl=doc.splitTextToSize("The relative charges along with applicable taxes (if any) may please be recovered from our Cash Credit/ Current Account No. 41289547389.",RW);
+    doc.text(cl,M,y); y+=cl.length*4.5+5;
+
+    // Documents enclosed
+    NF(true,9); doc.text("Documents enclosed:",M,y); y+=5;
+    NF(false,9);
+    doc.text("1. Signed Purchase order / Sales contract",M,y); y+=4.5;
+    doc.text("2. Other documents (please specify, if any): ",M,y);
+    UL(M+doc.getTextWidth("2. Other documents (please specify, if any): "),y,52); y+=8;
+
+    // Contact
+    NF(false,9); doc.text("Contact Details for this transaction:",M,y); y+=5;
+    [["Name","Akshay Mittal"],["Mobile No.","9111282828"],["Email ID","mittal94@gmail.com"]].forEach(([l,v])=>{
+      doc.text(l,M,y); doc.text(":",M+25,y);
+      doc.text(v,M+30,y); UL(M+28,y,65); y+=5;
+    });
+    y+=8;
+
+    // Undertaking header
+    doc.setFillColor(240,246,255); doc.rect(M-2,y-3,RW+4,6,"F");
+    NF(true,9); doc.text("UNDERTAKING-CUM-DECLARATION FOR DISBURSAL OF EPC/PCFC",105,y+0.5,{align:"center"});
+    const uth=doc.getTextWidth("UNDERTAKING-CUM-DECLARATION FOR DISBURSAL OF EPC/PCFC");
+    doc.setDrawColor(0); doc.setLineWidth(0.3); doc.line(105-uth/2,y+1.5,105+uth/2,y+1.5);
+    y+=9;
+
+    NF(true,8.5); doc.text("Section-A [Declaration for export of goods and submission of evidence of export]:",M,y); y+=5;
+    const secA=[
+      "1. In case of running account facility, I/We undertake to submit the details & copies of export order(s) to Bank within 30 days from the date of disbursement.",
+      "2. I/We confirm that I/we have not availed / will not avail PCFC/EPC from any bank against the said order / documents.",
+      "3. I/We undertake to export the goods as per the export schedule of the order/LC and submit the export documents to the Bank within 21 days of the shipment.",
+      "4. I/We confirm that all the terms and conditions stipulated by SBI/RBI/FEDAI for drawal of PCFC/EPC are/will be complied with.",
+    ];
+    secA.forEach(t=>{NF(false,8);const ls=doc.splitTextToSize(t,RW);doc.text(ls,M,y);y+=ls.length*4+2;});
+    y+=3;
+
+    NF(true,8.5); doc.text("Section - B (General declaration):",M,y); y+=5;
+    const secB=[
+      "1. I/We confirm that neither we nor the overseas party are in the Caution List of RBI or on the Specific Approval List of ECGC.",
+      "2. I/We confirm that the goods being exported are permissible as per latest Foreign Trade Policy and subsequent amendments from time to time Or I/We hold necessary export quota/license to execute the above shipment.",
+      "3. The transaction does not have linkage with Specially Designated Nations and blocked person (SDN) countries listed under OFAC/EU/UN sanctions in any manner. I/we undertake not to hold State Bank of India responsible for any of its action or inaction in respect of the OFAC-linked/UN/EU sanctioned transactions.",
+    ];
+    secB.forEach(t=>{NF(false,8);const ls=doc.splitTextToSize(t,RW);doc.text(ls,M,y);y+=ls.length*4+2;});
+    y+=8;
+
+    // Signature
+    NF(true,9); doc.text("Date: ",M,y); NF(false,9); doc.text(f.date,M+doc.getTextWidth("Date: "),y);
+    doc.text("Authorised Signatory (ies)",M+RW-doc.getTextWidth("Authorised Signatory (ies)"),y); y+=5;
+    NF(false,9); doc.text("Place: INDORE",M,y);
+    doc.text("(Please affix Company/Firm Stamp)",M+RW-doc.getTextWidth("(Please affix Company/Firm Stamp)"),y);
+
+    // Footer
+    doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
+    doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...white);
+    doc.text("DEVRATAN ENTERPRISES LLP  |  +91-9111282828  |  akshay@devratan.com",105,293,{align:"center"});
+  };
+
+  // ── Combined Export ───────────────────────────────────────────────────────
+  const exportPDF=()=>{
+    const missing=[];
+    if(!f.ref_serial) missing.push("Ref No (serial)");
+    if(!f.order_no) missing.push("Order No");
+    if(!f.order_date) missing.push("Order Date");
+    if(!f.lc_po_value) missing.push("LC/PO Value");
+    if(!f.fob_value) missing.push("FOB Value");
+    if(!f.epc_release) missing.push("EPC Release Today");
+    if(missing.length){alert("Please fill mandatory fields:\n• "+missing.join("\n• "));return;}
+
+    const JPDF=getPDF(); if(!JPDF) return;
+
+    // Page 1: EPC Letter
+    const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    exportEPCLetter(doc);
+
+    // Page 2+: Bank Application Form
+    doc.addPage();
+    exportBankForm(doc);
+
+    const refNo="DEV/"+getFY()+"/EPC/"+(f.ref_serial||"__");
+    doc.save("EPC_Application_"+refNo.replace(/\//g,"-")+".pdf");
+  };
 
   return(
     <div style={{background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
-      <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>📋 EPC Release Request Letter</h3>
-      <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>EPC Limit A/c No: 41269117338 · UIN: EPMIES210326008030</p>
+      <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>📋 EPC Release Request & Bank Application</h3>
+      <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>Exports both: EPC Release Letter + Annexure-I (Bank Form) as a single PDF</p>
 
       <SectionHeader title="Letter Details"/>
       <FRow label="Ref No" required>
@@ -6257,35 +6489,22 @@ function EPCForm({ships}){
         </div>
       </FRow>
       <FRow label="Date" required><DateInput value={f.date} onChange={v=>sf("date",v)}/></FRow>
-      <FRow label="UIN No">
-        <div style={{...iS,background:"#f1f5f9",color:"#64748b",fontSize:12,display:"flex",alignItems:"center"}}>
-          {f.uin_no} <span style={{marginLeft:8,fontSize:10,color:"#94a3b8"}}>Fixed till 31-03-2027</span>
-        </div>
-      </FRow>
-      <FRow label="UIN Date">
-        <div style={{...iS,background:"#f1f5f9",color:"#64748b",fontSize:12,display:"flex",alignItems:"center"}}>
-          {f.uin_date} <span style={{marginLeft:8,fontSize:10,color:"#94a3b8"}}>Fixed till 31-03-2027</span>
-        </div>
-      </FRow>
+      <FRow label="UIN No"><FInput value={f.uin_no} onChange={v=>sf("uin_no",v)}/></FRow>
+      <FRow label="UIN Date"><DateInput value={f.uin_date} onChange={v=>sf("uin_date",v)}/></FRow>
 
       <SectionHeader title="Export Order Details"/>
       <FRow label="Order No" required><FInput value={f.order_no} onChange={v=>sf("order_no",v)} placeholder="e.g. DEV-26/27-12"/></FRow>
       <FRow label="Order Date" required><DateInput value={f.order_date} onChange={v=>sf("order_date",v)}/></FRow>
-      <FRow label="CIF Value (USD)" required><FInput value={f.cif_value_usd} onChange={v=>{sf("cif_value_usd",v);if(v)sf("fob_value_usd",String(Math.round(n(v)*0.9*100)/100));}}/></FRow>
-      <FRow label="FOB Value (USD)" required>
-        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-          <FInput value={f.fob_value_usd} onChange={v=>sf("fob_value_usd",v)} placeholder="Auto-filled at 90% of CIF"/>
-          {f.cif_value_usd&&<button type="button" onClick={()=>sf("fob_value_usd",String(Math.round(n(f.cif_value_usd)*0.9*100)/100))}
-            style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>
-            = 90% of CIF
-          </button>}
-        </div>
-        {f.cif_value_usd&&!f.fob_value_usd&&<div style={{fontSize:10,color:"#0369a1",marginTop:3}}>
-          Suggested: USD {Math.round(n(f.cif_value_usd)*0.9*100)/100} (90% of CIF)
-        </div>}
+      <FRow label="Currency">
+        <select value={f.ccy} onChange={e=>sf("ccy",e.target.value)} style={{...iS,fontSize:12}}>
+          <option>USD</option><option>EUR</option><option>GBP</option><option>AED</option><option>INR</option>
+        </select>
       </FRow>
-      <FRow label="Exchange Rate (₹/USD)" required><FInput value={f.exchange_rate} onChange={v=>sf("exchange_rate",v)} placeholder="e.g. 85"/></FRow>
-      <FRow label="Margin"><div style={{...iS,background:"#f1f5f9",color:"#64748b",fontSize:12,display:"flex",alignItems:"center"}}>10% (Fixed)</div></FRow>
+      <FRow label="LC/PO Value" required><FInput value={f.lc_po_value} onChange={v=>sf("lc_po_value",v)} placeholder={"e.g. 200000 ("+f.ccy+")"}/></FRow>
+      <FRow label={"FOB Value ("+f.ccy+")"} required><FInput value={f.fob_value} onChange={v=>sf("fob_value",v)} placeholder={"e.g. 180000 ("+f.ccy+")"}/></FRow>
+      <FRow label={"Exchange Rate (₹/"+f.ccy+")"} required><FInput value={f.exchange_rate} onChange={v=>sf("exchange_rate",v)} placeholder="e.g. 85"/></FRow>
+      <FRow label="Margin %"><FInput value={f.margin_pct} onChange={v=>sf("margin_pct",v)}/></FRow>
+      <FRow label="Commodity"><FInput value={f.commodity} onChange={v=>sf("commodity",v)}/></FRow>
       <FRow label="HSN Code"><FInput value={f.hsn} onChange={v=>sf("hsn",v)}/></FRow>
 
       {/* Auto-calculated summary */}
@@ -6294,7 +6513,7 @@ function EPCForm({ships}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12}}>
           {[
             ["FOB Value (INR)",fobINR?"₹"+fobINR.toLocaleString("en-IN"):"—"],
-            ["Less: 10% Margin",margin?"₹"+margin.toLocaleString("en-IN"):"—"],
+            ["Less: "+f.margin_pct+"% Margin",margin?"₹"+margin.toLocaleString("en-IN"):"—"],
             ["Eligible Value","₹"+(eligible>0?eligible.toLocaleString("en-IN"):"0")],
             ["Balance after Release",balance>=0?"₹"+balance.toLocaleString("en-IN"):<span style={{color:"#dc2626"}}>{"₹"+balance.toLocaleString("en-IN")+" (Exceeds eligible)"}</span>],
           ].map(([l,v])=>(
@@ -6315,20 +6534,45 @@ function EPCForm({ships}){
       <FRow label="EPC Account No"><FInput value={f.epc_account} onChange={v=>sf("epc_account",v)}/></FRow>
       <FRow label="CC Account No"><FInput value={f.cc_account} onChange={v=>sf("cc_account",v)}/></FRow>
 
-      <div style={{marginTop:14,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
-        📄 PDF: Single page with company header · Calculation table · Undertakings · Signature block
+      <SectionHeader title="Additional Details (for Bank Form)"/>
+      <FRow label="Type of Facility">
+        <div style={{display:"flex",gap:16,alignItems:"center",paddingTop:6}}>
+          <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
+            <input type="radio" checked={f.facility_type==="running"} onChange={()=>sf("facility_type","running")}/>Running Account
+          </label>
+          <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
+            <input type="radio" checked={f.facility_type==="order"} onChange={()=>sf("facility_type","order")}/>Order Based
+          </label>
+        </div>
+      </FRow>
+      <FRow label="Tenor (in days)"><FInput value={f.tenor} onChange={v=>sf("tenor",v)} placeholder="e.g. 90"/></FRow>
+      <FRow label="Buyer Name & Address" required>
+        <textarea value={f.buyer_name} onChange={e=>sf("buyer_name",e.target.value)}
+          placeholder="Full buyer name and address"
+          style={{...iS,fontSize:12,minHeight:60,resize:"vertical"}}/>
+      </FRow>
+      <FRow label="LC/PO Details (Ref & Date)"><FInput value={f.lc_po_details} onChange={v=>sf("lc_po_details",v)} placeholder="e.g. TFS/26-27/001 Dt. 01.04.2026"/></FRow>
+      <FRow label="Expected Date of Shipment"><DateInput value={f.expected_shipment_date} onChange={v=>sf("expected_shipment_date",v)}/></FRow>
+      <FRow label="Shipment From — Port"><FInput value={f.shipment_from_port} onChange={v=>sf("shipment_from_port",v)} placeholder="e.g. NHAVA SHEVA"/></FRow>
+      <FRow label="Shipment From — Country"><FInput value={f.shipment_from_country} onChange={v=>sf("shipment_from_country",v)}/></FRow>
+      <FRow label="Shipment To — Port"><FInput value={f.shipment_to_port} onChange={v=>sf("shipment_to_port",v)} placeholder="e.g. JEDDAH"/></FRow>
+      <FRow label="Shipment To — Country"><FInput value={f.shipment_to_country} onChange={v=>sf("shipment_to_country",v)} placeholder="e.g. SAUDI ARABIA"/></FRow>
+
+      <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"10px 14px",marginBottom:10,fontSize:12,color:"#0369a1"}}>
+        💡 PDF exports both pages: Page 1 = EPC Release Letter · Page 2 = Bank Application Form (Annexure-I)<br/>
+        Fixed in bank form: Branch IFB Indore · EPC A/c 41269117338 · CC A/c 41289547389 · Contact: Akshay Mittal
       </div>
+
       <div style={{display:"flex",gap:10,marginTop:12,justifyContent:"flex-end"}}>
         <button onClick={exportPDF}
           style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",
                   borderRadius:8,padding:"8px 20px",cursor:"pointer",fontWeight:700,fontSize:13}}>
-          📄 Export PDF
+          📄 Export PDF (Both Pages)
         </button>
       </div>
     </div>
   );
 }
-
 
 
 // ── numWords helper (global) ───────────────────────────────────────────────
