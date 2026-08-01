@@ -6276,24 +6276,33 @@ function EPCForm({ships}){
     const applW=doc.getTextWidth("DEVRATAN ENTERPRISES LLP");
     UL(apx,y,PW-(apx-ML)); y+=9;
 
-    // Release line — CCY always INR (EPC release is always INR), labels above underlines
-    NF(false,7.5,blk);
-    doc.text("CCY",ML+doc.getTextWidth("I/We hereby request you to release EPC / PCFC - ")+3,y-3.5);
-    doc.text("Amount",ML+doc.getTextWidth("I/We hereby request you to release EPC / PCFC - ")+18,y-3.5);
+    // Release line — CCY always INR, Amount = EPC release in INR
+    // Layout: "I/We hereby... - [INR] [50,00,000] - by debit to our"
+    // CCY and Amount are small captions below their underlines
     NF(false,10,blk);
     const rl="I/We hereby request you to release EPC / PCFC - ";
+    // measure at font size 10 first
+    const rlW=doc.getTextWidth(rl);
     doc.text(rl,ML,y);
-    let rx=ML+doc.getTextWidth(rl);
-    // CCY box — always INR
-    UL(rx,y,12); doc.text("INR",rx+1,y);
-    rx+=14;
-    // Amount box
-    const amtW=amtINR?doc.getTextWidth(amtINR)+4:30;
-    UL(rx,y,Math.max(amtW,30));
-    if(amtINR) doc.text(amtINR,rx+1,y);
-    rx+=Math.max(amtW,30)+2;
-    NF(false,10,blk); doc.text("- by debit to our",rx,y);
-    y+=5.5;
+    let rx=ML+rlW;
+    // CCY underline + value (12mm wide)
+    UL(rx,y,14);
+    doc.text("INR",rx+1,y);
+    // CCY label below
+    NF(false,7,blk); doc.text("CCY",rx+3,y+3.5);
+    NF(false,10,blk);
+    rx+=16;
+    // Amount underline + value
+    const amtStr=amtINR||"";
+    const amtULW=Math.max(doc.getTextWidth(amtStr)+6,28);
+    UL(rx,y,amtULW);
+    if(amtStr) doc.text(amtStr,rx+1,y);
+    // Amount label below
+    NF(false,7,blk); doc.text("Amount",rx+amtULW/2,y+3.5,{align:"center"});
+    NF(false,10,blk);
+    rx+=amtULW+2;
+    doc.text("- by debit to our",rx,y);
+    y+=8;
     doc.text("EPC/PCFC Account No.",ML,y);
     const eax=ML+doc.getTextWidth("EPC/PCFC Account No.");
     doc.text("41269117338",eax+2,y);
@@ -6316,7 +6325,8 @@ function EPCForm({ships}){
     // Tenor
     NF(false,10,blk); doc.text("Tenor (in days)",ML,y); doc.text(":",ML+58,y);
     if(f.tenor) doc.text(f.tenor,ML+63,y);
-    UL(ML+61,y,36); y+=9;
+    const tenorULW=f.tenor?doc.getTextWidth(f.tenor)+6:30;
+    UL(ML+61,y,Math.max(tenorULW,30)); y+=9;
 
     // Buyer
     NF(false,10,blk); doc.text("Buyer Name & Address",ML,y);
@@ -6327,35 +6337,37 @@ function EPCForm({ships}){
     NF(false,10,blk); doc.text(":",ML+58,y);
     const bL=doc.splitTextToSize(f.buyer_name||"",PW-63);
     if(f.buyer_name){NF(false,10,blk);doc.text(bL,ML+63,y);}
-    UL(ML+61,y,ML+PW-ML-61); UL(ML+61,y+5.5,ML+PW-ML-61);
+    UL(ML+61,y,ML+PW-61); UL(ML+61,y+5.5,ML+PW-61);
     y+=19;
 
     // LC/PO Details
     NF(false,10,blk); doc.text("LC/Purchase Order Details",ML,y);
     doc.text("(Ref. No. & Date etc.)",ML,y+5);
     doc.text(":",ML+58,y);
-    if(lc_po_ref) doc.text(lc_po_ref,ML+63,y);
-    UL(ML+61,y,ML+PW-ML-61); y+=12;
+    if(lc_po_ref) doc.text(lc_po_ref,ML+63,y,{maxWidth:ML+PW-ML-63});
+    UL(ML+61,y,ML+PW-61); y+=12;
 
     // LC/PO Value
     NF(false,10,blk); doc.text("LC/Purchase Order Value",ML,y);
     doc.text(":",ML+58,y);
     if(lcVal) doc.text(lcVal,ML+63,y);
-    UL(ML+61,y,68); y+=9;
+    const lcULW=lcVal?doc.getTextWidth(lcVal)+6:60;
+    UL(ML+61,y,Math.max(lcULW,60)); y+=9;
 
     // Commodity
     NF(false,10,blk); doc.text("Commodity to be exported",ML,y);
     doc.text("(Description & HSN Code)",ML,y+5);
     doc.text(":",ML+58,y);
     const cstr=f.commodity+" (HSN: "+f.hsn+")";
-    doc.text(cstr,ML+63,y,{maxWidth:PW-63});
-    UL(ML+61,y,ML+PW-ML-61); y+=12;
+    doc.text(cstr,ML+63,y,{maxWidth:ML+PW-ML-63});
+    UL(ML+61,y,ML+PW-61); y+=12;
 
     // Expected Shipment
     NF(false,10,blk); doc.text("Expected Date of Shipment",ML,y);
     doc.text(":",ML+58,y);
     if(f.expected_shipment_date) doc.text(f.expected_shipment_date,ML+63,y);
-    UL(ML+61,y,52); y+=9;
+    const expULW=f.expected_shipment_date?doc.getTextWidth(f.expected_shipment_date)+6:45;
+    UL(ML+61,y,Math.max(expULW,45)); y+=9;
 
     // Shipment From
     NF(false,10,blk); doc.text("Shipment From",ML,y); doc.text("(Port & Country)",ML,y+5);
@@ -6378,18 +6390,18 @@ function EPCForm({ships}){
     doc.text(":",ML+75,y); y+=7;
     NF(false,8,blk); doc.text("CCY",ML+87,y); doc.text("Amount",ML+105,y); y+=5;
     [
-      ["Cash Credit Account","41289547389",f.ccy,amtINR,false],
+      ["Cash Credit Account","41289547389","INR",amtINR,false],
       ["Current Account","","","",false],
       ["DDA Account","","","",false],
       ["Import Payment","","","",true],
     ].forEach(([lbl,acc,ccy,amt,isImport])=>{
       NF(false,10,blk); doc.text(lbl,ML,y);
       if(acc) doc.text(acc,ML+43,y);
-      UL(ML+41,y,40);
-      if(ccy){NF(false,9,blk);doc.text(ccy,ML+84,y);}
-      UL(ML+82,y,10);
-      if(amt){NF(false,9,blk);doc.text(amt,ML+95,y);}
-      UL(ML+93,y,ML+PW-93);
+      UL(ML+41,y,38);
+      if(ccy){NF(false,9,blk);doc.text(ccy,ML+82,y);}
+      UL(ML+80,y,10);
+      if(amt){NF(false,9,blk);doc.text(amt,ML+93,y);}
+      UL(ML+91,y,ML+PW-91);
       if(isImport){
         doc.setFont("helvetica","italic"); doc.setFontSize(7.5); doc.setTextColor(...blk);
         doc.text("(Application for processing Import",ML,y+4.5);
