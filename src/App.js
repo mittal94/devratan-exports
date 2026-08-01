@@ -6273,24 +6273,32 @@ function EPCForm({ships}){
     NF(false,10,blk); doc.text("Name of the Applicant: ",ML,y);
     const apx=ML+doc.getTextWidth("Name of the Applicant: ");
     doc.text("DEVRATAN ENTERPRISES LLP",apx+1,y);
+    const applW=doc.getTextWidth("DEVRATAN ENTERPRISES LLP");
     UL(apx,y,PW-(apx-ML)); y+=9;
 
-    // Release line
+    // Release line — CCY always INR (EPC release is always INR), labels above underlines
+    NF(false,7.5,blk);
+    doc.text("CCY",ML+doc.getTextWidth("I/We hereby request you to release EPC / PCFC - ")+3,y-3.5);
+    doc.text("Amount",ML+doc.getTextWidth("I/We hereby request you to release EPC / PCFC - ")+18,y-3.5);
     NF(false,10,blk);
     const rl="I/We hereby request you to release EPC / PCFC - ";
     doc.text(rl,ML,y);
     let rx=ML+doc.getTextWidth(rl);
-    UL(rx,y,12); NF(false,8,blk); doc.text(f.ccy,rx+1,y); doc.text("CCY",rx+2,y+3.5,{align:"center"});
+    // CCY box — always INR
+    UL(rx,y,12); doc.text("INR",rx+1,y);
     rx+=14;
-    UL(rx,y,46); NF(false,10,blk); if(amtINR) doc.text(amtINR,rx+1,y);
-    NF(false,8,blk); doc.text("Amount",rx+12,y+3.5,{align:"center"});
-    NF(false,10,blk); doc.text("- by debit to our",rx+48,y);
+    // Amount box
+    const amtW=amtINR?doc.getTextWidth(amtINR)+4:30;
+    UL(rx,y,Math.max(amtW,30));
+    if(amtINR) doc.text(amtINR,rx+1,y);
+    rx+=Math.max(amtW,30)+2;
+    NF(false,10,blk); doc.text("- by debit to our",rx,y);
     y+=5.5;
     doc.text("EPC/PCFC Account No.",ML,y);
     const eax=ML+doc.getTextWidth("EPC/PCFC Account No.");
     doc.text("41269117338",eax+2,y);
-    UL(eax+1,y,46);
-    doc.text("as per the details furnished below:",eax+48,y);
+    UL(eax+1,y,38);
+    doc.text("as per the details furnished below:",eax+41,y);
     y+=10;
 
     // Type of Facility
@@ -6319,7 +6327,7 @@ function EPCForm({ships}){
     NF(false,10,blk); doc.text(":",ML+58,y);
     const bL=doc.splitTextToSize(f.buyer_name||"",PW-63);
     if(f.buyer_name){NF(false,10,blk);doc.text(bL,ML+63,y);}
-    UL(ML+61,y,PW-61); UL(ML+61,y+5.5,PW-61);
+    UL(ML+61,y,ML+PW-ML-61); UL(ML+61,y+5.5,ML+PW-ML-61);
     y+=19;
 
     // LC/PO Details
@@ -6327,7 +6335,7 @@ function EPCForm({ships}){
     doc.text("(Ref. No. & Date etc.)",ML,y+5);
     doc.text(":",ML+58,y);
     if(lc_po_ref) doc.text(lc_po_ref,ML+63,y);
-    UL(ML+61,y,PW-61); y+=12;
+    UL(ML+61,y,ML+PW-ML-61); y+=12;
 
     // LC/PO Value
     NF(false,10,blk); doc.text("LC/Purchase Order Value",ML,y);
@@ -6341,7 +6349,7 @@ function EPCForm({ships}){
     doc.text(":",ML+58,y);
     const cstr=f.commodity+" (HSN: "+f.hsn+")";
     doc.text(cstr,ML+63,y,{maxWidth:PW-63});
-    UL(ML+61,y,PW-61); y+=12;
+    UL(ML+61,y,ML+PW-ML-61); y+=12;
 
     // Expected Shipment
     NF(false,10,blk); doc.text("Expected Date of Shipment",ML,y);
@@ -6353,17 +6361,17 @@ function EPCForm({ships}){
     NF(false,10,blk); doc.text("Shipment From",ML,y); doc.text("(Port & Country)",ML,y+5);
     doc.text(":",ML+58,y);
     if(f.shipment_from_port) doc.text(f.shipment_from_port,ML+63,y);
-    UL(ML+61,y,45);
-    if(f.shipment_from_country) doc.text(f.shipment_from_country,ML+110,y);
-    UL(ML+108,y,PW-90); y+=12;
+    UL(ML+61,y,42);
+    if(f.shipment_from_country) doc.text(f.shipment_from_country,ML+108,y);
+    UL(ML+106,y,ML+PW-106); y+=12;
 
     // Shipment To
     NF(false,10,blk); doc.text("Shipment To",ML,y); doc.text("(Port & Country)",ML,y+5);
     doc.text(":",ML+58,y);
     if(f.shipment_to_port) doc.text(f.shipment_to_port,ML+63,y);
-    UL(ML+61,y,45);
-    if(f.shipment_to_country) doc.text(f.shipment_to_country,ML+110,y);
-    UL(ML+108,y,PW-90); y+=14;
+    UL(ML+61,y,42);
+    if(f.shipment_to_country) doc.text(f.shipment_to_country,ML+108,y);
+    UL(ML+106,y,ML+PW-106); y+=14;
 
     // Credit/utilise
     NF(false,10,blk); doc.text("Credit/utilise the proceeds to/for",ML,y);
@@ -6377,11 +6385,11 @@ function EPCForm({ships}){
     ].forEach(([lbl,acc,ccy,amt,isImport])=>{
       NF(false,10,blk); doc.text(lbl,ML,y);
       if(acc) doc.text(acc,ML+43,y);
-      UL(ML+41,y,42);
-      if(ccy){NF(false,9,blk);doc.text(ccy,ML+86,y);}
-      UL(ML+84,y,10);
-      if(amt){NF(false,9,blk);doc.text(amt,ML+96,y);}
-      UL(ML+94,y,PW-76);
+      UL(ML+41,y,40);
+      if(ccy){NF(false,9,blk);doc.text(ccy,ML+84,y);}
+      UL(ML+82,y,10);
+      if(amt){NF(false,9,blk);doc.text(amt,ML+95,y);}
+      UL(ML+93,y,ML+PW-93);
       if(isImport){
         doc.setFont("helvetica","italic"); doc.setFontSize(7.5); doc.setTextColor(...blk);
         doc.text("(Application for processing Import",ML,y+4.5);
