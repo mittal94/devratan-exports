@@ -6337,7 +6337,7 @@ function EPCForm({ships}){
     NF(false,10,blk); doc.text(":",ML+58,y);
     const bL=doc.splitTextToSize(f.buyer_name||"",PW-63);
     if(f.buyer_name){NF(false,10,blk);doc.text(bL,ML+63,y);}
-    UL(ML+61,y,ML+PW-61); UL(ML+61,y+5.5,ML+PW-61);
+    UL(ML+61,y,PW-61); UL(ML+61,y+5.5,PW-61);
     y+=19;
 
     // LC/PO Details
@@ -6345,7 +6345,7 @@ function EPCForm({ships}){
     doc.text("(Ref. No. & Date etc.)",ML,y+5);
     doc.text(":",ML+58,y);
     if(lc_po_ref) doc.text(lc_po_ref,ML+63,y,{maxWidth:ML+PW-ML-63});
-    UL(ML+61,y,ML+PW-61); y+=12;
+    UL(ML+61,y,PW-61); y+=12;
 
     // LC/PO Value
     NF(false,10,blk); doc.text("LC/Purchase Order Value",ML,y);
@@ -6360,7 +6360,7 @@ function EPCForm({ships}){
     doc.text(":",ML+58,y);
     const cstr=f.commodity+" (HSN: "+f.hsn+")";
     doc.text(cstr,ML+63,y,{maxWidth:ML+PW-ML-63});
-    UL(ML+61,y,ML+PW-61); y+=12;
+    UL(ML+61,y,PW-61); y+=12;
 
     // Expected Shipment
     NF(false,10,blk); doc.text("Expected Date of Shipment",ML,y);
@@ -6375,7 +6375,7 @@ function EPCForm({ships}){
     if(f.shipment_from_port) doc.text(f.shipment_from_port,ML+63,y);
     UL(ML+61,y,42);
     if(f.shipment_from_country) doc.text(f.shipment_from_country,ML+108,y);
-    UL(ML+106,y,ML+PW-106); y+=12;
+    UL(ML+106,y,PW-106); y+=12;
 
     // Shipment To
     NF(false,10,blk); doc.text("Shipment To",ML,y); doc.text("(Port & Country)",ML,y+5);
@@ -6383,12 +6383,12 @@ function EPCForm({ships}){
     if(f.shipment_to_port) doc.text(f.shipment_to_port,ML+63,y);
     UL(ML+61,y,42);
     if(f.shipment_to_country) doc.text(f.shipment_to_country,ML+108,y);
-    UL(ML+106,y,ML+PW-106); y+=14;
+    UL(ML+106,y,PW-106); y+=14;
 
     // Credit/utilise
     NF(false,10,blk); doc.text("Credit/utilise the proceeds to/for",ML,y);
     doc.text(":",ML+75,y); y+=7;
-    NF(false,8,blk); doc.text("CCY",ML+87,y); doc.text("Amount",ML+105,y); y+=5;
+    NF(false,8,blk); doc.text("CCY",ML+82,y); doc.text("Amount",ML+93,y); y+=5;
     [
       ["Cash Credit Account","41289547389","INR",amtINR,false],
       ["Current Account","","","",false],
@@ -6401,7 +6401,7 @@ function EPCForm({ships}){
       if(ccy){NF(false,9,blk);doc.text(ccy,ML+82,y);}
       UL(ML+80,y,10);
       if(amt){NF(false,9,blk);doc.text(amt,ML+93,y);}
-      UL(ML+91,y,ML+PW-91);
+      UL(ML+91,y,PW-91);
       if(isImport){
         doc.setFont("helvetica","italic"); doc.setFontSize(7.5); doc.setTextColor(...blk);
         doc.text("(Application for processing Import",ML,y+4.5);
@@ -6461,24 +6461,24 @@ function EPCForm({ships}){
     // Undertaking
     NF(true,10,blk);
     doc.text("UNDERTAKING-CUM-DECLARATION FOR DISBURSAL OF EPC/PCFC",105,y,{align:"center"});
-    y+=9;
+    y+=6;
 
-    NF(true,10,blk); doc.text("Section-A [Declaration for export of goods and submission of evidence of export]:",ML,y); y+=6;
+    NF(true,9.5,blk); doc.text("Section-A [Declaration for export of goods and submission of evidence of export]:",ML,y); y+=5;
     [
       "1. In case of running account facility, I/We undertake to submit the details & copies of export order(s) to Bank within 30 days from the date of disbursement.",
       "2. I/We confirm that I/we have not availed / will not avail PCFC/EPC from any bank against the said order / documents.",
       "3. I/We undertake to export the goods as per the export schedule of the order/LC and submit the export documents to the Bank within 21 days of the shipment.",
       "4. I/We confirm that all the terms and conditions stipulated by SBI/RBI/FEDAI for drawal of PCFC/EPC are/will be complied with.",
-    ].forEach(t=>{NF(false,9.5,blk);const ls=doc.splitTextToSize(t,PW);doc.text(ls,ML,y);y+=ls.length*5+4;});
-    y+=5;
+    ].forEach(t=>{NF(false,9.5,blk);const ls=doc.splitTextToSize(t,PW);doc.text(ls,ML,y);y+=ls.length*4.5+2;});
+    y+=3;
 
-    NF(true,10,blk); doc.text("Section - B (General declaration):",ML,y); y+=6;
+    NF(true,9.5,blk); doc.text("Section - B (General declaration):",ML,y); y+=5;
     [
       "1. I/We confirm that neither we nor the overseas party are in the Caution List of RBI or on the Specific Approval List of ECGC.",
       "2. I/We confirm that the goods being exported are permissible as per latest Foreign Trade Policy and subsequent amendments from time to time Or I/We hold necessary export quota/license to execute the above shipment.",
       "3. The transaction does not have linkage with Specially Designated Nations and blocked person (SDN) countries listed under OFAC/EU/UN sanctions in any manner. I/we undertake not to hold State Bank of India responsible for any of its action or inaction in respect of the OFAC-linked/UN/EU sanctioned transactions.",
-    ].forEach(t=>{NF(false,9.5,blk);const ls=doc.splitTextToSize(t,PW);doc.text(ls,ML,y);y+=ls.length*5+4;});
-    y+=12;
+    ].forEach(t=>{NF(false,9.5,blk);const ls=doc.splitTextToSize(t,PW);doc.text(ls,ML,y);y+=ls.length*4.5+2;});
+    y+=8;
 
     // Signature
     NF(false,10,blk); doc.text("Date:",ML,y);
