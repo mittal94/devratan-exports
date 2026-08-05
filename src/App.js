@@ -8374,203 +8374,274 @@ function VJRAInvoicingTab({buyers}){
 }
 
 // ── Rice Price Calculator ──────────────────────────────────────────────────────
-const PACKING_TYPES = [
-  {id:1,  label:"25KG White Jute Bag with Inner & Outer",           cost:3050},
-  {id:2,  label:"40KG Brown Jute Bag with Inner, Tag & Patti",     cost:3700},
+const DEFAULT_PACKING_COSTS = [
+  {id:1,  label:"25KG White Jute Bag with Inner & Outer",                    cost:3050},
+  {id:2,  label:"40KG Brown Jute Bag with Inner, Tag & Patti",               cost:3700},
   {id:3,  label:"10KG Brown Jute Bag with Handle, Tag, Patti & 40KG Master", cost:5400},
   {id:4,  label:"5KG Brown Jute Bag with Handle, Tag, Patti & 40KG Master",  cost:8500},
-  {id:5,  label:"25KG Non-Woven Bag with Inner & Outer",            cost:1120},
-  {id:6,  label:"18KG Non-Woven Bag with Inner",                    cost:1250},
-  {id:7,  label:"10KG Non-Woven Bag with Inner & 40KG Master",      cost:2550},
-  {id:8,  label:"5KG Non-Woven Bag with Inner & 40KG Master",       cost:4150},
-  {id:9,  label:"25KG BOPP Bag",                                     cost:720},
-  {id:10, label:"50KG BOPP Bag",                                     cost:600},
-  {id:11, label:"50KG PP Bag",                                       cost:400},
-  {id:12, label:"25KG Pinch Bottom Bag",                             cost:1400},
-  {id:13, label:"10KG Pouch with 40KG Master",                       cost:2150},
-  {id:14, label:"5KG Pouch with 40KG Master",                        cost:3950},
-  {id:15, label:"10KG Pouch in 20KG Cartoon",                        cost:3900},
-  {id:16, label:"5KG Pouch in 20KG Cartoon",                         cost:5700},
-  {id:17, label:"1KG Pouch in 20KG Master Bag",                      cost:3400},
-  {id:18, label:"1KG Pouch in 20KG Cartoon",                         cost:5100},
+  {id:5,  label:"25KG Non-Woven Bag with Inner & Outer",                      cost:1120},
+  {id:6,  label:"18KG Non-Woven Bag with Inner",                              cost:1250},
+  {id:7,  label:"10KG Non-Woven Bag with Inner & 40KG Master",                cost:2550},
+  {id:8,  label:"5KG Non-Woven Bag with Inner & 40KG Master",                 cost:4150},
+  {id:9,  label:"25KG BOPP Bag",                                               cost:720},
+  {id:10, label:"50KG BOPP Bag",                                               cost:600},
+  {id:11, label:"50KG PP Bag",                                                 cost:400},
+  {id:12, label:"25KG Pinch Bottom Bag",                                      cost:1400},
+  {id:13, label:"10KG Pouch with 40KG Master",                                cost:2150},
+  {id:14, label:"5KG Pouch with 40KG Master",                                 cost:3950},
+  {id:15, label:"10KG Pouch in 20KG Cartoon",                                 cost:3900},
+  {id:16, label:"5KG Pouch in 20KG Cartoon",                                  cost:5700},
+  {id:17, label:"1KG Pouch in 20KG Master Bag",                               cost:3400},
+  {id:18, label:"1KG Pouch in 20KG Cartoon",                                  cost:5100},
 ];
 
 function PriceCalculator(){
+  const nv=v=>parseFloat(String(v||0).replace(/,/g,""))||0;
+  const fmtINR=v=>v?v.toLocaleString("en-IN",{maximumFractionDigits:2}):"—";
+  const fmtUSD=v=>v?v.toFixed(2):"—";
+
+  // ── Packing costs — loaded from Supabase, editable by admin ─────────────
+  const [packingCosts,setPackingCosts]=useState(DEFAULT_PACKING_COSTS);
+  const [costsLoaded,setCostsLoaded]=useState(false);
+  const [editCosts,setEditCosts]=useState(false);
+  const [editCostDraft,setEditCostDraft]=useState([]);
+  const [savingCosts,setSavingCosts]=useState(false);
+
+  // Load packing costs from Supabase settings table on mount
+  useEffect(()=>{
+    sb("app_settings?key=eq.packing_costs&select=value").then(rows=>{
+      if(rows&&rows[0]?.value){
+        try{
+          const saved=JSON.parse(rows[0].value);
+          // Merge with defaults to preserve labels, only update costs
+          const merged=DEFAULT_PACKING_COSTS.map(d=>({...d,cost:saved.find(s=>s.id===d.id)?.cost??d.cost}));
+          setPackingCosts(merged);
+        }catch(e){}
+      }
+      setCostsLoaded(true);
+    }).catch(()=>setCostsLoaded(true));
+  },[]);
+
+  const openEditCosts=()=>{
+    setEditCostDraft(packingCosts.map(p=>({...p,costStr:String(p.cost)})));
+    setEditCosts(true);
+  };
+
+  const saveCosts=async()=>{
+    setSavingCosts(true);
+    const updated=editCostDraft.map(p=>({id:p.id,cost:nv(p.costStr)||p.cost}));
+    const payload={key:"packing_costs",value:JSON.stringify(updated)};
+    // Upsert into app_settings
+    try{
+      await sb("app_settings?key=eq.packing_costs",{method:"DELETE"});
+      await sb("app_settings",{method:"POST",body:JSON.stringify(payload)});
+      setPackingCosts(DEFAULT_PACKING_COSTS.map(d=>({...d,cost:updated.find(u=>u.id===d.id)?.cost??d.cost})));
+      setEditCosts(false);
+      alert("✅ Packing costs saved!");
+    }catch(e){alert("❌ Failed to save: "+e.message);}
+    setSavingCosts(false);
+  };
+
+  // ── Calculator inputs ────────────────────────────────────────────────────
   const [f,setF]=useState({
     exchange_rate:"85",
     commodity_inr:"",
-    packing_type:"7",  // default type 7 (10KG Non-Woven) as per Excel
+    packing_type:"7",
     local_frt:"0",
     packing_labour:"1500",
-    cha_basmati:false,  // false=non-basmati 1250, true=basmati 1350
-    margin:"25",
+    cha_basmati:false,
+    margin:"0",       // fixed INR per MT
     freight_usd:"24",
     coc:"0",
   });
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
-  const n=v=>parseFloat(String(v||0).replace(/,/g,""))||0;
 
-  // Derived calculations (all per MT)
-  const exRate    = n(f.exchange_rate);
-  const commodity = n(f.commodity_inr);
-  const packing   = PACKING_TYPES.find(p=>p.id===parseInt(f.packing_type))?.cost||0;
-  const localFrt  = n(f.local_frt);
-  const labour    = n(f.packing_labour);
+  // ── Calculations (all per MT) ────────────────────────────────────────────
+  const exRate    = nv(f.exchange_rate);
+  const commodity = nv(f.commodity_inr);
+  const packing   = packingCosts.find(p=>p.id===parseInt(f.packing_type))?.cost||0;
+  const localFrt  = nv(f.local_frt);
+  const labour    = nv(f.packing_labour);
   const chaTHC    = f.cha_basmati ? 1350 : 1250;
-  const margin    = n(f.margin);
-  const frtUSD    = n(f.freight_usd);
-  const coc       = n(f.coc);
+  const marginINR = nv(f.margin);  // fixed per MT in INR
+  const frtUSD    = nv(f.freight_usd);
+  const coc       = nv(f.coc);
 
-  const totalCostINR = commodity + packing + localFrt + labour + chaTHC;
-  const marginAmt    = totalCostINR * (margin/100);
-  const totalWithMargin = totalCostINR + marginAmt;
-  const fobUSD    = exRate>0 ? totalWithMargin/exRate : 0;
-  const cifUSD    = fobUSD + frtUSD + coc;
+  const totalCostINR    = commodity + packing + localFrt + labour + chaTHC;
+  const totalWithMargin = totalCostINR + marginINR;
+  const fobUSD          = exRate>0 ? totalWithMargin/exRate : 0;
+  const cifUSD          = fobUSD + frtUSD + coc;
 
-  const fmtINR=v=>v?v.toLocaleString("en-IN",{maximumFractionDigits:2}):"—";
-  const fmtUSD=v=>v?v.toFixed(2):"—";
-
-  const Row=({label,inr,usd,bold,highlight})=>(
-    <tr style={{background:highlight?"#eff6ff":bold?"#f8fafc":"#fff"}}>
+  const Row=({label,inr,usd,bold})=>(
+    <tr style={{background:bold?"#f0f4ff":"#fff"}}>
       <td style={{padding:"7px 12px",fontSize:13,fontWeight:bold?700:400,color:bold?"#1e3a5f":"#374151",borderBottom:"1px solid #e2e8f0"}}>{label}</td>
       <td style={{padding:"7px 12px",fontSize:13,fontWeight:bold?700:400,color:bold?"#1e3a5f":"#374151",textAlign:"right",borderBottom:"1px solid #e2e8f0"}}>{inr!=null?"₹"+fmtINR(inr):""}</td>
       <td style={{padding:"7px 12px",fontSize:13,fontWeight:bold?700:400,color:bold?"#1e3a5f":"#374151",textAlign:"right",borderBottom:"1px solid #e2e8f0"}}>{usd!=null?"$"+fmtUSD(usd):""}</td>
     </tr>
   );
 
-  const FI=({label,value,onChange,type,prefix,suffix,small})=>(
+  const FI=({label,value,onChange,prefix,suffix})=>(
     <div style={{marginBottom:10}}>
       <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
-      <div style={{display:"flex",alignItems:"center",gap:4}}>
-        {prefix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"7px 0 0 7px",border:"1px solid #e2e8f0",borderRight:"none"}}>{prefix}</span>}
-        <input
-          type={type||"number"} value={value}
-          onChange={e=>onChange(e.target.value)}
-          style={{width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:prefix?0:7,fontSize:small?11:13,background:"#fff",outline:"none"}}
-        />
-        {suffix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"0 7px 7px 0",border:"1px solid #e2e8f0",borderLeft:"none"}}>{suffix}</span>}
+      <div style={{display:"flex",alignItems:"center",gap:0}}>
+        {prefix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"7px 0 0 7px",border:"1px solid #e2e8f0",borderRight:"none",whiteSpace:"nowrap"}}>{prefix}</span>}
+        <input type="number" value={value} onChange={e=>onChange(e.target.value)}
+          style={{width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:prefix&&suffix?0:prefix?"0 7px 7px 0":suffix?"7px 0 0 7px":7,fontSize:13,background:"#fff",outline:"none"}}/>
+        {suffix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"0 7px 7px 0",border:"1px solid #e2e8f0",borderLeft:"none",whiteSpace:"nowrap"}}>{suffix}</span>}
       </div>
     </div>
   );
 
+  if(!costsLoaded) return <div style={{padding:40,textAlign:"center",color:"#64748b"}}>Loading...</div>;
+
   return(
-    <div style={{maxWidth:900,margin:"0 auto",padding:"16px 8px"}}>
-      <div style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",borderRadius:12,padding:"14px 20px",marginBottom:16,color:"#fff"}}>
-        <div style={{fontWeight:800,fontSize:17,marginBottom:2}}>🧮 Rice Price Calculator</div>
-        <div style={{fontSize:11,opacity:0.85}}>FOB & CIF pricing per Metric Tonne · Admin only</div>
+    <div style={{maxWidth:980,margin:"0 auto",padding:"16px 8px"}}>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",borderRadius:12,padding:"14px 20px",marginBottom:16,color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontWeight:800,fontSize:17,marginBottom:2}}>🧮 Rice Price Calculator</div>
+          <div style={{fontSize:11,opacity:0.85}}>FOB & CIF pricing per Metric Tonne · Admin only</div>
+        </div>
+        <button onClick={openEditCosts} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>
+          ✏️ Edit Packing Costs
+        </button>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      {/* Edit packing costs panel */}
+      {editCosts&&(
+        <div style={{background:"#fff",borderRadius:12,padding:16,marginBottom:16,boxShadow:"0 1px 4px rgba(0,0,0,0.1)",border:"2px solid #f59e0b"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontWeight:700,color:"#92400e",fontSize:13}}>✏️ Edit Packing Costs (₹/MT) — Changes saved to database</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setEditCosts(false)} style={{background:"#f1f5f9",border:"none",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
+              <button onClick={saveCosts} disabled={savingCosts} style={{background:"#15803d",color:"#fff",border:"none",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>
+                {savingCosts?"Saving...":"💾 Save All Costs"}
+              </button>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {editCostDraft.map((p,i)=>(
+              <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,background:"#fafafa",borderRadius:7,padding:"6px 10px",border:"1px solid #e2e8f0"}}>
+                <span style={{fontSize:11,fontWeight:700,color:"#64748b",minWidth:18}}>{p.id}.</span>
+                <span style={{fontSize:11,color:"#374151",flex:1,lineHeight:1.3}}>{p.label}</span>
+                <div style={{display:"flex",alignItems:"center",gap:2,flexShrink:0}}>
+                  <span style={{fontSize:11,color:"#64748b"}}>₹</span>
+                  <input type="number" value={p.costStr}
+                    onChange={e=>{const d=[...editCostDraft];d[i]={...d[i],costStr:e.target.value};setEditCostDraft(d);}}
+                    style={{width:70,padding:"4px 6px",border:"1px solid #d1d5db",borderRadius:5,fontSize:12,textAlign:"right"}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{display:"grid",gridTemplateColumns:"340px 1fr",gap:16}}>
         {/* ── LEFT: Inputs ── */}
         <div style={{background:"#fff",borderRadius:12,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
           <div style={{fontWeight:700,color:"#1e3a5f",fontSize:13,marginBottom:12,paddingBottom:6,borderBottom:"2px solid #e2e8f0"}}>📥 Input Parameters</div>
-
-          <FI label="Exchange Rate (₹/USD)" value={f.exchange_rate} onChange={v=>sf("exchange_rate",v)} prefix="₹"/>
+          <FI label="Exchange Rate (₹/USD)" value={f.exchange_rate} onChange={v=>sf("exchange_rate",v)} prefix="₹" suffix="/USD"/>
           <FI label="Commodity Price (₹/MT)" value={f.commodity_inr} onChange={v=>sf("commodity_inr",v)} prefix="₹" suffix="/MT"/>
-
           <div style={{marginBottom:10}}>
             <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:3}}>Packing Type</label>
             <select value={f.packing_type} onChange={e=>sf("packing_type",e.target.value)}
               style={{width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:7,fontSize:12,background:"#fff"}}>
-              {PACKING_TYPES.map(p=>(
+              {packingCosts.map(p=>(
                 <option key={p.id} value={p.id}>{p.id}. {p.label} — ₹{p.cost.toLocaleString("en-IN")}/MT</option>
               ))}
             </select>
           </div>
-
-          <FI label="Local Freight (₹/MT)" value={f.local_frt} onChange={v=>sf("local_frt",v)} prefix="₹"/>
-          <FI label="Packing Labour Extra (₹/MT)" value={f.packing_labour} onChange={v=>sf("packing_labour",v)} prefix="₹"/>
-
+          <FI label="Local Freight (₹/MT)" value={f.local_frt} onChange={v=>sf("local_frt",v)} prefix="₹" suffix="/MT"/>
+          <FI label="Packing Labour Extra (₹/MT)" value={f.packing_labour} onChange={v=>sf("packing_labour",v)} prefix="₹" suffix="/MT"/>
           <div style={{marginBottom:10}}>
-            <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:6}}>CHA & THC Type</label>
+            <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:6}}>CHA & THC</label>
             <div style={{display:"flex",gap:12}}>
-              <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
-                <input type="radio" checked={!f.cha_basmati} onChange={()=>sf("cha_basmati",false)}/>
-                Non-Basmati ₹1,250/MT
+              <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12}}>
+                <input type="radio" checked={!f.cha_basmati} onChange={()=>sf("cha_basmati",false)}/>Non-Basmati ₹1,250
               </label>
-              <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
-                <input type="radio" checked={f.cha_basmati} onChange={()=>sf("cha_basmati",true)}/>
-                Basmati ₹1,350/MT
+              <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12}}>
+                <input type="radio" checked={f.cha_basmati} onChange={()=>sf("cha_basmati",true)}/>Basmati ₹1,350
               </label>
             </div>
           </div>
-
-          <FI label="Margin %" value={f.margin} onChange={v=>sf("margin",v)} suffix="%"/>
-
+          <FI label="Margin (₹/MT)" value={f.margin} onChange={v=>sf("margin",v)} prefix="₹" suffix="/MT"/>
           <div style={{borderTop:"1px solid #e2e8f0",marginTop:4,paddingTop:10}}>
             <div style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:8}}>FOR CIF CALCULATION</div>
-            <FI label="Freight (USD/MT)" value={f.freight_usd} onChange={v=>sf("freight_usd",v)} prefix="$"/>
-            <FI label="COC (USD/MT)" value={f.coc} onChange={v=>sf("coc",v)} prefix="$"/>
+            <FI label="Freight (USD/MT)" value={f.freight_usd} onChange={v=>sf("freight_usd",v)} prefix="$" suffix="/MT"/>
+            <FI label="COC (USD/MT)" value={f.coc} onChange={v=>sf("coc",v)} prefix="$" suffix="/MT"/>
           </div>
         </div>
 
         {/* ── RIGHT: Results ── */}
         <div>
+          {/* FOB / CIF cards */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            <div style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",borderRadius:10,padding:"16px 18px",color:"#fff",textAlign:"center"}}>
+              <div style={{fontSize:11,opacity:0.8,marginBottom:4}}>FOB Price / MT</div>
+              <div style={{fontSize:26,fontWeight:800,letterSpacing:-0.5}}>${fmtUSD(fobUSD)}</div>
+              <div style={{fontSize:11,opacity:0.75,marginTop:3}}>₹{fmtINR(totalWithMargin)} / MT</div>
+            </div>
+            <div style={{background:"linear-gradient(135deg,#15803d,#16a34a)",borderRadius:10,padding:"16px 18px",color:"#fff",textAlign:"center"}}>
+              <div style={{fontSize:11,opacity:0.8,marginBottom:4}}>CIF Price / MT</div>
+              <div style={{fontSize:26,fontWeight:800,letterSpacing:-0.5}}>${fmtUSD(cifUSD)}</div>
+              <div style={{fontSize:11,opacity:0.75,marginTop:3}}>Frt: ${fmtUSD(frtUSD)} + COC: ${fmtUSD(coc)}</div>
+            </div>
+          </div>
+
+          {/* Cost breakdown */}
           <div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",overflow:"hidden",marginBottom:12}}>
             <div style={{background:"#1e3a5f",color:"#fff",padding:"10px 14px",fontWeight:700,fontSize:13}}>📊 Cost Breakdown (per MT)</div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
                 <tr style={{background:"#f8fafc"}}>
                   <th style={{padding:"7px 12px",textAlign:"left",fontSize:11,color:"#64748b",borderBottom:"2px solid #e2e8f0"}}>Component</th>
-                  <th style={{padding:"7px 12px",textAlign:"right",fontSize:11,color:"#64748b",borderBottom:"2px solid #e2e8f0"}}>₹ INR</th>
-                  <th style={{padding:"7px 12px",textAlign:"right",fontSize:11,color:"#64748b",borderBottom:"2px solid #e2e8f0"}}>$ USD</th>
+                  <th style={{padding:"7px 12px",textAlign:"right",fontSize:11,color:"#64748b",borderBottom:"2px solid #e2e8f0"}}>₹ INR / MT</th>
+                  <th style={{padding:"7px 12px",textAlign:"right",fontSize:11,color:"#64748b",borderBottom:"2px solid #e2e8f0"}}>$ USD / MT</th>
                 </tr>
               </thead>
               <tbody>
                 <Row label="Commodity" inr={commodity} usd={exRate?commodity/exRate:null}/>
-                <Row label={`Packing — Type ${f.packing_type}`} inr={packing} usd={exRate?packing/exRate:null}/>
+                <Row label={`Packing — Type ${f.packing_type}: ${packingCosts.find(p=>p.id===parseInt(f.packing_type))?.label||""}`} inr={packing} usd={exRate?packing/exRate:null}/>
                 <Row label="Local Freight" inr={localFrt} usd={exRate?localFrt/exRate:null}/>
                 <Row label="Packing Labour" inr={labour} usd={exRate?labour/exRate:null}/>
                 <Row label={`CHA & THC (${f.cha_basmati?"Basmati":"Non-Basmati"})`} inr={chaTHC} usd={exRate?chaTHC/exRate:null}/>
                 <Row label="Sub-Total (Cost)" inr={totalCostINR} usd={exRate?totalCostINR/exRate:null} bold/>
-                <Row label={`Margin @ ${f.margin}%`} inr={marginAmt} usd={exRate?marginAmt/exRate:null}/>
+                <Row label="Margin (fixed per MT)" inr={marginINR} usd={exRate?marginINR/exRate:null}/>
+                <Row label="Total (FOB Base)" inr={totalWithMargin} usd={fobUSD} bold/>
               </tbody>
             </table>
           </div>
 
-          {/* FOB / CIF result cards */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-            <div style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",borderRadius:10,padding:"14px 16px",color:"#fff",textAlign:"center"}}>
-              <div style={{fontSize:11,opacity:0.8,marginBottom:4}}>FOB Price / MT</div>
-              <div style={{fontSize:22,fontWeight:800}}>${fmtUSD(fobUSD)}</div>
-              <div style={{fontSize:11,opacity:0.8,marginTop:2}}>₹{fmtINR(totalWithMargin)}</div>
-            </div>
-            <div style={{background:"linear-gradient(135deg,#15803d,#16a34a)",borderRadius:10,padding:"14px 16px",color:"#fff",textAlign:"center"}}>
-              <div style={{fontSize:11,opacity:0.8,marginBottom:4}}>CIF Price / MT</div>
-              <div style={{fontSize:22,fontWeight:800}}>${fmtUSD(cifUSD)}</div>
-              <div style={{fontSize:11,opacity:0.8,marginTop:2}}>Freight: ${fmtUSD(frtUSD)} + COC: ${fmtUSD(coc)}</div>
-            </div>
-          </div>
-
-          {/* Quick reference table — multiple packing types */}
+          {/* Quick reference — all packing types */}
           <div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",overflow:"hidden"}}>
-            <div style={{background:"#7c3aed",color:"#fff",padding:"10px 14px",fontWeight:700,fontSize:13}}>📋 Quick Reference — All Packing Types</div>
-            <div style={{overflowX:"auto",maxHeight:300,overflowY:"auto"}}>
+            <div style={{background:"#7c3aed",color:"#fff",padding:"10px 14px",fontWeight:700,fontSize:13}}>📋 All Packing Types at Current Inputs</div>
+            <div style={{maxHeight:280,overflowY:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead style={{position:"sticky",top:0}}>
+                <thead style={{position:"sticky",top:0,zIndex:1}}>
                   <tr style={{background:"#f8fafc"}}>
                     <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>#</th>
-                    <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>Packing Type</th>
+                    <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>Packing</th>
+                    <th style={{padding:"6px 10px",textAlign:"right",fontSize:10,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>Cost ₹</th>
                     <th style={{padding:"6px 10px",textAlign:"right",fontSize:10,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>FOB $</th>
                     <th style={{padding:"6px 10px",textAlign:"right",fontSize:10,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>CIF $</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {PACKING_TYPES.map(p=>{
-                    const ptCost=p.cost;
-                    const ptTotal=(commodity+ptCost+localFrt+labour+chaTHC)*(1+margin/100);
+                  {packingCosts.map(p=>{
+                    const ptTotal=(commodity+p.cost+localFrt+labour+chaTHC+marginINR);
                     const ptFOB=exRate?ptTotal/exRate:0;
                     const ptCIF=ptFOB+frtUSD+coc;
-                    const isSelected=parseInt(f.packing_type)===p.id;
+                    const isSel=parseInt(f.packing_type)===p.id;
                     return(
                       <tr key={p.id} onClick={()=>sf("packing_type",String(p.id))}
-                        style={{background:isSelected?"#eff6ff":"#fff",cursor:"pointer",transition:"background 0.15s"}}
-                        onMouseEnter={e=>!isSelected&&(e.currentTarget.style.background="#f8fafc")}
-                        onMouseLeave={e=>!isSelected&&(e.currentTarget.style.background="#fff")}>
-                        <td style={{padding:"5px 10px",fontSize:11,color:"#64748b",borderBottom:"1px solid #f1f5f9",fontWeight:isSelected?700:400}}>{p.id}</td>
-                        <td style={{padding:"5px 10px",fontSize:11,color:isSelected?"#1e3a5f":"#374151",borderBottom:"1px solid #f1f5f9",fontWeight:isSelected?700:400}}>{p.label}</td>
-                        <td style={{padding:"5px 10px",fontSize:12,textAlign:"right",color:isSelected?"#1e3a5f":"#374151",borderBottom:"1px solid #f1f5f9",fontWeight:isSelected?700:400}}>${fmtUSD(ptFOB)}</td>
-                        <td style={{padding:"5px 10px",fontSize:12,textAlign:"right",color:isSelected?"#15803d":"#374151",borderBottom:"1px solid #f1f5f9",fontWeight:isSelected?700:400}}>${fmtUSD(ptCIF)}</td>
+                        style={{background:isSel?"#eff6ff":"#fff",cursor:"pointer"}}
+                        onMouseEnter={e=>{if(!isSel)e.currentTarget.style.background="#f8fafc";}}
+                        onMouseLeave={e=>{if(!isSel)e.currentTarget.style.background="#fff";}}>
+                        <td style={{padding:"5px 10px",fontSize:11,color:"#64748b",borderBottom:"1px solid #f1f5f9",fontWeight:isSel?700:400}}>{p.id}</td>
+                        <td style={{padding:"5px 10px",fontSize:11,color:isSel?"#1e3a5f":"#374151",borderBottom:"1px solid #f1f5f9",fontWeight:isSel?700:400}}>{p.label}</td>
+                        <td style={{padding:"5px 10px",fontSize:11,textAlign:"right",color:"#64748b",borderBottom:"1px solid #f1f5f9"}}>₹{p.cost.toLocaleString("en-IN")}</td>
+                        <td style={{padding:"5px 10px",fontSize:12,textAlign:"right",color:isSel?"#1e3a5f":"#374151",borderBottom:"1px solid #f1f5f9",fontWeight:isSel?700:400}}>${fmtUSD(ptFOB)}</td>
+                        <td style={{padding:"5px 10px",fontSize:12,textAlign:"right",color:isSel?"#15803d":"#374151",borderBottom:"1px solid #f1f5f9",fontWeight:isSel?700:400}}>${fmtUSD(ptCIF)}</td>
                       </tr>
                     );
                   })}
