@@ -330,6 +330,72 @@ const calcProfit = (p, ships) => {
 };
 
 const iS = {width:"100%",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px",fontSize:13,outline:"none",boxSizing:"border-box",background:"#f8fafc"};
+// ── SmartDateInput — works on all devices, accepts DD.MM.YYYY ────────────────
+function SmartDate({value,onChange,style}){
+  const toISO=v=>{if(!v)return "";if(v.includes("-"))return v;const p=(v||"").split(".");return(p[2]&&p[1]&&p[0])?p[2]+"-"+p[1].padStart(2,"0")+"-"+p[0].padStart(2,"0"):"";};
+  const toDD=v=>{if(!v)return "";if(v.includes(".")||!v.includes("-"))return v;const p=v.split("-");return p[2]+"."+p[1]+"."+p[0];};
+  const hidRef=React.useRef(null);
+  const handleText=e=>{
+    let v=e.target.value.replace(/[^0-9.]/g,"");
+    if(v.length===2&&!v.includes("."))v=v+".";
+    if(v.length===5&&v.split(".").length===2)v=v+".";
+    onChange(v);
+  };
+  return(
+    <div style={{display:"flex",alignItems:"center",position:"relative"}}>
+      <input type="text" inputMode="numeric" placeholder="DD.MM.YYYY"
+        value={value||""}
+        onChange={handleText}
+        style={{...iS,...(style||{}),borderRadius:"7px 0 0 7px",borderRight:"none"}}
+      />
+      <button type="button"
+        onClick={()=>{hidRef.current?.showPicker?.();hidRef.current?.focus();}}
+        style={{padding:"7px 9px",border:"1px solid #e2e8f0",borderLeft:"none",borderRadius:"0 7px 7px 0",background:"#f8fafc",cursor:"pointer",fontSize:13,flexShrink:0}}>
+        📅
+      </button>
+      <input ref={hidRef} type="date"
+        value={toISO(value)||""}
+        onChange={e=>onChange(toDD(e.target.value))}
+        tabIndex={-1}
+        style={{position:"absolute",opacity:0,width:1,height:1,pointerEvents:"none"}}
+      />
+    </div>
+  );
+}
+
+// SmartDateISO — stores value as YYYY-MM-DD (for fields that use ISO dates directly)
+function SmartDateISO({value,onChange,style}){
+  const toDD=v=>{if(!v||v.includes("."))return v||"";const p=v.split("-");return p.length===3?p[2]+"."+p[1]+"."+p[0]:v;};
+  const toISO=v=>{if(!v||v.includes("-"))return v||"";const p=v.split(".");return p.length===3?p[2]+"-"+p[1].padStart(2,"0")+"-"+p[0].padStart(2,"0"):"";};
+  const hidRef=React.useRef(null);
+  const [disp,setDisp]=React.useState(toDD(value));
+  React.useEffect(()=>setDisp(toDD(value)),[value]);
+  const handleText=e=>{
+    let v=e.target.value.replace(/[^0-9.]/g,"");
+    if(v.length===2&&!v.includes("."))v=v+".";
+    if(v.length===5&&v.split(".").length===2)v=v+".";
+    setDisp(v);
+    const iso=toISO(v);
+    if(iso) onChange(iso);
+  };
+  return(
+    <div style={{display:"flex",alignItems:"center",position:"relative"}}>
+      <input type="text" inputMode="numeric" placeholder="DD.MM.YYYY"
+        value={disp}
+        onChange={handleText}
+        style={{...iS,...(style||{}),borderRadius:"7px 0 0 7px",borderRight:"none"}}
+      />
+      <button type="button"
+        onClick={()=>{hidRef.current?.showPicker?.();hidRef.current?.focus();}}
+        style={{padding:"7px 9px",border:"1px solid #e2e8f0",borderLeft:"none",borderRadius:"0 7px 7px 0",background:"#f8fafc",cursor:"pointer",fontSize:13,flexShrink:0}}>
+        📅
+      </button>
+      <input ref={hidRef} type="date" value={value||""} onChange={e=>onChange(e.target.value)}
+        tabIndex={-1} style={{position:"absolute",opacity:0,width:1,height:1,pointerEvents:"none"}}/>
+    </div>
+  );
+}
+
 const cS = {...iS,background:"#e0f2fe",color:"#0369a1",fontWeight:600,cursor:"not-allowed"};
 const bMap = {Received:{bg:"#dcfce7",color:"#16a34a"},Pending:{bg:"#fef3c7",color:"#d97706"},Error:{bg:"#fee2e2",color:"#dc2626"},NA:{bg:"#f1f5f9",color:"#64748b"},admin:{bg:"#dbeafe",color:"#1d4ed8"},accountant:{bg:"#f3e8ff",color:"#7c3aed"},senior_accountant:{bg:"#f3e8ff",color:"#7c3aed"},junior_accountant:{bg:"#fef9c3",color:"#854d0e"},viewer:{bg:"#f1f5f9",color:"#64748b"}};
 
@@ -705,11 +771,11 @@ function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[], allBC
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div>
                 <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>From Date</label>
-                <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={iS}/>
+                <SmartDateISO value={fromDate} onChange={setFromDate}/>
               </div>
               <div>
                 <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>To Date</label>
-                <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={iS}/>
+                <SmartDateISO value={toDate} onChange={setToDate}/>
               </div>
             </div>
             {(fromDate||toDate) && (
@@ -1102,7 +1168,7 @@ function BCModal({bc, allShips, allBCs, allIRMs, allBRCs, onSave, onClose, savin
             <input value={form.bc_no} onChange={e=>sf("bc_no",e.target.value)} style={iS} placeholder="e.g. BC-2627-001"/>
           </div>
           <div><label style={lbl}>BC Date *</label>
-            <input type="date" value={form.bc_date} onChange={e=>sf("bc_date",e.target.value)} style={iS}/>
+            <SmartDateISO value={form.bc_date} onChange={v=>sf("bc_date",v)}/>
           </div>
           <div><label style={lbl}>Total BC Amount (USD) *</label>
             <input type="number" step="any" value={form.bc_amount_usd}
@@ -1290,7 +1356,7 @@ function IRMModal({irm, allIRMs, onSave, onClose, saving}){
             <input value={form.irm_no} onChange={e=>sf("irm_no",e.target.value)} style={iS} placeholder="e.g. IRM-001"/>
           </div>
           <div><label style={lbl}>IRM Date *</label>
-            <input type="date" value={form.irm_date} onChange={e=>sf("irm_date",e.target.value)} style={iS}/>
+            <SmartDateISO value={form.irm_date} onChange={v=>sf("irm_date",v)}/>
           </div>
           <div><label style={lbl}>Total IRM Amount (USD) *</label>
             <input type="number" step="any" value={form.irm_total_usd}
@@ -1424,7 +1490,7 @@ function BRCModal({brc, allBRCs, allIRMs, allShips, allBCs, onSave, onClose, sav
             <input value={form.brc_no} onChange={e=>sf("brc_no",e.target.value)} style={iS} placeholder="e.g. BRC-001"/>
           </div>
           <div><label style={lbl}>BRC Date *</label>
-            <input type="date" value={form.brc_date} onChange={e=>sf("brc_date",e.target.value)} style={iS}/>
+            <SmartDateISO value={form.brc_date} onChange={v=>sf("brc_date",v)}/>
           </div>
           <div><label style={lbl}>BRC Amount (USD) *</label>
             <input type="number" step="any" value={form.brc_amt_usd}
@@ -2819,7 +2885,7 @@ function ProformaInvoiceModal({contract, buyer, onClose, onSave}) {
         {/* Validity Date */}
         <div style={{marginBottom:12}}>
           <label style={{fontSize:11.5,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Valid Till Date</label>
-          <input type="date" value={validityDate} onChange={e=>setValidityDate(e.target.value)} style={iS}/>
+          <SmartDateISO value={validityDate} onChange={setValidityDate}/>
         </div>
 
         {/* Advance % */}
@@ -4847,9 +4913,7 @@ function AdvancePaymentForm({ships, buyers}){
 
       <SectionHeader title="Basic Details"/>
       <FRow label="Date" required>
-        <input type="date" value={toISODate(f.date)}
-          onChange={e=>sf("date",toDisplayDate(e.target.value))}
-          style={{...iS,fontSize:12}}/>
+        <SmartDate value={f.date} onChange={v=>sf("date",v)}/>
       </FRow>
       <FRow label="Amount in FCY" required>
         <div style={{display:"flex",gap:6}}>
@@ -4883,14 +4947,10 @@ function AdvancePaymentForm({ships, buyers}){
       <FRow label="HSN / SAC Code"><FInput value={f.hsn} onChange={v=>sf("hsn",v)}/></FRow>
       <FRow label="Proforma Invoice / PO No." required><FInput value={f.pi_no} onChange={v=>sf("pi_no",v)} placeholder="e.g. DEV-EXP-25/26-45"/></FRow>
       <FRow label="PI / PO Date" required>
-        <input type="date" value={toISODate(f.pi_date)}
-          onChange={e=>sf("pi_date",toDisplayDate(e.target.value))}
-          style={{...iS,fontSize:12}}/>
+        <SmartDate value={f.pi_date} onChange={v=>sf("pi_date",v)}/>
       </FRow>
       <FRow label="Expected Date of Export">
-        <input type="date" value={toISODate(f.expected_date)}
-          onChange={e=>sf("expected_date",toDisplayDate(e.target.value))}
-          style={{...iS,fontSize:12}}/>
+        <SmartDate value={f.expected_date} onChange={v=>sf("expected_date",v)}/>
       </FRow>
       <FRow label="Country of Origin"><FInput value={f.country_origin} onChange={v=>sf("country_origin",v)}/></FRow>
       <FRow label="Port of Loading" required><FInput value={f.port_loading} onChange={v=>sf("port_loading",v)}/></FRow>
@@ -4950,7 +5010,7 @@ function AdvancePaymentForm({ships, buyers}){
                   <td style={{border:"1px solid #e2e8f0",padding:4,textAlign:"center",width:30}}>{i+1}</td>
                   <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={fc.no} onChange={e=>updFwd(i,"no",e.target.value)} style={{...iS,fontSize:11}}/></td>
                   <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={fc.amt} onChange={e=>updFwd(i,"amt",e.target.value)} placeholder={f.fcy_currency} style={{...iS,fontSize:11}}/></td>
-                  <td style={{border:"1px solid #e2e8f0",padding:3}}><input type="date" value={fc.due||""} onChange={e=>updFwd(i,"due",e.target.value)} style={{...iS,fontSize:11}}/></td>
+                  <td style={{border:"1px solid #e2e8f0",padding:3}}><SmartDateISO value={fc.due||""} onChange={v=>updFwd(i,"due",v)}/></td>
                   <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={fc.util} onChange={e=>updFwd(i,"util",e.target.value)} placeholder={f.fcy_currency} style={{...iS,fontSize:11}}/></td>
                   <td style={{border:"1px solid #e2e8f0",padding:3,textAlign:"center"}}>
                     <button onClick={()=>delFwd(i)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:11}}>✕</button>
@@ -5377,11 +5437,7 @@ function ExportBCForm({ships, buyers}){
   };
 
   // ── FORM UI ───────────────────────────────────────────────────────────────
-  const DateInput=({value,onChange})=>(
-    <input type="date" value={toISO(value)}
-      onChange={e=>onChange(toDisplay(e.target.value))}
-      style={{...iS,fontSize:12}}/>
-  );
+  const DateInput=({value,onChange})=>(<SmartDate value={value} onChange={onChange}/>);
 
   return(
     <div style={{background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
@@ -5519,7 +5575,7 @@ function ExportBCForm({ships, buyers}){
       {f.export_type==="Merchanting Trade"&&(
         <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"10px 14px",marginBottom:10,fontSize:12}}>
           <div style={{fontWeight:700,color:"#92400e",marginBottom:8}}>Merchanting Trade Details</div>
-          <FRow label="Import Leg Shipment Date"><input type="date" value={f.mt_shipdate} onChange={e=>sf("mt_shipdate",e.target.value)} style={{...iS,fontSize:12}}/></FRow>
+          <FRow label="Import Leg Shipment Date"><SmartDateISO value={f.mt_shipdate} onChange={v=>sf("mt_shipdate",v)}/></FRow>
           <FRow label="Txn. Ref. No."><FInput value={f.mt_txn_ref} onChange={v=>sf("mt_txn_ref",v)}/></FRow>
         </div>
       )}
@@ -5719,9 +5775,7 @@ function FormA2({ships}){
     doc.save("SBI_Form_A2.pdf");
   };
 
-  const DateInput=({value,onChange})=>(
-    <input type="date" value={toISO(value)} onChange={e=>onChange(toDisplay(e.target.value))} style={{...iS,fontSize:12}}/>
-  );
+  const DateInput=({value,onChange})=>(<SmartDate value={value} onChange={onChange}/>);
 
   return(
     <div style={{background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
@@ -5808,9 +5862,7 @@ function IBLForm({ships, buyers}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
   const toDisplay=iso=>{if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
   const toISO=dd=>{if(!dd||!dd.includes("."))return"";const[d,m,y]=dd.split(".");return`${y}-${m}-${d}`;};
-  const DateInput=({value,onChange})=>(
-    <input type="date" value={toISO(value)} onChange={e=>onChange(toDisplay(e.target.value))} style={{...iS,fontSize:12}}/>
-  );
+  const DateInput=({value,onChange})=>(<SmartDate value={value} onChange={onChange}/>);
 
   const [f,setF]=useState({
     date:today,
@@ -6129,9 +6181,7 @@ function EPCForm({ships}){
   const epcRelease = n(f.epc_release);
   const balance  = eligible - epcAvailed - epcRelease;
 
-  const DateInput=({value,onChange})=>(
-    <input type="date" value={toISO(value)} onChange={e=>onChange(toDisplay(e.target.value))} style={{...iS,fontSize:12}}/>
-  );
+  const DateInput=({value,onChange})=>(<SmartDate value={value} onChange={onChange}/>);
 
   // ── PDF 1: EPC Release Request Letter (original) ──────────────────────────
   const exportEPCLetter=(doc)=>{
@@ -7363,9 +7413,7 @@ function InvoicingTab({buyers}){
   // ── FORM VIEW ──────────────────────────────────────────────────────────────
   const toISO=dd=>{if(!dd||!dd.includes("."))return dd||"";const[d,m,y]=dd.split(".");return y?`${y}-${m}-${d}`:dd;};
   const toDD=iso=>{if(!iso||!iso.includes("-"))return iso||"";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
-  const DI=({value,onChange,style})=>(
-    <input type="date" value={toISO(value)} onChange={e=>onChange(toDD(e.target.value))} style={{...iS,fontSize:12,...style}}/>
-  );
+  const DI=({value,onChange,style})=>(<SmartDate value={value} onChange={onChange} style={style}/>);
 
   const PARTY_TABS=[["exp","Export Invoice"],["buyer","Comm. Inv. (Buyer)"],["bank","Comm. Inv. (Bank)"],["pl","Packing List"]];
 
@@ -8134,7 +8182,7 @@ function VJRAInvoicingTab({buyers}){
 
   const toISO=dd=>{if(!dd||!dd.includes("."))return dd||"";const[d,m,y]=dd.split(".");return y?`${y}-${m}-${d}`:dd;};
   const toDD=iso=>{if(!iso||!iso.includes("-"))return iso||"";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
-  const DI=({value,onChange})=>(<input type="date" value={toISO(value)} onChange={e=>onChange(toDD(e.target.value))} style={{...iS,fontSize:12}}/>);
+  const DI=({value,onChange})=>(<SmartDate value={value} onChange={onChange}/>);
 
   // ── LIST VIEW ──────────────────────────────────────────────────────────────
   if(view==="list") return(
@@ -8486,25 +8534,19 @@ function PriceCalculator(){
     </tr>
   );
 
-  // FI uses defaultValue + onBlur to avoid re-render on every keystroke (fixes mobile keyboard dismiss)
-  const FI=({label,value,onChange,prefix,suffix,fieldKey})=>{
-    const ref=React.useRef(null);
-    // Sync external value to input only when not focused
-    React.useEffect(()=>{
-      if(ref.current && document.activeElement!==ref.current){
-        ref.current.value=value;
-      }
-    },[value]);
+  // FI — uncontrolled input, updates state only on blur (prevents mobile keyboard dismiss)
+  const FI=({label,value,onChange,prefix,suffix})=>{
     const br=prefix&&suffix?0:prefix?"0 7px 7px 0":suffix?"7px 0 0 7px":7;
     return(
       <div style={{marginBottom:10}}>
         <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
         <div style={{display:"flex",alignItems:"center",gap:0}}>
           {prefix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"7px 0 0 7px",border:"1px solid #e2e8f0",borderRight:"none",whiteSpace:"nowrap"}}>{prefix}</span>}
-          <input ref={ref} type="text" inputMode="decimal"
+          <input type="text" inputMode="decimal"
+            key={value+"_"+label}
             defaultValue={value}
             onBlur={e=>onChange(e.target.value)}
-            onKeyDown={e=>{if(e.key==="Enter"){e.target.blur();}}}
+            onKeyDown={e=>{if(e.key==="Enter")e.target.blur();}}
             style={{width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:br,fontSize:13,background:"#fff",outline:"none"}}/>
           {suffix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"0 7px 7px 0",border:"1px solid #e2e8f0",borderLeft:"none",whiteSpace:"nowrap"}}>{suffix}</span>}
         </div>
