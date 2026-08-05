@@ -8414,7 +8414,7 @@ function PriceCalculator(){
         try{
           const saved=JSON.parse(rows[0].value);
           // Merge with defaults to preserve labels, only update costs
-          const merged=DEFAULT_PACKING_COSTS.map(d=>({...d,cost:saved.find(s=>s.id===d.id)?.cost??d.cost}));
+          const merged=DEFAULT_PACKING_COSTS.map(d=>{const s=saved.find(s=>s.id===d.id);return{...d,cost:s?.cost??d.cost,updated_at:s?.updated_at||null};});
           setPackingCosts(merged);
         }catch(e){}
       }
@@ -8429,13 +8429,19 @@ function PriceCalculator(){
 
   const saveCosts=async()=>{
     setSavingCosts(true);
-    const updated=editCostDraft.map(p=>({id:p.id,cost:nv(p.costStr)||p.cost}));
+    const now=new Date().toISOString();
+    // Track which items changed — only update their timestamp
+    const updated=editCostDraft.map(p=>{
+      const orig=packingCosts.find(o=>o.id===p.id);
+      const newCost=nv(p.costStr)||p.cost;
+      const changed=newCost!==(orig?.cost||0);
+      return {id:p.id, cost:newCost, updated_at:changed?now:(orig?.updated_at||null)};
+    });
     const payload={key:"packing_costs",value:JSON.stringify(updated)};
-    // Upsert into app_settings
     try{
       await sb("app_settings?key=eq.packing_costs",{method:"DELETE"});
       await sb("app_settings",{method:"POST",body:JSON.stringify(payload)});
-      setPackingCosts(DEFAULT_PACKING_COSTS.map(d=>({...d,cost:updated.find(u=>u.id===d.id)?.cost??d.cost})));
+      setPackingCosts(DEFAULT_PACKING_COSTS.map(d=>({...d,...(updated.find(u=>u.id===d.id)||{})})));
       setEditCosts(false);
       alert("✅ Packing costs saved!");
     }catch(e){alert("❌ Failed to save: "+e.message);}
@@ -8485,7 +8491,7 @@ function PriceCalculator(){
       <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
       <div style={{display:"flex",alignItems:"center",gap:0}}>
         {prefix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"7px 0 0 7px",border:"1px solid #e2e8f0",borderRight:"none",whiteSpace:"nowrap"}}>{prefix}</span>}
-        <input type="number" value={value} onChange={e=>onChange(e.target.value)}
+        <input type="text" inputMode="decimal" value={value} onChange={e=>onChange(e.target.value)}
           style={{width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:prefix&&suffix?0:prefix?"0 7px 7px 0":suffix?"7px 0 0 7px":7,fontSize:13,background:"#fff",outline:"none"}}/>
         {suffix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"0 7px 7px 0",border:"1px solid #e2e8f0",borderLeft:"none",whiteSpace:"nowrap"}}>{suffix}</span>}
       </div>
@@ -8523,10 +8529,13 @@ function PriceCalculator(){
             {editCostDraft.map((p,i)=>(
               <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,background:"#fafafa",borderRadius:7,padding:"6px 10px",border:"1px solid #e2e8f0"}}>
                 <span style={{fontSize:11,fontWeight:700,color:"#64748b",minWidth:18}}>{p.id}.</span>
-                <span style={{fontSize:11,color:"#374151",flex:1,lineHeight:1.3}}>{p.label}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:11,color:"#374151",lineHeight:1.3}}>{p.label}</div>
+                  {p.updated_at&&<div style={{fontSize:9.5,color:"#94a3b8",marginTop:1}}>Updated: {new Date(p.updated_at).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>}
+                </div>
                 <div style={{display:"flex",alignItems:"center",gap:2,flexShrink:0}}>
                   <span style={{fontSize:11,color:"#64748b"}}>₹</span>
-                  <input type="number" value={p.costStr}
+                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={p.costStr}
                     onChange={e=>{const d=[...editCostDraft];d[i]={...d[i],costStr:e.target.value};setEditCostDraft(d);}}
                     style={{width:70,padding:"4px 6px",border:"1px solid #d1d5db",borderRadius:5,fontSize:12,textAlign:"right"}}/>
                 </div>
