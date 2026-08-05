@@ -334,7 +334,7 @@ const iS = {width:"100%",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 
 function SmartDate({value,onChange,style}){
   const toISO=v=>{if(!v)return "";if(v.includes("-"))return v;const p=(v||"").split(".");return(p[2]&&p[1]&&p[0])?p[2]+"-"+p[1].padStart(2,"0")+"-"+p[0].padStart(2,"0"):"";};
   const toDD=v=>{if(!v)return "";if(v.includes(".")||!v.includes("-"))return v;const p=v.split("-");return p[2]+"."+p[1]+"."+p[0];};
-  const hidRef=React.useRef(null);
+  const hidRef=useRef(null);
   const handleText=e=>{
     let v=e.target.value.replace(/[^0-9.]/g,"");
     if(v.length===2&&!v.includes("."))v=v+".";
@@ -367,9 +367,9 @@ function SmartDate({value,onChange,style}){
 function SmartDateISO({value,onChange,style}){
   const toDD=v=>{if(!v||v.includes("."))return v||"";const p=v.split("-");return p.length===3?p[2]+"."+p[1]+"."+p[0]:v;};
   const toISO=v=>{if(!v||v.includes("-"))return v||"";const p=v.split(".");return p.length===3?p[2]+"-"+p[1].padStart(2,"0")+"-"+p[0].padStart(2,"0"):"";};
-  const hidRef=React.useRef(null);
-  const [disp,setDisp]=React.useState(toDD(value));
-  React.useEffect(()=>setDisp(toDD(value)),[value]);
+  const hidRef=useRef(null);
+  const [disp,setDisp]=useState(toDD(value));
+  useEffect(()=>setDisp(toDD(value)),[value]);
   const handleText=e=>{
     let v=e.target.value.replace(/[^0-9.]/g,"");
     if(v.length===2&&!v.includes("."))v=v+".";
