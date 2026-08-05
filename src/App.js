@@ -8486,17 +8486,31 @@ function PriceCalculator(){
     </tr>
   );
 
-  const FI=({label,value,onChange,prefix,suffix})=>(
-    <div style={{marginBottom:10}}>
-      <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
-      <div style={{display:"flex",alignItems:"center",gap:0}}>
-        {prefix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"7px 0 0 7px",border:"1px solid #e2e8f0",borderRight:"none",whiteSpace:"nowrap"}}>{prefix}</span>}
-        <input type="text" inputMode="decimal" value={value} onChange={e=>onChange(e.target.value)}
-          style={{width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:prefix&&suffix?0:prefix?"0 7px 7px 0":suffix?"7px 0 0 7px":7,fontSize:13,background:"#fff",outline:"none"}}/>
-        {suffix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"0 7px 7px 0",border:"1px solid #e2e8f0",borderLeft:"none",whiteSpace:"nowrap"}}>{suffix}</span>}
+  // FI uses defaultValue + onBlur to avoid re-render on every keystroke (fixes mobile keyboard dismiss)
+  const FI=({label,value,onChange,prefix,suffix,fieldKey})=>{
+    const ref=React.useRef(null);
+    // Sync external value to input only when not focused
+    React.useEffect(()=>{
+      if(ref.current && document.activeElement!==ref.current){
+        ref.current.value=value;
+      }
+    },[value]);
+    const br=prefix&&suffix?0:prefix?"0 7px 7px 0":suffix?"7px 0 0 7px":7;
+    return(
+      <div style={{marginBottom:10}}>
+        <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
+        <div style={{display:"flex",alignItems:"center",gap:0}}>
+          {prefix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"7px 0 0 7px",border:"1px solid #e2e8f0",borderRight:"none",whiteSpace:"nowrap"}}>{prefix}</span>}
+          <input ref={ref} type="text" inputMode="decimal"
+            defaultValue={value}
+            onBlur={e=>onChange(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter"){e.target.blur();}}}
+            style={{width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:br,fontSize:13,background:"#fff",outline:"none"}}/>
+          {suffix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"0 7px 7px 0",border:"1px solid #e2e8f0",borderLeft:"none",whiteSpace:"nowrap"}}>{suffix}</span>}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   if(!costsLoaded) return <div style={{padding:40,textAlign:"center",color:"#64748b"}}>Loading...</div>;
 
