@@ -8373,6 +8373,217 @@ function VJRAInvoicingTab({buyers}){
   );
 }
 
+// ── Rice Price Calculator ──────────────────────────────────────────────────────
+const PACKING_TYPES = [
+  {id:1,  label:"25KG White Jute Bag with Inner & Outer",           cost:3050},
+  {id:2,  label:"40KG Brown Jute Bag with Inner, Tag & Patti",     cost:3700},
+  {id:3,  label:"10KG Brown Jute Bag with Handle, Tag, Patti & 40KG Master", cost:5400},
+  {id:4,  label:"5KG Brown Jute Bag with Handle, Tag, Patti & 40KG Master",  cost:8500},
+  {id:5,  label:"25KG Non-Woven Bag with Inner & Outer",            cost:1120},
+  {id:6,  label:"18KG Non-Woven Bag with Inner",                    cost:1250},
+  {id:7,  label:"10KG Non-Woven Bag with Inner & 40KG Master",      cost:2550},
+  {id:8,  label:"5KG Non-Woven Bag with Inner & 40KG Master",       cost:4150},
+  {id:9,  label:"25KG BOPP Bag",                                     cost:720},
+  {id:10, label:"50KG BOPP Bag",                                     cost:600},
+  {id:11, label:"50KG PP Bag",                                       cost:400},
+  {id:12, label:"25KG Pinch Bottom Bag",                             cost:1400},
+  {id:13, label:"10KG Pouch with 40KG Master",                       cost:2150},
+  {id:14, label:"5KG Pouch with 40KG Master",                        cost:3950},
+  {id:15, label:"10KG Pouch in 20KG Cartoon",                        cost:3900},
+  {id:16, label:"5KG Pouch in 20KG Cartoon",                         cost:5700},
+  {id:17, label:"1KG Pouch in 20KG Master Bag",                      cost:3400},
+  {id:18, label:"1KG Pouch in 20KG Cartoon",                         cost:5100},
+];
+
+function PriceCalculator(){
+  const [f,setF]=useState({
+    exchange_rate:"85",
+    commodity_inr:"",
+    packing_type:"7",  // default type 7 (10KG Non-Woven) as per Excel
+    local_frt:"0",
+    packing_labour:"1500",
+    cha_basmati:false,  // false=non-basmati 1250, true=basmati 1350
+    margin:"25",
+    freight_usd:"24",
+    coc:"0",
+  });
+  const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+  const n=v=>parseFloat(String(v||0).replace(/,/g,""))||0;
+
+  // Derived calculations (all per MT)
+  const exRate    = n(f.exchange_rate);
+  const commodity = n(f.commodity_inr);
+  const packing   = PACKING_TYPES.find(p=>p.id===parseInt(f.packing_type))?.cost||0;
+  const localFrt  = n(f.local_frt);
+  const labour    = n(f.packing_labour);
+  const chaTHC    = f.cha_basmati ? 1350 : 1250;
+  const margin    = n(f.margin);
+  const frtUSD    = n(f.freight_usd);
+  const coc       = n(f.coc);
+
+  const totalCostINR = commodity + packing + localFrt + labour + chaTHC;
+  const marginAmt    = totalCostINR * (margin/100);
+  const totalWithMargin = totalCostINR + marginAmt;
+  const fobUSD    = exRate>0 ? totalWithMargin/exRate : 0;
+  const cifUSD    = fobUSD + frtUSD + coc;
+
+  const fmtINR=v=>v?v.toLocaleString("en-IN",{maximumFractionDigits:2}):"—";
+  const fmtUSD=v=>v?v.toFixed(2):"—";
+
+  const Row=({label,inr,usd,bold,highlight})=>(
+    <tr style={{background:highlight?"#eff6ff":bold?"#f8fafc":"#fff"}}>
+      <td style={{padding:"7px 12px",fontSize:13,fontWeight:bold?700:400,color:bold?"#1e3a5f":"#374151",borderBottom:"1px solid #e2e8f0"}}>{label}</td>
+      <td style={{padding:"7px 12px",fontSize:13,fontWeight:bold?700:400,color:bold?"#1e3a5f":"#374151",textAlign:"right",borderBottom:"1px solid #e2e8f0"}}>{inr!=null?"₹"+fmtINR(inr):""}</td>
+      <td style={{padding:"7px 12px",fontSize:13,fontWeight:bold?700:400,color:bold?"#1e3a5f":"#374151",textAlign:"right",borderBottom:"1px solid #e2e8f0"}}>{usd!=null?"$"+fmtUSD(usd):""}</td>
+    </tr>
+  );
+
+  const FI=({label,value,onChange,type,prefix,suffix,small})=>(
+    <div style={{marginBottom:10}}>
+      <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
+      <div style={{display:"flex",alignItems:"center",gap:4}}>
+        {prefix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"7px 0 0 7px",border:"1px solid #e2e8f0",borderRight:"none"}}>{prefix}</span>}
+        <input
+          type={type||"number"} value={value}
+          onChange={e=>onChange(e.target.value)}
+          style={{width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:prefix?0:7,fontSize:small?11:13,background:"#fff",outline:"none"}}
+        />
+        {suffix&&<span style={{fontSize:12,color:"#64748b",background:"#f1f5f9",padding:"7px 8px",borderRadius:"0 7px 7px 0",border:"1px solid #e2e8f0",borderLeft:"none"}}>{suffix}</span>}
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{maxWidth:900,margin:"0 auto",padding:"16px 8px"}}>
+      <div style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",borderRadius:12,padding:"14px 20px",marginBottom:16,color:"#fff"}}>
+        <div style={{fontWeight:800,fontSize:17,marginBottom:2}}>🧮 Rice Price Calculator</div>
+        <div style={{fontSize:11,opacity:0.85}}>FOB & CIF pricing per Metric Tonne · Admin only</div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+        {/* ── LEFT: Inputs ── */}
+        <div style={{background:"#fff",borderRadius:12,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+          <div style={{fontWeight:700,color:"#1e3a5f",fontSize:13,marginBottom:12,paddingBottom:6,borderBottom:"2px solid #e2e8f0"}}>📥 Input Parameters</div>
+
+          <FI label="Exchange Rate (₹/USD)" value={f.exchange_rate} onChange={v=>sf("exchange_rate",v)} prefix="₹"/>
+          <FI label="Commodity Price (₹/MT)" value={f.commodity_inr} onChange={v=>sf("commodity_inr",v)} prefix="₹" suffix="/MT"/>
+
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:3}}>Packing Type</label>
+            <select value={f.packing_type} onChange={e=>sf("packing_type",e.target.value)}
+              style={{width:"100%",padding:"7px 10px",border:"1px solid #e2e8f0",borderRadius:7,fontSize:12,background:"#fff"}}>
+              {PACKING_TYPES.map(p=>(
+                <option key={p.id} value={p.id}>{p.id}. {p.label} — ₹{p.cost.toLocaleString("en-IN")}/MT</option>
+              ))}
+            </select>
+          </div>
+
+          <FI label="Local Freight (₹/MT)" value={f.local_frt} onChange={v=>sf("local_frt",v)} prefix="₹"/>
+          <FI label="Packing Labour Extra (₹/MT)" value={f.packing_labour} onChange={v=>sf("packing_labour",v)} prefix="₹"/>
+
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:11,fontWeight:600,color:"#64748b",display:"block",marginBottom:6}}>CHA & THC Type</label>
+            <div style={{display:"flex",gap:12}}>
+              <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
+                <input type="radio" checked={!f.cha_basmati} onChange={()=>sf("cha_basmati",false)}/>
+                Non-Basmati ₹1,250/MT
+              </label>
+              <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
+                <input type="radio" checked={f.cha_basmati} onChange={()=>sf("cha_basmati",true)}/>
+                Basmati ₹1,350/MT
+              </label>
+            </div>
+          </div>
+
+          <FI label="Margin %" value={f.margin} onChange={v=>sf("margin",v)} suffix="%"/>
+
+          <div style={{borderTop:"1px solid #e2e8f0",marginTop:4,paddingTop:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:8}}>FOR CIF CALCULATION</div>
+            <FI label="Freight (USD/MT)" value={f.freight_usd} onChange={v=>sf("freight_usd",v)} prefix="$"/>
+            <FI label="COC (USD/MT)" value={f.coc} onChange={v=>sf("coc",v)} prefix="$"/>
+          </div>
+        </div>
+
+        {/* ── RIGHT: Results ── */}
+        <div>
+          <div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",overflow:"hidden",marginBottom:12}}>
+            <div style={{background:"#1e3a5f",color:"#fff",padding:"10px 14px",fontWeight:700,fontSize:13}}>📊 Cost Breakdown (per MT)</div>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:"#f8fafc"}}>
+                  <th style={{padding:"7px 12px",textAlign:"left",fontSize:11,color:"#64748b",borderBottom:"2px solid #e2e8f0"}}>Component</th>
+                  <th style={{padding:"7px 12px",textAlign:"right",fontSize:11,color:"#64748b",borderBottom:"2px solid #e2e8f0"}}>₹ INR</th>
+                  <th style={{padding:"7px 12px",textAlign:"right",fontSize:11,color:"#64748b",borderBottom:"2px solid #e2e8f0"}}>$ USD</th>
+                </tr>
+              </thead>
+              <tbody>
+                <Row label="Commodity" inr={commodity} usd={exRate?commodity/exRate:null}/>
+                <Row label={`Packing — Type ${f.packing_type}`} inr={packing} usd={exRate?packing/exRate:null}/>
+                <Row label="Local Freight" inr={localFrt} usd={exRate?localFrt/exRate:null}/>
+                <Row label="Packing Labour" inr={labour} usd={exRate?labour/exRate:null}/>
+                <Row label={`CHA & THC (${f.cha_basmati?"Basmati":"Non-Basmati"})`} inr={chaTHC} usd={exRate?chaTHC/exRate:null}/>
+                <Row label="Sub-Total (Cost)" inr={totalCostINR} usd={exRate?totalCostINR/exRate:null} bold/>
+                <Row label={`Margin @ ${f.margin}%`} inr={marginAmt} usd={exRate?marginAmt/exRate:null}/>
+              </tbody>
+            </table>
+          </div>
+
+          {/* FOB / CIF result cards */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            <div style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",borderRadius:10,padding:"14px 16px",color:"#fff",textAlign:"center"}}>
+              <div style={{fontSize:11,opacity:0.8,marginBottom:4}}>FOB Price / MT</div>
+              <div style={{fontSize:22,fontWeight:800}}>${fmtUSD(fobUSD)}</div>
+              <div style={{fontSize:11,opacity:0.8,marginTop:2}}>₹{fmtINR(totalWithMargin)}</div>
+            </div>
+            <div style={{background:"linear-gradient(135deg,#15803d,#16a34a)",borderRadius:10,padding:"14px 16px",color:"#fff",textAlign:"center"}}>
+              <div style={{fontSize:11,opacity:0.8,marginBottom:4}}>CIF Price / MT</div>
+              <div style={{fontSize:22,fontWeight:800}}>${fmtUSD(cifUSD)}</div>
+              <div style={{fontSize:11,opacity:0.8,marginTop:2}}>Freight: ${fmtUSD(frtUSD)} + COC: ${fmtUSD(coc)}</div>
+            </div>
+          </div>
+
+          {/* Quick reference table — multiple packing types */}
+          <div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",overflow:"hidden"}}>
+            <div style={{background:"#7c3aed",color:"#fff",padding:"10px 14px",fontWeight:700,fontSize:13}}>📋 Quick Reference — All Packing Types</div>
+            <div style={{overflowX:"auto",maxHeight:300,overflowY:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead style={{position:"sticky",top:0}}>
+                  <tr style={{background:"#f8fafc"}}>
+                    <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>#</th>
+                    <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>Packing Type</th>
+                    <th style={{padding:"6px 10px",textAlign:"right",fontSize:10,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>FOB $</th>
+                    <th style={{padding:"6px 10px",textAlign:"right",fontSize:10,color:"#64748b",borderBottom:"1px solid #e2e8f0"}}>CIF $</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {PACKING_TYPES.map(p=>{
+                    const ptCost=p.cost;
+                    const ptTotal=(commodity+ptCost+localFrt+labour+chaTHC)*(1+margin/100);
+                    const ptFOB=exRate?ptTotal/exRate:0;
+                    const ptCIF=ptFOB+frtUSD+coc;
+                    const isSelected=parseInt(f.packing_type)===p.id;
+                    return(
+                      <tr key={p.id} onClick={()=>sf("packing_type",String(p.id))}
+                        style={{background:isSelected?"#eff6ff":"#fff",cursor:"pointer",transition:"background 0.15s"}}
+                        onMouseEnter={e=>!isSelected&&(e.currentTarget.style.background="#f8fafc")}
+                        onMouseLeave={e=>!isSelected&&(e.currentTarget.style.background="#fff")}>
+                        <td style={{padding:"5px 10px",fontSize:11,color:"#64748b",borderBottom:"1px solid #f1f5f9",fontWeight:isSelected?700:400}}>{p.id}</td>
+                        <td style={{padding:"5px 10px",fontSize:11,color:isSelected?"#1e3a5f":"#374151",borderBottom:"1px solid #f1f5f9",fontWeight:isSelected?700:400}}>{p.label}</td>
+                        <td style={{padding:"5px 10px",fontSize:12,textAlign:"right",color:isSelected?"#1e3a5f":"#374151",borderBottom:"1px solid #f1f5f9",fontWeight:isSelected?700:400}}>${fmtUSD(ptFOB)}</td>
+                        <td style={{padding:"5px 10px",fontSize:12,textAlign:"right",color:isSelected?"#15803d":"#374151",borderBottom:"1px solid #f1f5f9",fontWeight:isSelected?700:400}}>${fmtUSD(ptCIF)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App(){
   const [session,setSession]=useState(()=>{
     try{
@@ -9010,6 +9221,7 @@ export default function App(){
           ...(!isJuniorAccountant?[["profitability","💰 P&L"],["bcmanager","🏦 Bill Coll."],["banking","🏛 Banking Forms"],["invoicing","📄 Invoicing"]]:[]),
           ["buyers","👥 Buyers"],
           ...(!isJuniorAccountant||true?[["contracts","📋 Contracts"]]:[]),
+          ...(isAdmin?[["calculator","🧮 Price Calc"]]:[]),
         ].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)} style={{background:"none",border:"none",borderBottom:tab===k?"3px solid #1e3a5f":"3px solid transparent",color:tab===k?"#1e3a5f":"#64748b",padding:"11px 14px",cursor:"pointer",fontWeight:tab===k?700:500,fontSize:12,whiteSpace:"nowrap",flex:"1 0 auto"}}>{l}</button>
         ))}
@@ -9273,7 +9485,10 @@ export default function App(){
             {invSubTab==="vjra"&&<VJRAInvoicingTab buyers={buyers}/>}
           </div>
         )}
-        {tab==="buyers"&&(
+        {tab==="calculator"&&isAdmin&&(
+        <PriceCalculator/>
+      )}
+            {tab==="buyers"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
               <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Buyer Master</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>{buyers.length} buyers</p></div>
