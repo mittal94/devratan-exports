@@ -331,21 +331,35 @@ const calcProfit = (p, ships) => {
 
 const iS = {width:"100%",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px",fontSize:13,outline:"none",boxSizing:"border-box",background:"#f8fafc"};
 // ── SmartDateInput — works on all devices, accepts DD.MM.YYYY ────────────────
+// SmartDate — DD.MM.YYYY display, uncontrolled text input (no re-render on keystroke)
 function SmartDate({value,onChange,style}){
   const toISO=v=>{if(!v)return "";if(v.includes("-"))return v;const p=(v||"").split(".");return(p[2]&&p[1]&&p[0])?p[2]+"-"+p[1].padStart(2,"0")+"-"+p[0].padStart(2,"0"):"";};
   const toDD=v=>{if(!v)return "";if(v.includes(".")||!v.includes("-"))return v;const p=v.split("-");return p[2]+"."+p[1]+"."+p[0];};
-  const hidRef=useRef(null);
-  const handleText=e=>{
+  const txtRef=useRef(null); const hidRef=useRef(null);
+  // Sync displayed value only when field not focused
+  useEffect(()=>{
+    if(txtRef.current&&document.activeElement!==txtRef.current) txtRef.current.value=value||"";
+  },[value]);
+  const handleKey=e=>{
     let v=e.target.value.replace(/[^0-9.]/g,"");
     if(v.length===2&&!v.includes("."))v=v+".";
     if(v.length===5&&v.split(".").length===2)v=v+".";
-    onChange(v);
+    e.target.value=v; // update DOM directly — no state, no re-render
+  };
+  const handleBlur=e=>{
+    const v=e.target.value;
+    if(v!==value) onChange(v);
+  };
+  const handleCalendar=e=>{
+    onChange(toDD(e.target.value));
+    if(txtRef.current) txtRef.current.value=toDD(e.target.value);
   };
   return(
     <div style={{display:"flex",alignItems:"center",position:"relative"}}>
-      <input type="text" inputMode="numeric" placeholder="DD.MM.YYYY"
-        value={value||""}
-        onChange={handleText}
+      <input ref={txtRef} type="text" inputMode="numeric" placeholder="DD.MM.YYYY"
+        defaultValue={value||""}
+        onInput={handleKey}
+        onBlur={handleBlur}
         style={{...iS,...(style||{}),borderRadius:"7px 0 0 7px",borderRight:"none"}}
       />
       <button type="button"
@@ -353,36 +367,40 @@ function SmartDate({value,onChange,style}){
         style={{padding:"7px 9px",border:"1px solid #e2e8f0",borderLeft:"none",borderRadius:"0 7px 7px 0",background:"#f8fafc",cursor:"pointer",fontSize:13,flexShrink:0}}>
         📅
       </button>
-      <input ref={hidRef} type="date"
-        value={toISO(value)||""}
-        onChange={e=>onChange(toDD(e.target.value))}
-        tabIndex={-1}
-        style={{position:"absolute",opacity:0,width:1,height:1,pointerEvents:"none"}}
-      />
+      <input ref={hidRef} type="date" value={toISO(value)||""} onChange={handleCalendar}
+        tabIndex={-1} style={{position:"absolute",opacity:0,width:1,height:1,pointerEvents:"none"}}/>
     </div>
   );
 }
 
-// SmartDateISO — stores value as YYYY-MM-DD (for fields that use ISO dates directly)
+// SmartDateISO — YYYY-MM-DD storage, same uncontrolled approach
 function SmartDateISO({value,onChange,style}){
   const toDD=v=>{if(!v||v.includes("."))return v||"";const p=v.split("-");return p.length===3?p[2]+"."+p[1]+"."+p[0]:v;};
   const toISO=v=>{if(!v||v.includes("-"))return v||"";const p=v.split(".");return p.length===3?p[2]+"-"+p[1].padStart(2,"0")+"-"+p[0].padStart(2,"0"):"";};
-  const hidRef=useRef(null);
-  const [disp,setDisp]=useState(toDD(value));
-  useEffect(()=>setDisp(toDD(value)),[value]);
-  const handleText=e=>{
+  const txtRef=useRef(null); const hidRef=useRef(null);
+  useEffect(()=>{
+    if(txtRef.current&&document.activeElement!==txtRef.current) txtRef.current.value=toDD(value);
+  },[value]);
+  const handleKey=e=>{
     let v=e.target.value.replace(/[^0-9.]/g,"");
     if(v.length===2&&!v.includes("."))v=v+".";
     if(v.length===5&&v.split(".").length===2)v=v+".";
-    setDisp(v);
-    const iso=toISO(v);
-    if(iso) onChange(iso);
+    e.target.value=v;
+  };
+  const handleBlur=e=>{
+    const iso=toISO(e.target.value);
+    if(iso&&iso!==value) onChange(iso);
+  };
+  const handleCalendar=e=>{
+    onChange(e.target.value);
+    if(txtRef.current) txtRef.current.value=toDD(e.target.value);
   };
   return(
     <div style={{display:"flex",alignItems:"center",position:"relative"}}>
-      <input type="text" inputMode="numeric" placeholder="DD.MM.YYYY"
-        value={disp}
-        onChange={handleText}
+      <input ref={txtRef} type="text" inputMode="numeric" placeholder="DD.MM.YYYY"
+        defaultValue={toDD(value)}
+        onInput={handleKey}
+        onBlur={handleBlur}
         style={{...iS,...(style||{}),borderRadius:"7px 0 0 7px",borderRight:"none"}}
       />
       <button type="button"
@@ -390,7 +408,7 @@ function SmartDateISO({value,onChange,style}){
         style={{padding:"7px 9px",border:"1px solid #e2e8f0",borderLeft:"none",borderRadius:"0 7px 7px 0",background:"#f8fafc",cursor:"pointer",fontSize:13,flexShrink:0}}>
         📅
       </button>
-      <input ref={hidRef} type="date" value={value||""} onChange={e=>onChange(e.target.value)}
+      <input ref={hidRef} type="date" value={value||""} onChange={handleCalendar}
         tabIndex={-1} style={{position:"absolute",opacity:0,width:1,height:1,pointerEvents:"none"}}/>
     </div>
   );
