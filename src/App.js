@@ -7105,7 +7105,7 @@ function InvoicingTab({buyers}){
     const seller=co||COMPANIES.devratan;
     const sealImg=co?null:SEAL_B64;
     // Compact sign block: ~28mm total — only add page if genuinely no space
-    if(y+28>287){doc.addPage();y=20;}
+    if(y+30>287){doc.addPage();y=52;}
     invNF(doc,false,8);
     y+=3;
     doc.text("For "+seller.name,M+RW-42,y); y+=1;
@@ -8105,8 +8105,8 @@ function VJRAInvoicingTab({buyers}){
     const amtLines=doc.splitTextToSize(amtW,RW);
     doc.text(amtLines,M,y); y+=amtLines.length*4.5+4;
 
-    // Bank details
-    if(y+30>282){doc.addPage();y=52;}
+    // Bank details + sign block — check if both fit on current page (need ~78mm)
+    if(y+78>287){doc.addPage();y=52;}
     doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.text("Bank Details:",M,y); y+=5;
     doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
       body:[
@@ -8117,10 +8117,10 @@ function VJRAInvoicingTab({buyers}){
         [{content:"IBAN",styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:RW*0.4}},{content:vjraBank.iban||"",styles:{fontStyle:"bold"}}],
         [{content:"SWIFT CODE",styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:RW*0.4}},{content:vjraBank.swift,styles:{fontStyle:"bold"}}],
       ],
-      styles:{fontSize:8,cellPadding:{top:2,bottom:2,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+      styles:{fontSize:7.5,cellPadding:{top:1.5,bottom:1.5,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
-    y=doc.lastAutoTable.finalY+5;
+    y=doc.lastAutoTable.finalY+4;
 
     y=vjraSignBlock(doc,M,y,RW);
     addVJRAFooter(doc);
@@ -8158,6 +8158,8 @@ function VJRAInvoicingTab({buyers}){
     doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.text("Container Details:",M,y); y+=3;
     y=vjraContainerTable(doc,M,y,RW); y+=2;
 
+    // Ensure sign block fits on current page
+    if(y+30>287){doc.addPage();y=52;}
     y=vjraSignBlock(doc,M,y,RW);
     addVJRAFooter(doc);
     await r2SavePDF(doc,"vjra_invoices/"+form.invoice_no.replace(/\//g,"-"),"PackingList.pdf");
