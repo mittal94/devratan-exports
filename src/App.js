@@ -4484,6 +4484,207 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
 
 
 
+
+function InwardRemittanceLetter({ships}){
+  const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
+  const n=v=>parseFloat(String(v||0).replace(/[$,]/g,""))||0;
+
+  const [f,setF]=useState({
+    date:today,
+    remitter:"",
+    cc_fcy:"",   // Cash Credit FCY amount — manual
+    epc_fcy:"",  // EPC/PCFC FCY amount — manual
+    rows:[
+      {advice_no:"",invoice_no:"",sb_no:"",fcy_amt:""},
+      {advice_no:"",invoice_no:"",sb_no:"",fcy_amt:""},
+    ],
+  });
+  const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+  const sfRow=(i,k,v)=>setF(p=>({...p,rows:p.rows.map((r,j)=>j===i?{...r,[k]:v}:r)}));
+  const addRow=()=>setF(p=>({...p,rows:[...p.rows,{advice_no:"",invoice_no:"",sb_no:"",fcy_amt:""}]}));
+  const delRow=i=>setF(p=>({...p,rows:p.rows.filter((_,j)=>j!==i)}));
+
+  // Auto-fill SB No from selected invoice
+  const getSBNo=invoiceNo=>{const s=ships.find(x=>x.invoice_no===invoiceNo);return s?.sb_no||s?.shipping_bill_no||"";};
+
+  // Auto-sum total from FCY amounts in rows
+  const totalFCY=f.rows.reduce((s,r)=>s+n(r.fcy_amt),0);
+  const totalStr=totalFCY>0?"USD "+totalFCY.toLocaleString("en-IN",{minimumFractionDigits:2}):"USD ___";
+
+  const exportPDF=()=>{
+    if(!f.remitter){alert("Please enter Remitter Name.");return;}
+    const JPDF=getPDF(); if(!JPDF) return;
+    const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    const M=20,RW=170;
+    const navy=[18,52,96],steel=[70,130,180],ltblue=[220,235,250],gold=[162,120,50],white=[255,255,255];
+    const seller=COMPANIES.devratan;
+    const NF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||9);doc.setTextColor(0,0,0);};
+
+    // ── Devratan letterhead ───────────────────────────────────────────────────
+    doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
+    try{if(LOGO_B64)doc.addImage(LOGO_B64,"PNG",10,3,38,38);}catch(e){}
+    doc.setDrawColor(...steel); doc.setLineWidth(0.4); doc.line(52,6,52,40);
+    doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+    doc.text(seller.name,57,13);
+    const nw=doc.getTextWidth(seller.name);
+    doc.setDrawColor(...gold); doc.setLineWidth(0.6); doc.line(57,14.5,57+nw,14.5);
+    doc.setFontSize(7); doc.setFont("helvetica","italic"); doc.setTextColor(...steel);
+    doc.text(seller.tagline||"",57,18.5);
+    doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(0,0,0);
+    doc.text(seller.address,57,23);
+    doc.text((seller.phone||"")+(seller.email?"  |  "+seller.email:""),57,27.5);
+    if(seller.gstin) doc.text(seller.gstin,57,32);
+    doc.setTextColor(0,0,0);
+
+    let y=52;
+
+    // Date
+    NF(false,9); doc.text("Date: "+f.date,M,y); y+=8;
+
+    // Address block
+    doc.text("To,",M,y); y+=5;
+    doc.text("THE ASST. GENERAL MANAGER,",M,y); y+=5;
+    doc.text("STATE BANK OF INDIA,",M,y); y+=5;
+    doc.text("SME KHEL PRASHAL BRANCH,",M,y); y+=5;
+    doc.text("Y.N. ROAD INDORE",M,y); y+=9;
+
+    // Subject
+    NF(true,9); doc.text("Sub: INWARD REMITTANCE - "+totalStr+" - "+seller.name.toUpperCase(),M,y,{maxWidth:RW}); y+=8;
+
+    NF(false,9); doc.text("Dear Sir,",M,y); y+=7;
+
+    const para="I/We request you to process the Payment of "+totalStr+" received by you in our favour from "+f.remitter.toUpperCase()+", as mentioned below:";
+    const paraLines=doc.splitTextToSize(para,RW);
+    doc.text(paraLines,M,y); y+=paraLines.length*4.5+7;
+
+    // Credit Proceeds table
+    NF(true,9); doc.text("Credit Proceeds to:",M,y); y+=4;
+    doc.autoTable({
+      startY:y, margin:{left:M,right:M}, tableWidth:RW,
+      head:[[
+        {content:"Account",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
+        {content:"Account No.",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
+        {content:"FCY Amount",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
+      ]],
+      body:[
+        ["Cash Credit Account","41289547389",f.cc_fcy||""],
+        ["EPC / PCFC Account","41269117338",f.epc_fcy||""],
+      ],
+      styles:{fontSize:8.5,cellPadding:{top:2.5,bottom:2.5,left:4,right:4},lineColor:[100,100,100],lineWidth:0.2},
+      headStyles:{fillColor:ltblue,textColor:navy,fontStyle:"bold"},
+      tableLineColor:[100,100,100],tableLineWidth:0.2,
+      columnStyles:{0:{cellWidth:RW*0.45},1:{cellWidth:RW*0.3},2:{cellWidth:RW*0.25,halign:"right"}},
+    });
+    y=doc.lastAutoTable.finalY+7;
+
+    // Bill reference table
+    NF(true,9); doc.text("Bill reference details:",M,y); y+=4;
+    const validRows=f.rows.filter(r=>r.invoice_no||r.advice_no||r.fcy_amt);
+    doc.autoTable({
+      startY:y, margin:{left:M,right:M}, tableWidth:RW,
+      head:[[
+        {content:"S.No",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy,cellWidth:12}},
+        {content:"Advice No.",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
+        {content:"Invoice No.",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
+        {content:"SB No.",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
+        {content:"FCY Amount",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
+      ]],
+      body:validRows.map((r,i)=>[
+        String(i+1),
+        r.advice_no||"",
+        r.invoice_no||"",
+        r.sb_no||"",
+        r.fcy_amt?"$ "+r.fcy_amt:"",
+      ]),
+      styles:{fontSize:8.5,cellPadding:{top:2.5,bottom:2.5,left:4,right:4},lineColor:[100,100,100],lineWidth:0.2},
+      headStyles:{fillColor:ltblue,textColor:navy,fontStyle:"bold"},
+      tableLineColor:[100,100,100],tableLineWidth:0.2,
+      columnStyles:{0:{cellWidth:12,halign:"center"},1:{cellWidth:RW*0.3},2:{cellWidth:RW*0.25},3:{cellWidth:RW*0.2},4:{halign:"right"}},
+    });
+    y=doc.lastAutoTable.finalY+7;
+
+    NF(false,9); doc.text("Fx retail deal copy has been attached.",M,y); y+=8;
+    doc.text("Kindly do the needful & oblige.",M,y); y+=9;
+    doc.text("Thanking you,",M,y); y+=8;
+
+    // Sign block
+    NF(true,9); doc.text("For "+seller.name.toUpperCase(),M,y); y+=18;
+    doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
+    doc.line(M,y,M+60,y); y+=4;
+    NF(false,8); doc.text("Authorized Signatory",M,y);
+
+    // Footer
+    doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
+    doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...white);
+    doc.text(seller.name+"  |  "+seller.phone+"  |  "+seller.email,105,293,{align:"center"});
+
+    doc.save("Inward_Remittance_"+f.date.replace(/\./g,"-")+".pdf");
+  };
+
+  // Invoice dropdown options
+  const invoiceOptions=ships.map(s=>s.invoice_no).filter(Boolean).sort().reverse();
+
+  return(
+    <div style={{background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+      <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>📥 Inward Remittance Letter</h3>
+      <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>Letter to SBI for processing inward remittance against export bill collection</p>
+
+      <SectionHeader title="Letter Details"/>
+      <FRow label="Date" required><SmartDate value={f.date} onChange={v=>sf("date",v)}/></FRow>
+      <FRow label="Remitter Name" required><FInput value={f.remitter} onChange={v=>sf("remitter",v)} placeholder="e.g. AL RABIAH TRADING CO. L.L.C."/></FRow>
+
+      <SectionHeader title="Credit Proceeds (FCY Amounts)"/>
+      <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"10px 14px",marginBottom:10,fontSize:12,color:"#0369a1"}}>
+        Account numbers are fixed: Cash Credit <strong>41289547389</strong> · EPC/PCFC <strong>41269117338</strong>
+      </div>
+      <FRow label="Cash Credit A/c FCY Amount"><FInput value={f.cc_fcy} onChange={v=>sf("cc_fcy",v)} placeholder="e.g. 25227.28"/></FRow>
+      <FRow label="EPC/PCFC A/c FCY Amount"><FInput value={f.epc_fcy} onChange={v=>sf("epc_fcy",v)} placeholder="e.g. 0"/></FRow>
+
+      <SectionHeader title="Bill Reference Details"/>
+      <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#15803d"}}>
+        Total FCY (auto-sum): <strong>{totalStr}</strong> — used in subject line automatically
+      </div>
+
+      {f.rows.map((row,i)=>(
+        <div key={i} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"12px 14px",marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontWeight:700,color:"#1e3a5f",fontSize:12}}>Row {i+1}</span>
+            {f.rows.length>1&&<button onClick={()=>delRow(i)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontSize:12,fontWeight:700}}>✕ Remove</button>}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <FRow label="Advice No."><FInput value={row.advice_no} onChange={v=>sfRow(i,"advice_no",v)} placeholder="e.g. 3034026DC0B00919"/></FRow>
+            <FRow label="Invoice No.">
+              <select value={row.invoice_no}
+                onChange={e=>{
+                  const inv=e.target.value;
+                  const sb=getSBNo(inv);
+                  setF(p=>({...p,rows:p.rows.map((r,j)=>j===i?{...r,invoice_no:inv,sb_no:sb||r.sb_no}:r)}));
+                }}
+                style={{...iS,fontSize:12}}>
+                <option value="">— Select Invoice —</option>
+                {invoiceOptions.map(inv=><option key={inv} value={inv}>{inv}</option>)}
+              </select>
+            </FRow>
+            <FRow label="SB No. (auto-filled)"><FInput value={row.sb_no} onChange={v=>sfRow(i,"sb_no",v)} placeholder="Auto-filled from invoice"/></FRow>
+            <FRow label="FCY Amount"><FInput value={row.fcy_amt} onChange={v=>sfRow(i,"fcy_amt",v)} placeholder="e.g. 12690"/></FRow>
+          </div>
+        </div>
+      ))}
+
+      <button onClick={addRow} style={{background:"#f0fdf4",color:"#15803d",border:"1px dashed #86efac",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:12,fontWeight:600,width:"100%",marginBottom:16}}>
+        + Add Row
+      </button>
+
+      <div style={{display:"flex",justifyContent:"flex-end"}}>
+        <button onClick={exportPDF}
+          style={{background:"linear-gradient(135deg,#1e3a5f,#2563eb)",color:"#fff",border:"none",borderRadius:8,padding:"9px 22px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+          📄 Export PDF
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BankingFormsTab({ships, buyers, bcs}){
   const FORMS = [
     {id:"advance",  label:"SBI Advance Payment Form",         icon:"💵"},
@@ -4491,6 +4692,7 @@ function BankingFormsTab({ships, buyers, bcs}){
     {id:"a2",       label:"SBI Form A-2",                     icon:"📋"},
     {id:"epc",      label:"EPC Release Request Letter",       icon:"📋"},
     {id:"ibl",      label:"IBL Collection Form",              icon:"🏦"},
+    {id:"inward",   label:"Inward Remittance Letter",          icon:"📥"},
   ];
   const [activeForm, setActiveForm] = useState("advance");
 
@@ -4520,6 +4722,7 @@ function BankingFormsTab({ships, buyers, bcs}){
       {activeForm==="a2"       && <FormA2 ships={ships}/>}
       {activeForm==="epc"      && <EPCForm ships={ships}/>}
       {activeForm==="ibl"      && <IBLForm ships={ships} buyers={buyers}/>}
+      {activeForm==="inward"   && <InwardRemittanceLetter ships={ships}/>}
     </div>
   );
 }
