@@ -4492,6 +4492,7 @@ function InwardRemittanceLetter({ships}){
   const [f,setF]=useState({
     date:today,
     remitter:"",
+    ccy:"USD",   // single currency for whole letter
     cc_fcy:"",   // Cash Credit FCY amount — manual
     epc_fcy:"",  // EPC/PCFC FCY amount — manual
     rows:[
@@ -4509,7 +4510,7 @@ function InwardRemittanceLetter({ships}){
 
   // Auto-sum total from FCY amounts in rows
   const totalFCY=f.rows.reduce((s,r)=>s+n(r.fcy_amt),0);
-  const totalStr=totalFCY>0?"USD "+totalFCY.toLocaleString("en-IN",{minimumFractionDigits:2}):"USD ___";
+  const totalStr=totalFCY>0?f.ccy+" "+totalFCY.toLocaleString("en-IN",{minimumFractionDigits:2}):f.ccy+" ___";
 
   const exportPDF=()=>{
     if(!f.remitter){alert("Please enter Remitter Name.");return;}
@@ -4564,11 +4565,11 @@ function InwardRemittanceLetter({ships}){
       head:[[
         {content:"Account",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
         {content:"Account No.",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
-        {content:"FCY Amount",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
+        {content:"FCY Amount",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy,halign:"right"}},
       ]],
       body:[
-        ["Cash Credit Account","41289547389",f.cc_fcy||""],
-        ["EPC / PCFC Account","41269117338",f.epc_fcy||""],
+        [{content:"Cash Credit Account"},{content:"41289547389"},{content:f.cc_fcy?f.ccy+" "+Number(f.cc_fcy).toLocaleString("en-IN",{minimumFractionDigits:2}):"",styles:{halign:"right"}}],
+        [{content:"EPC / PCFC Account"},{content:"41269117338"},{content:f.epc_fcy?f.ccy+" "+Number(f.epc_fcy).toLocaleString("en-IN",{minimumFractionDigits:2}):"",styles:{halign:"right"}}],
       ],
       styles:{fontSize:8.5,cellPadding:{top:2.5,bottom:2.5,left:4,right:4},lineColor:[100,100,100],lineWidth:0.2},
       headStyles:{fillColor:ltblue,textColor:navy,fontStyle:"bold"},
@@ -4590,16 +4591,16 @@ function InwardRemittanceLetter({ships}){
         {content:"FCY Amount",styles:{fontStyle:"bold",fillColor:ltblue,textColor:navy}},
       ]],
       body:validRows.map((r,i)=>[
-        String(i+1),
-        r.advice_no||"",
-        r.invoice_no||"",
-        r.sb_no||"",
-        r.fcy_amt?"$ "+r.fcy_amt:"",
+        {content:String(i+1),styles:{halign:"center"}},
+        {content:r.advice_no||""},
+        {content:r.invoice_no||""},
+        {content:r.sb_no||""},
+        {content:r.fcy_amt?f.ccy+" "+Number(r.fcy_amt).toLocaleString("en-IN",{minimumFractionDigits:2}):"",styles:{halign:"right"}},
       ]),
       styles:{fontSize:8.5,cellPadding:{top:2.5,bottom:2.5,left:4,right:4},lineColor:[100,100,100],lineWidth:0.2},
       headStyles:{fillColor:ltblue,textColor:navy,fontStyle:"bold"},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
-      columnStyles:{0:{cellWidth:12,halign:"center"},1:{cellWidth:RW*0.3},2:{cellWidth:RW*0.25},3:{cellWidth:RW*0.2},4:{halign:"right"}},
+      columnStyles:{0:{cellWidth:12,halign:"center"},1:{cellWidth:RW*0.3},2:{cellWidth:RW*0.25},3:{cellWidth:RW*0.2},4:{cellWidth:RW*0.25-12,halign:"right"}},
     });
     y=doc.lastAutoTable.finalY+7;
 
@@ -4633,12 +4634,20 @@ function InwardRemittanceLetter({ships}){
       <FRow label="Date" required><SmartDate value={f.date} onChange={v=>sf("date",v)}/></FRow>
       <FRow label="Remitter Name" required><FInput value={f.remitter} onChange={v=>sf("remitter",v)} placeholder="e.g. AL RABIAH TRADING CO. L.L.C."/></FRow>
 
-      <SectionHeader title="Credit Proceeds (FCY Amounts)"/>
+      <SectionHeader title="Currency & Credit Proceeds"/>
+      <FRow label="Currency (applies to all amounts)">
+        <select value={f.ccy} onChange={e=>sf("ccy",e.target.value)} style={{...iS,fontSize:13,fontWeight:700}}>
+          <option value="USD">USD — US Dollar</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="GBP">GBP — British Pound</option>
+          <option value="AED">AED — UAE Dirham</option>
+        </select>
+      </FRow>
       <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"10px 14px",marginBottom:10,fontSize:12,color:"#0369a1"}}>
         Account numbers are fixed: Cash Credit <strong>41289547389</strong> · EPC/PCFC <strong>41269117338</strong>
       </div>
-      <FRow label="Cash Credit A/c FCY Amount"><FInput value={f.cc_fcy} onChange={v=>sf("cc_fcy",v)} placeholder="e.g. 25227.28"/></FRow>
-      <FRow label="EPC/PCFC A/c FCY Amount"><FInput value={f.epc_fcy} onChange={v=>sf("epc_fcy",v)} placeholder="e.g. 0"/></FRow>
+      <FRow label={f.ccy+" — Cash Credit A/c Amount"}><FInput value={f.cc_fcy} onChange={v=>sf("cc_fcy",v)} placeholder="e.g. 25227.28"/></FRow>
+      <FRow label={f.ccy+" — EPC/PCFC A/c Amount"}><FInput value={f.epc_fcy} onChange={v=>sf("epc_fcy",v)} placeholder="e.g. 0"/></FRow>
 
       <SectionHeader title="Bill Reference Details"/>
       <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#15803d"}}>
@@ -4666,7 +4675,7 @@ function InwardRemittanceLetter({ships}){
               </select>
             </FRow>
             <FRow label="SB No. (auto-filled)"><FInput value={row.sb_no} onChange={v=>sfRow(i,"sb_no",v)} placeholder="Auto-filled from invoice"/></FRow>
-            <FRow label="FCY Amount"><FInput value={row.fcy_amt} onChange={v=>sfRow(i,"fcy_amt",v)} placeholder="e.g. 12690"/></FRow>
+            <FRow label={f.ccy+" Amount"}><FInput value={row.fcy_amt} onChange={v=>sfRow(i,"fcy_amt",v)} placeholder="e.g. 12690"/></FRow>
           </div>
         </div>
       ))}
