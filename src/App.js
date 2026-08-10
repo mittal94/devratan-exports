@@ -4509,7 +4509,7 @@ function InwardRemittanceLetter({ships}){
   const getSBNo=invoiceNo=>{const s=ships.find(x=>x.invoice_no===invoiceNo);return s?.sb_no||s?.shipping_bill_no||"";};
 
   // Auto-sum total from FCY amounts in rows
-  const totalFCY=f.rows.reduce((s,r)=>s+n(r.fcy_amt),0);
+  const totalFCY=n(f.cc_fcy)+n(f.epc_fcy);
   const totalStr=totalFCY>0?f.ccy+" "+totalFCY.toLocaleString("en-IN",{minimumFractionDigits:2}):f.ccy+" ___";
 
   const exportPDF=()=>{
