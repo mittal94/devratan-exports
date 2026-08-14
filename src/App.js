@@ -5494,16 +5494,19 @@ function ExportBCForm({ships, buyers}){
       y+=rh;
     }
 
-    // Row f: Advance Remittance Ref — dynamic height
+    // Row f: Advance Remittance Ref — dynamic height, value wraps inside cell
     {
       const lbl="Advance Remittance Ref. No. / e FIRC No. (If applicable)";
       const lls=doc.splitTextToSize(lbl,c1-2);
-      const rh=Math.max(7,lls.length*4+3);
+      const valW=c3-4; // width available for the value
+      NF(false,8);
+      const vls=doc.splitTextToSize(f.adv_ref_no||"",valW);
+      const rh=Math.max(7,Math.max(lls.length,vls.length)*4+3);
       RECT(M,y,c0,rh); RECT(M+c0,y,c1,rh); RECT(M+c0+c1,y,c2,rh); RECT(M+c0+c1+c2,y,c3,rh);
-      doc.text("f.",M+1,y+4.5);
+      NF(false,8.5); doc.text("f.",M+1,y+4.5);
       NF(true,8); doc.text(lls,M+c0+1,y+4);
       NF(false,8.5); doc.text(":",M+c0+c1+1,y+4.5);
-      doc.text(f.adv_ref_no||"",M+c0+c1+c2+2,y+4.5);
+      NF(false,8); doc.text(vls,M+c0+c1+c2+2,y+4);
       y+=rh;
     }
     y+=3;
