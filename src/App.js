@@ -4091,7 +4091,45 @@ function exportContractPDF(contract, buyer, consignee) {
   // ── SIGNATURE BLOCK — continues from y, new page only if not enough space ──
   if(y+75>287){ doc.addPage(); addPageDecor(); y=52; }
   y+=4;
-    drawSigBox(M, "SELLER", seller.name);
+  doc.setDrawColor(...gold); doc.setLineWidth(0.8);
+  doc.line(M, y, M + pw, y);
+  doc.setDrawColor(...lgold); doc.setLineWidth(0.3);
+  doc.line(M, y + 1.5, M + pw, y + 1.5);
+  y += 6;
+
+  const sigW = pw / 2 - 4;
+  const drawSigBox = (x, label, name) => {
+    doc.setFillColor(255, 255, 255); doc.setDrawColor(...gold); doc.setLineWidth(0.7);
+    doc.roundedRect(x, y, sigW, 58, 2, 2, "FD");
+    doc.setFillColor(...navy);
+    doc.roundedRect(x, y, sigW, 9, 2, 2, "F");
+    doc.rect(x, y + 5, sigW, 4, "F");
+    doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(255, 255, 255);
+    doc.text(label, x + sigW / 2, y + 6.5, { align: "center" });
+    doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
+    const nameLines = doc.splitTextToSize(name, sigW - 10);
+    let ny = y + 16;
+    nameLines.forEach(nl => {
+      const nw = doc.getTextWidth(nl);
+      const nx2 = x + sigW / 2;
+      doc.text(nl, nx2, ny, { align: "center" });
+      doc.setDrawColor(...navy); doc.setLineWidth(0.45);
+      doc.line(nx2 - nw / 2, ny + 1.5, nx2 + nw / 2, ny + 1.5);
+      ny += 5.5;
+    });
+    if(label === "SELLER"){
+      const sealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
+      const sealType = (seller === COMPANIES.vjra) ? "PNG" : "JPEG";
+      const sealY = y + 26;
+      try{ if(sealImg) doc.addImage(sealImg, sealType, x + sigW/2 - 16, sealY, 32, 20); }catch(e){}
+    }
+    doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
+    doc.line(x + 8, y + 49, x + sigW - 8, y + 49);
+    doc.setFont(undefined, "normal"); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
+    doc.text("Authorized Signature & Stamp", x + sigW / 2, y + 55, { align: "center" });
+  };
+
+  drawSigBox(M, "SELLER", seller.name);
   drawSigBox(M + sigW + 8, "BUYER", contract.buyer_name || "");
 
   // ── WATERMARK + FOOTER on every page (watermark drawn last so it overlays tables) ─
