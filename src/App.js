@@ -3943,54 +3943,166 @@ function exportContractPDF(contract, buyer, consignee) {
     y += padV;
   }
 
-  // ── TERMS & CONDITIONS ────────────────────────────────────────────────────
-  y = sectionHead("Terms & Conditions:", y);
+  // ── TERMS & CONDITIONS — 2-column layout on new page(s) ────────────────────
+  doc.addPage();
 
-  const tc = [
-    "All customs duties and formalities are for Seller's account at loading port.",
-    "The Documents will be delivered through Sellers Bank to the Buyers Bank or telex release depends on buyer choice.",
-    "Bank charges at Seller's bank paid at the Seller's expense, at Buyer's bank and correspondent bank - at the Buyer's expense.",
-    "The Seller shall deliver Goods in FCL lot on basis of " + baseTerms + ", according to INCOTERMS 2020.",
-    "None of the Parties is entitled to transfer its rights and obligations under the present Contract to a third party without the other Party's previous written consent.",
-    "All amendments and additions to the present Contract are valid only if they are made out in writing and signed by both Parties. All amendments to the present Contract are integral part of it.",
-    "The present Contract is signed in two originals in English, one for each Party.",
-    "The Contract will come in force at the moment of its signing by the Parties and continues until the Parties fully perform their obligations under the present Contract.",
-    "The duration of the contract is 3 months after duly signing of the contract by both parties.",
-    "Weight & Quality will be finalized at loading port only by any third-party surveyor & accepted as final report.",
-    "If buyer fails to make payment of the documents as per the contract, the seller reserves the right to protect his interest and accordingly this contract acts as implied no objection certificate/confirmation from buyer to seller to transfer/resell to alternate buyer. This clause therefore serves as valid no objection certificate to customs or any statutory authorities to clear the cargo. Under these circumstances seller can unconditionally choose to cancel the contract and withdraw or re-route the documents and sell the cargo as per seller choice.",
-    "This facsimile/email/whatsapp transmission of the signed contract shall be treated as valid and legal.",
-    "Payment: " + (contract.payment_condition || ""),
+  // Draw full contract-style header on T&C page(s)
+  const drawTCHeader = () => {
+    doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
+    if(seller===COMPANIES.vjra){doc.setFillColor(255,255,255);doc.rect(0,0,53,46,"F");}
+    const tcLogo=(seller===COMPANIES.vjra)?VJRA_LOGO_B64_PNG:LOGO_B64;
+    try{if(tcLogo)doc.addImage(tcLogo,"PNG",7,4,40,38);}catch(e){}
+    doc.setDrawColor(...steel);doc.setLineWidth(0.4);doc.line(52,6,52,40);
+    doc.setFontSize(12);doc.setFont(undefined,"bold");doc.setTextColor(...navy);
+    doc.text(seller.name,57,13);
+    const snW=doc.getTextWidth(seller.name);
+    doc.setDrawColor(...gold);doc.setLineWidth(0.6);doc.line(57,14.5,57+snW,14.5);
+    doc.setFontSize(7);doc.setFont(undefined,"italic");doc.setTextColor(...steel);
+    doc.text(seller.tagline||"",57,18.5);
+    doc.setFont(undefined,"normal");doc.setTextColor(...navy);doc.setFontSize(6.5);
+    doc.text(seller.address,57,23);
+    doc.text(seller.phone+(seller.email?"  |  "+seller.email:""),57,27.5);
+    if(seller.gstin)doc.text(seller.gstin,57,32);
+    // Right: TERMS & CONDITIONS title
+    doc.setFontSize(13);doc.setFont(undefined,"bold");doc.setTextColor(...navy);
+    doc.text("TERMS & CONDITIONS",210-M,13,{align:"right"});
+    const ttW=doc.getTextWidth("TERMS & CONDITIONS");
+    doc.setDrawColor(...gold);doc.setLineWidth(0.7);doc.line(210-M-ttW,15,210-M,15);
+    // Page number
+    const tcPgNum=doc.getNumberOfPages();
+    doc.setFontSize(7);doc.setFont(undefined,"normal");doc.setTextColor(...steel);
+    doc.text("Page "+tcPgNum,210-M,21,{align:"right"});
+    doc.setTextColor(0,0,0);
+  };
+  drawTCHeader();
+
+  // Clause data — FOB clause 40 or CIF clauses 40+41 based on delivery terms
+  const isCIF=(contract.delivery_terms||"").toUpperCase().includes("CIF");
+  const clause40FOB={h:"40. FOB – Vessel Nomination & Carriage",b:"The Buyer shall nominate the vessel/carrier and provide complete and accurate shipping instructions within the agreed shipment period. Seller shall deliver the Goods on board the Buyer-nominated vessel at the named port of shipment on FOB basis in accordance with Incoterms® 2020. Risk transfers to Buyer when the Goods are on board. Buyer shall arrange and pay for main carriage and cargo insurance. If Buyer fails to provide timely nomination or instructions, Seller may extend the shipment period, recover resulting costs or cancel the affected unperformed portion without liability."};
+  const clause40CIF={h:"40. CIF – Freight & Insurance",b:"The Seller shall deliver the Goods on board the vessel at the named port of shipment on CIF basis in accordance with Incoterms® 2020 and shall contract and pay for carriage to the named destination port. Risk of loss of or damage to the Goods shall transfer to Buyer when the Goods are on board the vessel at the shipment port. Seller shall arrange cargo insurance in accordance with the minimum insurance requirement under CIF Incoterms® 2020 unless a higher level of cover is expressly agreed in writing. Any additional or enhanced insurance coverage requested by Buyer shall be at Buyer’s additional cost."};
+  const clause41CIF={h:"41. CIF – Carrier & Buyer Instructions",b:"Seller shall arrange main carriage through a shipping line/carrier of its choice on usual commercial terms to the named destination port. Buyer shall provide complete and accurate consignee, notify-party, destination and documentary details within the time requested by Seller. Any delay, amendment charge or other expense arising from late, incomplete or incorrect information supplied by Buyer shall be borne by Buyer."};
+
+  const allClauses=[
+    {h:"1. Export Customs & Formalities",b:"All export customs duties and export formalities in India shall be for the Seller’s account. All import customs duties, taxes, levies and import formalities in the destination country shall be solely for the Buyer’s account."},
+    {h:"2. Contract Formation",b:"This Contract shall become operational upon execution by both Parties and receipt of the agreed advance payment in cleared funds. Any delay attributable to Buyer shall automatically extend Seller’s shipment period."},
+    {h:"3. Payment & Cleared Funds",b:"Payment shall be made strictly as per payment terms without set-off or deduction. Seller must receive full invoiced amount in cleared and freely usable funds. A SWIFT copy shall not constitute payment until funds are actually credited to Seller."},
+    {h:"4. Advance Payment Protection",b:"Any advance payment constitutes part-payment and commercial security. If cancelled due to Buyer default, Seller may apply the advance against recoverable losses including commodity price difference, packing, processing, storage, handling, freight, documentation, banking and mitigation costs."},
+    {h:"5. Payment Default & Seller Remedies",b:"Time for payment is of the essence. If Buyer fails to pay, Seller may suspend production/shipment, withhold documents, cancel unshipped quantity, terminate the Contract, store/divert/resell goods and recover resulting losses."},
+    {h:"6. Title, Risk & Document Control",b:"Title to Goods shall not pass to Buyer until full payment is received. Risk shall transfer per agreed Incoterm. Seller shall retain control of negotiable shipping documents until applicable payment conditions are fulfilled."},
+    {h:"7. Shipment Period & Carrier Schedules",b:"Shipment is subject to timely payment, commodity availability, containers/vessels, carrier acceptance and events outside Seller’s control. Vessel schedules and ETAs are estimates only. Buyer-side delays shall extend the shipment period accordingly."},
+    {h:"8. Buyer Shipping & Documentary Instructions",b:"Buyer shall provide complete and accurate consignee, notify-party, destination, B/L instructions and documentary requirements within the deadline requested. Buyer bears all costs and delays resulting from late, incomplete or incorrect instructions."},
+    {h:"9. Documents & Additional Requirements",b:"Seller shall provide only the documents expressly specified in the Contract. Any additional document not listed at Contract date shall be outside Seller’s obligation unless expressly agreed in writing at Buyer’s additional cost."},
+    {h:"10. Import Permits & Destination Compliance",b:"Buyer is solely responsible for destination-country requirements including import licences, product registration, quota, customs clearance, food/import permits and local regulatory approvals. Buyer’s inability to import does not excuse payment obligations already accrued."},
+    {h:"11. Weight, Quality & Loading-Port Finality",b:"Unless otherwise agreed in writing, quality, quantity and weight shall be determined at the port of loading. Where an independent surveyor is appointed, its certificate at loading shall be final and binding. Natural variations within contractual specification shall not constitute breach."},
+    {h:"12. Agricultural Commodity Condition",b:"Buyer acknowledges that rice is a natural agricultural commodity. Reasonable variations in grain colour, appearance, dimensions or moisture that remain within the agreed contractual specification and recognized testing tolerances shall not constitute non-conformity."},
+    {h:"13. Claims Procedure",b:"Buyer shall inspect Goods promptly upon arrival. Any claim for apparent shortage or damage shall be notified in writing within 3 business days after discharge. Any quality claim shall be notified within 7 calendar days, with survey report, photographs, samples and calculation of alleged loss."},
+    {h:"14. No Unilateral Rejection",b:"Buyer shall not reject the entire shipment for a minor or commercially insignificant deviation. Where a proven non-conformity is capable of reasonable commercial adjustment, the Parties shall first consider a price allowance. Buyer shall preserve affected Goods and mitigate loss."},
+    {h:"15. Transit Damage",b:"Transit loss or damage occurring after contractual transfer of risk shall be for the risk-bearing Party and/or cargo insurer per the agreed Incoterm and applicable insurance."},
+    {h:"16. Demurrage, Detention, Storage & Destination Costs",b:"All demurrage, detention, storage, port charges and similar expenses caused by Buyer’s delayed payment, delayed clearance, delayed documents/instructions or refusal to take delivery shall be for Buyer’s account. Buyer shall reimburse Seller immediately upon demand."},
+    {h:"17. Resale, Diversion & Mitigation After Default",b:"Following Buyer default, Seller may take commercially reasonable measures including resale at prevailing market price, diversion, redirection, return, warehousing, re-documentation or change of consignee. Buyer gives advance consent to such measures. Net resale proceeds shall be credited against Seller’s recoverable loss."},
+    {h:"18. No Set-Off / Separate Transactions",b:"Each Contract, shipment and invoice shall constitute a separate commercial transaction. Buyer shall not withhold payment under this Contract because of an alleged claim arising from another shipment, invoice or contract. No set-off or cross-contract deduction is permitted except where required by a final binding award or mandatory law."},
+    {h:"19. War, Sanctions & Geopolitical Risk",b:"Seller shall not be required to perform any act that would expose Seller, its bank, supplier, carrier or insurer to violation of applicable sanctions, export controls or banking restrictions. Seller may suspend, reroute or terminate affected performance where destination becomes restricted or performance becomes impracticable due to such events."},
+    {h:"20. Change in Law / Export Restrictions",b:"If after Contract date any governmental authority prohibits or restricts export, imposes a minimum export price, export duty/tax or otherwise materially increases the legal cost or prevents performance, Seller may adjust affected performance, suspend shipment, request reimbursement of incremental charges or terminate the affected portion if performance becomes unlawful."},
+    {h:"21. Banking & Compliance Events",b:"Seller shall not be in default because Buyer’s payment is blocked, correspondent banking is unavailable, or Seller’s bank refuses a transaction for compliance reasons. Buyer remains responsible for arranging a lawful payment method acceptable to Seller."},
+    {h:"22. Force Majeure",b:"Neither Party shall be liable for failure or delay caused by circumstances beyond reasonable control, including war, invasion, terrorism, blockade, sanctions, governmental restriction, port/border closure, extraordinary vessel/container shortage, natural disaster, epidemic, strike or civil disorder. If the event continues for more than 60 days, Seller may terminate the affected unperformed portion by written notice."},
+    {h:"23. War Risk & Extraordinary Charges",b:"Notwithstanding the agreed Incoterm, any additional or extraordinary charges arising after Contract date due to war, hostilities, geopolitical tensions, blockade, route deviation or sanctions — including War Risk Surcharge (WRS), Emergency Risk Surcharge (ERS), additional freight, diversion charges, additional insurance premium or extraordinary charges — shall be borne by Buyer, payable immediately upon demand and over and above the agreed Contract price."},
+    {h:"24. Private Label / Buyer Artwork",b:"Where Buyer-specific or private-label packing is involved, Buyer shall approve artwork, labels and markings in writing before printing/production. Buyer warrants that materials supplied by Buyer may lawfully be used and shall indemnify Seller against third-party intellectual-property claims arising from such materials."},
+    {h:"25. Buyer Indemnity",b:"Buyer shall indemnify and hold Seller harmless against losses, claims, penalties and reasonable costs arising from Buyer’s import violations, unauthorized artwork/trademark instructions, inaccurate shipping information, consignee/importer failure or Buyer’s breach."},
+    {h:"26. Taxes, Duties & Charges",b:"Taxes, duties, port charges and customs expenses shall be allocated according to the agreed Incoterm. Destination-side taxes, duties and charges are for Buyer unless expressly included in the agreed price."},
+    {h:"27. Limitation of Seller’s Liability",b:"To the maximum extent permitted by applicable law, Seller shall not be liable for indirect, consequential, exemplary or special loss. Seller’s aggregate liability arising from a particular shipment shall not exceed the invoice value of the portion of Goods giving rise to the proven claim."},
+    {h:"28. Notices & Electronic Communications",b:"Notices and contractual communications may be transmitted through designated company email addresses, authorized business WhatsApp numbers, electronic-signature platform and/or courier. Electronic copies of executed documents may constitute valid evidence of agreement."},
+    {h:"29. Electronic Signatures & Document Integrity",b:"Electronic execution, reliable electronic signatures and counterparts may be used to the extent permitted by applicable law. Seller’s signature/stamp is valid only in connection with the complete Contract bearing the corresponding Contract Number."},
+    {h:"30. Authority to Sign",b:"Each signatory represents and warrants that he/she is duly authorized to execute this Contract and bind the respective Party."},
+    {h:"31. Assignment",b:"Buyer may not assign, transfer or novate its rights or obligations without Seller’s prior written consent. Seller may assign receivables or payment rights to its bank, insurer or financing institution upon written notice where required."},
+    {h:"32. No Waiver",b:"Failure or delay by Seller in exercising any right or remedy shall not constitute waiver. Acceptance of late or partial payment shall not waive Seller’s rights regarding existing or subsequent defaults unless Seller expressly confirms such waiver in writing."},
+    {h:"33. Amendments",b:"No amendment, modification or addition shall be binding unless recorded in writing and accepted by authorized representatives of both Parties."},
+    {h:"34. Entire Agreement & Precedence",b:"This Contract constitutes the entire agreement. Order of precedence: (1) signed Special Conditions/Addendum; (2) main Contract commercial terms; (3) these General Terms & Conditions; (4) product/packing schedules; (5) other referenced documents."},
+    {h:"35. Severability",b:"If any provision is held invalid or unenforceable, it shall be severed to the minimum extent necessary and the remainder of the Contract shall continue in full force and effect."},
+    {h:"36. Continuing Obligations",b:"Termination or completion of this Contract shall not extinguish rights and obligations that by their nature survive, including outstanding payment, loss reconciliation, indemnities, claims, limitation of liability and dispute resolution."},
+    {h:"37. Buyer Acknowledgement",b:"By signing this Contract, Buyer confirms that it has read and understood the complete Contract, accepts the payment, shipment, default, force-majeure, claims and dispute provisions, and confirms that the signatory has authority to bind Buyer."},
+    {h:"38. Governing Law",b:"This Contract shall be governed by and construed in accordance with the laws of India, without regard to conflict-of-law principles."},
+    {h:"39. Dispute Resolution & Arbitration",b:"The Parties shall first attempt to resolve any dispute through amicable negotiations. If not resolved within 30 days, it shall be settled by arbitration in Indore, Madhya Pradesh, India, under the Arbitration and Conciliation Act, 1996. The seat of arbitration shall be Indore. The arbitral award shall be final and binding."},
+    isCIF?clause40CIF:clause40FOB,
+    ...(isCIF?[clause41CIF]:[{h:"41. Signatures",b:"The Parties confirm that they have read, understood and accepted this Contract in full."}]),
   ];
-  if (contract.war_risk_clause !== false) {
-    tc.splice(11, 0, "WAR RISK & EXTRAORDINARY CHARGES (IMPORTANT): Notwithstanding the agreed Incoterms (including " + baseTerms + "), any increase or additional charges arising after the date of contract due to war, hostilities, geopolitical tensions, sanctions, route deviations, or similar circumstances - including but not limited to War Risk Surcharge (WRS), Emergency Risk Surcharge (ERS), additional insurance premium, port congestion surcharge, or any unforeseen charges imposed by shipping lines, carriers, port authorities, or insurers - shall be borne by the Buyer. These charges shall be payable by the Buyer immediately upon demand and shall be over and above the agreed contract price.");
+
+  // Draw 2-column T&C layout
+  {
+    const cW=(pw-4)/2; // each column width
+    const colX=[M, M+cW+4]; // left col x, right col x
+    const pageH=287; const topY=50; const botY=pageH;
+    let colIdx=0; // 0=left, 1=right
+    let cy=topY; // current y in active column
+
+    const tcNF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz);doc.setTextColor(0,0,0);};
+    const lineH=3.5; // line height for 6pt text
+    const clauseGap=2; // gap between clauses
+
+    // Draw vertical divider between columns
+    const drawColDivider=()=>{
+      doc.setDrawColor(192,212,236); doc.setLineWidth(0.3);
+      doc.line(M+cW+2,topY,M+cW+2,botY);
+    };
+    drawColDivider();
+
+    for(const cl of allClauses){
+      // Measure heading
+      tcNF(true,6);
+      const hLines=doc.splitTextToSize(cl.h,cW-3);
+      const hH=hLines.length*lineH;
+      // Measure body
+      tcNF(false,6);
+      const bLines=doc.splitTextToSize(cl.b,cW-3);
+      const bH=bLines.length*lineH;
+      const totalH=hH+bH+clauseGap+1;
+
+      // Check if fits in current column
+      if(cy+totalH>botY){
+        if(colIdx===0){
+          // Move to right column
+          colIdx=1; cy=topY;
+        } else {
+          // Start new page
+          addPageDecor();
+          doc.addPage();
+          drawTCHeader();
+          drawColDivider();
+          colIdx=0; cy=topY;
+        }
+      }
+
+      const cx=colX[colIdx];
+      // Draw heading
+      tcNF(true,6);
+      doc.setTextColor(18,52,96);
+      doc.text(hLines,cx+1,cy+lineH);
+      cy+=hH;
+      // Draw body
+      tcNF(false,6);
+      doc.setTextColor(0,0,0);
+      doc.text(bLines,cx+1,cy+lineH);
+      cy+=bH+clauseGap+1;
+    }
   }
-  tc.forEach(clause => { y = addClause(clause, y); });
 
-  // ── FORCE MAJEURE ─────────────────────────────────────────────────────────
-  y = sectionHead("Force Majeure:", y);
-  [
-    "The parties have agreed, that in case of force majeure circumstances (actions of a force majeure, which do not depend on will of the Parties), namely: wars, military actions, blockade, embargo, other international sanctions, currency restrictions, other actions of the states, that make impossible performance by the Parties of their obligations, fires, floods, other act of nature or seasonal natural phenomena, in particular such as freezing of the sea, straits, ports etc., closing of ways, straits, channels, crossings, the Parties are released from performance of their obligations during the time when the specified circumstances are in action.",
-    "In case if action of the specified circumstances lasts more than 30 days, each of the Parties has the right to cancel the present Contract and does not bear the responsibility for such cancellation provided that it will notify on it other Party not later than 15 days before cancellation.",
-    "The sufficient proof of action of force majeure circumstances is the document given by Commercial and industrial chamber or other representative on distribution of such documents by a state body.",
-  ].forEach(clause => { y = addClause(clause, y); });
-
-  // ── CONDITION OF GOODS AT DESTINATION ────────────────────────────────────
-  y = sectionHead("Condition of Goods at Destination:", y);
-  [
-    "The Shipper shall not be held liable for any moisture damage, water damage, or rusted bags identified at the Port of Discharge (POD). Furthermore, no claims for weight or quantity shortages shall be accepted at the POD; the quantity and weight stated in the Loading Port Certificate shall be final, binding, and conclusively accepted by both parties.",
-    "The Buyer expressly agrees that no deductions, offsets, or discounts shall be applied to the invoice value for such damages. Any claims for moisture, water, or rust damage must be settled strictly in accordance with the applicable marine insurance policy terms and supported by an official Certificate of Destruction. The Buyer shall claim all such losses directly from the insurance provider, and the Shipper shall be completely absolved of any financial liability.",
-  ].forEach(clause => { y = addClause(clause, y); });
-
-  // ── ARBITRATION ───────────────────────────────────────────────────────────
-  y = sectionHead("Arbitration:", y);
-  [
-    "All disputes or differences that may arise out of this Contract or in connection with it shall be settled by amicable talks.",
-    "In the case that it is impossible to settle disputes by negotiations then disputes shall be settled in the competent Court at the domicile of the defendant.",
-    "The awards of this Arbitration Court shall be final and binding upon both Parties concerned.",
-  ].forEach(clause => { y = addClause(clause, y); });
-
-  // ── SIGNATURE BLOCK ───────────────────────────────────────────────────────
-  if (y > 238) { doc.addPage(); addPageDecor(); y = 24; }
+  // ── SIGNATURE BLOCK — always on new page after T&C ──────────────────────
+  doc.addPage(); addPageDecor();
+  // Repeat full header on signature page
+  doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
+  if(seller===COMPANIES.vjra){doc.setFillColor(255,255,255);doc.rect(0,0,53,46,"F");}
+  const sigLogo=(seller===COMPANIES.vjra)?VJRA_LOGO_B64_PNG:LOGO_B64;
+  try{if(sigLogo)doc.addImage(sigLogo,"PNG",7,4,40,38);}catch(e){}
+  doc.setDrawColor(...steel);doc.setLineWidth(0.4);doc.line(52,6,52,40);
+  doc.setFontSize(12);doc.setFont(undefined,"bold");doc.setTextColor(...navy);doc.text(seller.name,57,13);
+  const slnW=doc.getTextWidth(seller.name);
+  doc.setDrawColor(...gold);doc.setLineWidth(0.6);doc.line(57,14.5,57+slnW,14.5);
+  doc.setFontSize(7);doc.setFont(undefined,"italic");doc.setTextColor(...steel);doc.text(seller.tagline||"",57,18.5);
+  doc.setFont(undefined,"normal");doc.setTextColor(...navy);doc.setFontSize(6.5);
+  doc.text(seller.address,57,23);
+  doc.text(seller.phone+(seller.email?"  |  "+seller.email:""),57,27.5);
+  if(seller.gstin)doc.text(seller.gstin,57,32);
+  doc.setTextColor(0,0,0);
+  y = 54;
   y += 4;
   doc.setDrawColor(...gold); doc.setLineWidth(0.8);
   doc.line(M, y, M + pw, y);
