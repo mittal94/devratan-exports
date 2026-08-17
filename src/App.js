@@ -4021,7 +4021,6 @@ function exportContractPDF(contract, buyer, consignee) {
       else{heading=(clauseNum++)+". "+heading;}
       return {h:heading,b:body};
     });
-    ];
 
     const cW=(pw-4)/2;
     const colX=[M, M+cW+4];
