@@ -3926,26 +3926,66 @@ function exportContractPDF(contract, buyer, consignee) {
     doc.text("Special Conditions:", M + 5, y + 5.5);
     y += labelH;
 
-    // Content lines — with per-line page break
+    // Content lines — draw all on current page, handle overflow properly
     doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
-    scLines.forEach(line => {
-      if (y > 278) {
-        doc.addPage(); addPageDecor(); y = 24;
-        // Redraw box background for continuation
+    let scPageY = y; // track where current box started on this page
+    let scLinesOnPage = [];
+    const flushScLines = (lines, pageY) => {
+      // Draw box around all lines on this page
+      const bH = lines.length * lineH + (pageY === scPageY ? 0 : 2);
+      doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
+      doc.roundedRect(M, pageY - labelH, pw, labelH + lines.length * lineH + padV, 2, 2, "FD");
+      doc.setFont(undefined, "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
+      doc.text("Special Conditions:", M + 5, pageY - labelH + 5.5);
+      doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
+      let ly = pageY;
+      lines.forEach(line => { doc.text(line, M + 6, ly); ly += lineH; });
+    };
+
+    // Simpler: redraw box properly when page breaks
+    y -= labelH; // back to box top
+    const totalBoxH = labelH + scLines.length * lineH + padV;
+    if (y + totalBoxH <= 275) {
+      // Fits on current page — draw normally
+      doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
+      doc.roundedRect(M, y, pw, totalBoxH, 2, 2, "FD");
+      doc.setFont(undefined, "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
+      doc.text("Special Conditions:", M + 5, y + 5.5);
+      y += labelH;
+      doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
+      scLines.forEach(line => { doc.text(line, M + 6, y); y += lineH; });
+      y += padV;
+    } else {
+      // Split across pages
+      let lineIdx = 0;
+      let boxStartY = y;
+      while (lineIdx < scLines.length) {
+        const linesLeft = scLines.slice(lineIdx);
+        const spaceForLines = Math.floor((275 - (boxStartY + labelH)) / lineH);
+        const linesOnThisPage = Math.max(1, spaceForLines);
+        const batch = linesLeft.slice(0, linesOnThisPage);
+        const bH = labelH + batch.length * lineH + padV;
         doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
-        const remH = (scLines.length * lineH) + padV;
-        doc.roundedRect(M, y - 2, pw, remH, 2, 2, "FD");
+        doc.roundedRect(M, boxStartY, pw, bH, 2, 2, "FD");
+        doc.setFont(undefined, "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
+        doc.text("Special Conditions:", M + 5, boxStartY + 5.5);
         doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
+        let ly = boxStartY + labelH;
+        batch.forEach(line => { doc.text(line, M + 6, ly); ly += lineH; });
+        lineIdx += batch.length;
+        y = ly + padV;
+        if (lineIdx < scLines.length) {
+          doc.addPage(); addPageDecor();
+          boxStartY = 16; y = 16;
+        }
       }
-      doc.text(line, M + 6, y);
-      y += lineH;
-    });
-    y += padV;
+    }
   }
 
   // ── TERMS & CONDITIONS — 2-column, continues from current y ───────────────
   {
-    // Check space remaining — if less than 40mm, start new page
+    // Gap after special conditions + check space
+    y += 4;
     if(y > 248){ doc.addPage(); addPageDecor(); y = 12; }
 
     // "TERMS & CONDITIONS" heading in body (not in header)
