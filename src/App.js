@@ -4064,66 +4064,119 @@ function exportContractPDF(contract, buyer, consignee) {
 
     const cW=(pw-4)/2;
     const colX=[M, M+cW+4];
-    const pageH=287; const botY=pageH;
-    let colIdx=0;
-    let cy=y;
+    const botY=287;
+    const lineH=3.2;
+    const clauseGap=1.2;
+    const SIG_H=75; // space needed for signature block
 
     const tcNF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz);doc.setTextColor(0,0,0);};
-    const lineH=3.2; // tight line height
-    const clauseGap=1.2; // minimal gap between clauses
 
-    // Draw vertical divider between columns at current y
+    // Pre-measure all clause heights
+    const clauseHeights=baseClauses.map(cl=>{
+      tcNF(true,6); const hH=doc.splitTextToSize(cl.h,cW-3).length*lineH;
+      tcNF(false,6); const bH=doc.splitTextToSize(cl.b,cW-3).length*lineH;
+      return {cl,hH,bH,totalH:hH+bH+clauseGap};
+    });
+
+    // Simulate layout to find where last page starts and how many clauses fit
+    // Goal: on the LAST page, split clauses between columns so sig block fits below
+    // Strategy: layout all pages, on last page balance columns to leave SIG_H at bottom
+    const pageAvailH=(startY)=>botY-startY;
+
+    // First pass: determine pages
+    let simColIdx=0, simCy=y, simPageStartY=y, simPages=[[]], simColStarts=[y];
+    clauseHeights.forEach((ch,i)=>{
+      if(simCy+ch.totalH>botY-4){
+        if(simColIdx===0){
+          simColIdx=1; simCy=simPageStartY;
+          simPages[simPages.length-1].push({...ch,colIdx:1});
+        } else {
+          simColIdx=0; simCy=12; simPageStartY=12;
+          simPages.push([]);
+          simColStarts.push(12);
+          simPages[simPages.length-1].push({...ch,colIdx:0});
+        }
+      } else {
+        simPages[simPages.length-1].push({...ch,colIdx:simColIdx});
+      }
+      simCy+=ch.totalH;
+    });
+
+    // On last page: try to balance so sig fits
+    // Re-layout last page clauses: fill left until half total height, then right
+    const lastPageClauses=simPages[simPages.length-1].map(ch=>ch.cl);
+    const lastPageStartY=simColStarts[simColStarts.length-1];
+    const availH=botY-lastPageStartY;
+    const totalLastH=clauseHeights.filter(ch=>lastPageClauses.includes(ch.cl)).reduce((s,ch)=>s+ch.totalH,0);
+    // If both columns + sig fit, balance; otherwise just flow
+    const halfH=Math.min(totalLastH/2, availH-SIG_H-4);
+
+    // Now draw everything
     const drawColDivider=(fromY,toY)=>{
       doc.setDrawColor(192,212,236); doc.setLineWidth(0.3);
       doc.line(M+cW+2,fromY,M+cW+2,toY);
     };
 
-    let pageStartY=y;
-
-    for(const cl of baseClauses){
-      tcNF(true,6);
-      const hLines=doc.splitTextToSize(cl.h,cW-3);
-      const hH=hLines.length*lineH;
-      tcNF(false,6);
-      // Justify body text
-      const bLines=doc.splitTextToSize(cl.b,cW-3);
-      const bH=bLines.length*lineH;
-      const totalH=hH+bH+clauseGap;
-
-      if(cy+totalH>botY-4){
-        if(colIdx===0){
-          // Move to right column
-          drawColDivider(pageStartY,botY);
-          colIdx=1; cy=pageStartY;
-        } else {
-          // New page
-          drawColDivider(pageStartY,botY);
-          doc.addPage(); addPageDecor(); y=12; cy=12; pageStartY=12; colIdx=0;
-        }
-      }
-
-      const cx=colX[colIdx];
+    const drawClause=(cl,cx,cyRef)=>{
       tcNF(true,6); doc.setTextColor(...navy);
-      doc.text(hLines,cx+1,cy+lineH);
-      cy+=hH+0.5;
+      const hLines=doc.splitTextToSize(cl.h,cW-3);
+      doc.text(hLines,cx+1,cyRef+lineH);
+      let localY=cyRef+hLines.length*lineH+0.5;
       tcNF(false,6); doc.setTextColor(0,0,0);
-      // Justify each body line except last
+      const bLines=doc.splitTextToSize(cl.b,cW-3);
       bLines.forEach((line,li)=>{
         const isLast=li===bLines.length-1;
         if(!isLast&&line.trim()){
           const words=line.split(" ");
           if(words.length>1){
-            const lineW=doc.getTextWidth(line);
-            const spaceW=(cW-3-lineW)/(words.length-1);
+            const lw=doc.getTextWidth(line);
+            const sw=(cW-3-lw)/(words.length-1);
             let wx=cx+1;
-            words.forEach((w,wi)=>{doc.text(w,wx,cy+lineH);wx+=doc.getTextWidth(w)+doc.getTextWidth(" ")+spaceW;});
-          } else { doc.text(line,cx+1,cy+lineH); }
-        } else { doc.text(line,cx+1,cy+lineH); }
-        cy+=lineH;
+            words.forEach(w=>{doc.text(w,wx,localY+lineH);wx+=doc.getTextWidth(w)+doc.getTextWidth(" ")+sw;});
+          } else doc.text(line,cx+1,localY+lineH);
+        } else doc.text(line,cx+1,localY+lineH);
+        localY+=lineH;
       });
-      cy+=clauseGap;
+      return localY+clauseGap;
+    };
+
+    let colIdx=0, cy=y, pageStartY=y;
+    let isLastPage=(simPages.length===1);
+    let leftColH=0;
+
+    for(let i=0;i<clauseHeights.length;i++){
+      const {cl,totalH}=clauseHeights[i];
+      const isOnLastPage=lastPageClauses.includes(cl);
+
+      // Determine column switch threshold
+      let switchThreshold;
+      if(isOnLastPage&&simPages.length>1){
+        // On last page: switch to right when left has filled halfH
+        switchThreshold=(colIdx===0&&leftColH>=halfH);
+      } else {
+        switchThreshold=(cy+totalH>botY-4&&colIdx===0)||(cy+totalH>botY-4&&colIdx===1&&false);
+      }
+
+      if(cy+totalH>botY-4){
+        if(colIdx===0){
+          drawColDivider(pageStartY,botY);
+          colIdx=1; cy=pageStartY; leftColH=0;
+          isLastPage=(i>=clauseHeights.length-lastPageClauses.length);
+        } else {
+          drawColDivider(pageStartY,botY);
+          doc.addPage(); addPageDecor();
+          cy=12; pageStartY=12; colIdx=0; leftColH=0;
+          isLastPage=(i>=clauseHeights.length-lastPageClauses.length);
+        }
+      } else if(isOnLastPage&&colIdx===0&&leftColH>=halfH){
+        // Switch to right column on last page to balance
+        drawColDivider(pageStartY,cy+2);
+        colIdx=1; cy=pageStartY;
+      }
+
+      cy=drawClause(cl,colX[colIdx],cy);
+      if(colIdx===0) leftColH+=totalH;
     }
-    // Final column divider
     drawColDivider(pageStartY,cy+2);
     y=cy+4;
   }
