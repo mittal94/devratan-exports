@@ -3946,7 +3946,7 @@ function exportContractPDF(contract, buyer, consignee) {
   // ── TERMS & CONDITIONS — 2-column, continues from current y ───────────────
   {
     // Check space remaining — if less than 40mm, start new page
-    if(y > 248){ doc.addPage(); addPageDecor(); y = 24; }
+    if(y > 248){ doc.addPage(); addPageDecor(); y = 12; }
 
     // "TERMS & CONDITIONS" heading in body (not in header)
     doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(...navy);
@@ -4058,7 +4058,7 @@ function exportContractPDF(contract, buyer, consignee) {
         } else {
           // New page
           drawColDivider(pageStartY,botY);
-          doc.addPage(); addPageDecor(); y=24; cy=24; pageStartY=24; colIdx=0;
+          doc.addPage(); addPageDecor(); y=12; cy=12; pageStartY=12; colIdx=0;
         }
       }
 
@@ -4089,7 +4089,7 @@ function exportContractPDF(contract, buyer, consignee) {
   }
 
   // ── SIGNATURE BLOCK — continues from y, new page only if not enough space ──
-  if(y+75>287){ doc.addPage(); addPageDecor(); y=24; }
+  if(y+75>287){ doc.addPage(); addPageDecor(); y=12; }
   y+=4;
   doc.setDrawColor(...gold); doc.setLineWidth(0.8);
   doc.line(M, y, M + pw, y);
