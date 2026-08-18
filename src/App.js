@@ -4214,7 +4214,7 @@ function exportContractPDF(contract, buyer, consignee) {
       const sealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
       const sealType = (seller === COMPANIES.vjra) ? "PNG" : "JPEG";
       const sealY = y + 26;
-      try{ if(sealImg) doc.addImage(sealImg, sealType, x + sigW/2 - 16, sealY, 32, 20); }catch(e){}
+      try{ if(sealImg) doc.addImage(sealImg, sealType, x + sigW/2 - 16, sealY, 32, 32); }catch(e){}
     }
     doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
     doc.line(x + 8, y + 49, x + sigW - 8, y + 49);
@@ -4658,7 +4658,7 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
   // Seal image — placed below name, not overlapping
   const piSealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
   const piSealType = (seller === COMPANIES.vjra) ? "PNG" : "JPEG";
-  try{ if(piSealImg) doc.addImage(piSealImg, piSealType, sigX + sigW/2 - 16, y + 22, 32, 20); }catch(e){}
+  try{ if(piSealImg) doc.addImage(piSealImg, piSealType, sigX + sigW/2 - 16, y + 22, 32, 32); }catch(e){}
   doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
   doc.line(sigX + 10, y + 43, sigX + sigW - 10, y + 43);
   doc.setFont(undefined,"normal"); doc.setFontSize(7.5); doc.setTextColor(100,100,100);
@@ -8240,8 +8240,8 @@ function VJRAInvoicingTab({buyers}){
     doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(0,0,0);
     y+=3;
     doc.text("For "+vjraCo.name,M+RW-42,y); y+=1;
-    try{if(VJRA_SEAL_B64)doc.addImage(VJRA_SEAL_B64,"PNG",M+RW-42,y,32,20);}catch(e){}
-    y+=21;
+    try{if(VJRA_SEAL_B64)doc.addImage(VJRA_SEAL_B64,"PNG",M+RW-42,y,32,32);}catch(e){}
+    y+=33;
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
     doc.line(M+RW-42,y,M+RW,y); y+=4;
     doc.setFont("helvetica","normal"); doc.setFontSize(7);
