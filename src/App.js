@@ -7308,19 +7308,20 @@ function InvoicingTab({buyers}){
   };
 
   // Items table
-  const renderItemsTable=(doc,M,y,RW,showPrice,useBuyerRate)=>{
+  const renderItemsTable=(doc,M,y,RW,showPrice,useBuyerRate,compact)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
+    const hdrH=compact?5.5:7, minRowH=compact?6:8, lineH=compact?3.3:3.8, hdrFont=compact?6.3:7, bodyFont=compact?6.5:7.5, totalsH=compact?5.5:7;
     const cols=showPrice
       ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
       :[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Gross Wt (Kg)",28],["Net Wt (Kg)",RW-10-45-55-20-28]];
     let hx=M;
     cols.forEach(([h,w])=>{
-      invRECT(doc,hx,y,w,7); doc.setFillColor(...lgray); doc.rect(hx,y,w,7,"F");
-      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.text(h,hx+0.5,y+4.5,{maxWidth:w-1});
+      invRECT(doc,hx,y,w,hdrH); doc.setFillColor(...lgray); doc.rect(hx,y,w,hdrH,"F");
+      doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(hdrFont);
+      doc.text(h,hx+0.5,y+hdrH*0.65,{maxWidth:w-1});
       hx+=w;
     });
-    y+=7;
+    y+=hdrH;
     let totalQtyLocal=0,totalAmtLocal=0,totalGross=0,totalNet=0;
     form.items.forEach((it,i)=>{
       const qty=n(it.qty_mt),rate=useBuyerRate&&it.rate_per_mt_buyer?n(it.rate_per_mt_buyer):n(it.rate_per_mt),amt=qty*rate;
@@ -7331,26 +7332,26 @@ function InvoicingTab({buyers}){
       const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
       const descLines=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
       const pkgLines=doc.splitTextToSize(pkgStr,cols[1][1]-2);
-      const rh=Math.max(Math.max(descLines.length,pkgLines.length)*3.8+2,8);
+      const rh=Math.max(Math.max(descLines.length,pkgLines.length)*lineH+2,minRowH);
       y=invChkPg(doc,y,rh,null,null);
       let rx=M;
       cols.forEach(([h,w],ci)=>{
         invRECT(doc,rx,y,w,rh);
-        invNF(doc,false,7.5); doc.setTextColor(0,0,0);
+        invNF(doc,false,bodyFont); doc.setTextColor(0,0,0);
         const descL1=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
         const descL2=it.desc2?doc.splitTextToSize(it.desc2,cols[2][1]-2):[];
-        if(ci===0) doc.text(String(i+1),rx+0.5,y+4);
-        else if(ci===1){invNF(doc,false,7);doc.text(pkgStr,rx+0.5,y+4,{maxWidth:cols[1][1]-2});}
-        else if(ci===2){invNF(doc,true,7.5);doc.text(descL1,rx+0.5,y+3.5);}
-        else if(ci===3) doc.text(qty?(qty.toFixed(3)+" "+(it.qty_unit||"MT")):"",rx+0.5,y+4);
+        if(ci===0) doc.text(String(i+1),rx+0.5,y+rh*0.55);
+        else if(ci===1){invNF(doc,false,bodyFont-0.5);doc.text(pkgStr,rx+0.5,y+rh*0.55,{maxWidth:cols[1][1]-2});}
+        else if(ci===2){invNF(doc,true,bodyFont);doc.text(descL1,rx+0.5,y+lineH-0.3);}
+        else if(ci===3) doc.text(qty?(qty.toFixed(3)+" "+(it.qty_unit||"MT")):"",rx+0.5,y+rh*0.55);
         else if(showPrice){
-          if(ci===4){invNF(doc,false,7.5);doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+4);}
-          if(ci===5){invNF(doc,true,7.5);doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+4);}
+          if(ci===4){invNF(doc,false,bodyFont);doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+rh*0.55);}
+          if(ci===5){invNF(doc,true,bodyFont);doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+rh*0.55);}
         } else {
-          if(ci===4) doc.text(gross?gross.toFixed(3):"",rx+0.5,y+4);
-          if(ci===5) doc.text(net?net.toFixed(3):"",rx+0.5,y+4);
+          if(ci===4) doc.text(gross?gross.toFixed(3):"",rx+0.5,y+rh*0.55);
+          if(ci===5) doc.text(net?net.toFixed(3):"",rx+0.5,y+rh*0.55);
         }
-        invNF(doc,false,7.5);
+        invNF(doc,false,bodyFont);
         rx+=w;
       });
       y+=rh;
@@ -7368,14 +7369,30 @@ function InvoicingTab({buyers}){
     });
     let tx=M;
     cols.forEach(([h,w],ci)=>{
-      invRECT(doc,tx,y,w,7); doc.setFillColor(...lgray); doc.rect(tx,y,w,7,"F");
-      invNF(doc,true,7.5); doc.setTextColor(...navy);
-      doc.text(tCols[ci],tx+0.5,y+4.5,{maxWidth:w-1});
+      invRECT(doc,tx,y,w,totalsH); doc.setFillColor(...lgray); doc.rect(tx,y,w,totalsH,"F");
+      invNF(doc,true,bodyFont); doc.setTextColor(...navy);
+      doc.text(tCols[ci],tx+0.5,y+totalsH*0.65,{maxWidth:w-1});
       tx+=w;
     });
-    y+=7;
+    y+=totalsH;
     doc.setTextColor(0,0,0);
     return {y,totalQtyLocal,totalAmtLocal,totalGross,totalNet};
+  };
+
+  // Measures items-table height without drawing, so callers can decide whether to
+  // switch to compact row sizing to keep the invoice on one page.
+  const measureItemsHeight=(doc,RW,compact)=>{
+    const hdrH=compact?5.5:7, minRowH=compact?6:8, lineH=compact?3.3:3.8, totalsH=compact?5.5:7;
+    const descColW=55-2, pkgColW=45-2;
+    let h=hdrH;
+    form.items.forEach(it=>{
+      const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
+      const descLines=doc.splitTextToSize(it.desc1||"",descColW).length;
+      const pkgLines=doc.splitTextToSize(pkgStr,pkgColW).length;
+      h+=Math.max(Math.max(descLines,pkgLines)*lineH+2,minRowH);
+    });
+    h+=totalsH;
+    return h;
   };
 
   // Container table
@@ -7459,7 +7476,12 @@ function InvoicingTab({buyers}){
     y+=2; y=renderInfoRow(doc,M,y,RW); y+=3;
 
     invNF(doc,true,8.5); doc.text("Items:",M,y); y+=4;
-    const {y:y2,totalAmtLocal}=renderItemsTable(doc,M,y,RW,true);
+    // Decide whether item rows need to shrink to keep the whole invoice on one page.
+    // Reserve ~78mm for the breakup/details block + signature that follows the items table.
+    const reserveAfterItems=85;
+    const normalItemsH=measureItemsHeight(doc,RW,false);
+    const compactItems = (y+normalItemsH+reserveAfterItems) > 282;
+    const {y:y2,totalAmtLocal}=renderItemsTable(doc,M,y,RW,true,false,compactItems);
     y=y2+3;
 
     // CIF/FOB/Freight/Insurance breakup
@@ -7483,52 +7505,46 @@ function InvoicingTab({buyers}){
     const gstLabel=gstRates.length===0?"GST @ 0% (IGST)":gstRates.length===1?"GST @ "+(n(gstRates[0])*100).toFixed(0)+"% (IGST)":"GST (IGST) — Mixed Rates";
     breakupRows.push([gstLabel,"INR "+igst.toLocaleString("en-IN"),""]);
 
-    // Two-column block: left = Net/Gross Wt, Amount in Words, Third Party, Bank Details.
-    // Right = CIF/FOB/Freight/Insurance breakup table. Give the breakup table the
-    // wider share since it carries the numeric detail; check space first.
-    y=invChkPg(doc,y,70,"EXPORT INVOICE CUM PACKING LIST",(d)=>{addInvFooter(d);return addInvHeader(d,"EXPORT INVOICE CUM PACKING LIST");});
+    // Two-column block: left = Net/Gross Wt, Amount in Words, Third Party, Bank Details
+    // (rendered as an aligned table so labels/values line up cleanly). Right = CIF/FOB/
+    // Freight/Insurance breakup table. Shrink both when the invoice is running long.
+    const compactBlock = compactItems;
+    y=invChkPg(doc,y,compactBlock?65:85,"EXPORT INVOICE CUM PACKING LIST",(d)=>{addInvFooter(d);return addInvHeader(d,"EXPORT INVOICE CUM PACKING LIST");});
     const blockStartY=y;
     const leftW=74,colGap=6,rightW=RW-leftW-colGap,rightX=M+leftW+colGap;
+    const bkFont=compactBlock?6.3:7, bkPad=compactBlock?1:1.5;
 
     doc.autoTable({startY:y,margin:{left:rightX,right:M},tableWidth:rightW,
       body:breakupRows.map(r=>[{content:r[0],styles:{fontStyle:"bold",cellWidth:rightW*0.6}},{content:r[1],styles:{fontStyle:"bold"}}]),
-      styles:{fontSize:7,cellPadding:{top:1.5,bottom:1.5,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2},
+      styles:{fontSize:bkFont,cellPadding:{top:bkPad,bottom:bkPad,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
     const rightFinalY=doc.lastAutoTable.finalY;
 
-    // Left column content
-    let ly=blockStartY;
+    // Left column — Net/Gross Wt, Amount in Words, Third Party, Bank Details as one
+    // aligned table so every label/value pair lines up (fixes the "not aligned" look).
     const totNetWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
     const totGrossWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_gross_wt)*100)/100,0);
-    invNF(doc,true,7.5);
-    const wtLblOff=Math.max(doc.getTextWidth("Net Wt:"),doc.getTextWidth("Gross Wt:"))+3;
-    doc.text("Net Wt:",M,ly);
-    invNF(doc,false,7.5); doc.text(totNetWt.toLocaleString("en-IN")+" Kgs",M+wtLblOff,ly); ly+=4.5;
-    invNF(doc,true,7.5); doc.text("Gross Wt:",M,ly);
-    invNF(doc,false,7.5); doc.text(totGrossWt.toLocaleString("en-IN")+" Kgs",M+wtLblOff,ly); ly+=6;
-
-    invNF(doc,true,7.5); doc.text("Amount in Words:",M,ly); ly+=4;
-    invNF(doc,false,7.5);
-    const amtWordsExp=numWords(totalAmt,form.items[0]?.ccy);
-    const amtLinesExp=doc.splitTextToSize(amtWordsExp,leftW);
-    doc.text(amtLinesExp,M,ly);
-    ly+=amtLinesExp.length*4+3;
-
-    if(form.third_party_name){
-      invNF(doc,true,7.5); doc.text("Third Party:",M,ly); ly+=4;
-      invNF(doc,false,7.5);
-      const tpLines=doc.splitTextToSize(form.third_party_name+(form.third_party_gst?"  |  GST: "+form.third_party_gst:""),leftW);
-      doc.text(tpLines,M,ly); ly+=tpLines.length*4+2;
-    }
-
-    invNF(doc,true,8); doc.text("Bank Details:",M,ly); ly+=4;
-    invNF(doc,false,7.5);
     const bd=BANK_DETAILS.devratan;
-    ly=invWRAP(doc,"Bank: "+bd.bankName+"  |  Branch: "+bd.branch,M,ly,leftW,3.8)+0.7;
-    ly=invWRAP(doc,"A/c No.: "+bd.accNo+"  |  AD Code: 0023340",M,ly,leftW,3.8)+0.7;
+    const amtWordsExp=numWords(totalAmt,form.items[0]?.ccy);
+    const leftRows=[
+      ["NET WT",totNetWt.toLocaleString("en-IN")+" Kgs"],
+      ["GROSS WT",totGrossWt.toLocaleString("en-IN")+" Kgs"],
+      ["AMOUNT IN WORDS",amtWordsExp],
+    ];
+    if(form.third_party_name) leftRows.push(["THIRD PARTY",form.third_party_name+(form.third_party_gst?"  |  GST: "+form.third_party_gst:"")]);
+    leftRows.push(["BANK",bd.bankName]);
+    leftRows.push(["BRANCH",bd.branch]);
+    leftRows.push(["A/C NO.",bd.accNo]);
+    leftRows.push(["AD CODE","0023340"]);
+    doc.autoTable({startY:blockStartY,margin:{left:M,right:M},tableWidth:leftW,
+      body:leftRows.map(([l,v])=>[{content:l,styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:leftW*0.4}},{content:v,styles:{fontStyle:"bold"}}]),
+      styles:{fontSize:bkFont,cellPadding:{top:bkPad,bottom:bkPad,left:2,right:2},lineColor:[100,100,100],lineWidth:0.2},
+      tableLineColor:[100,100,100],tableLineWidth:0.2,
+    });
+    const leftFinalY=doc.lastAutoTable.finalY;
 
-    y=Math.max(rightFinalY,ly)+4;
+    y=Math.max(rightFinalY,leftFinalY)+4;
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
