@@ -4475,6 +4475,7 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
     ["Bank",bank?.bankName||"STATE BANK OF INDIA"],
     ["Branch",bank?.branch||"IFB Branch, Indore"],
     ["Account No.",bank?.accNo||"41289547389"],
+    ...(bank?.iban?[["IBAN",bank.iban]]:[]),
     ["SWIFT Code",bank?.swift||"SBININBB711"],
     ["Currency","USD"],
   ];
@@ -4497,7 +4498,7 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
       RECT(rx,y,lblColW_r,sideRowH,lgray);
       RECT(rx+lblColW_r,y,valColW_r,sideRowH,bg);
       NF(true,7,navy); doc.text(bankRows[i][0],rx+3,y+4.2);
-      const isBold=[0,3,4].includes(i);
+      const isBold=["Beneficiary","Account No.","IBAN","SWIFT Code"].includes(bankRows[i][0]);
       NF(isBold,7.5,isBold?navy:[0,0,0]);
       doc.text(doc.splitTextToSize(bankRows[i][1],valColW_r-4),rx+lblColW_r+3,y+4.2);
     }
@@ -7481,41 +7482,53 @@ function InvoicingTab({buyers}){
     const gstRates=[...new Set(form.items.map(it=>it.gst_rate||"0").filter(r=>n(r)>0))];
     const gstLabel=gstRates.length===0?"GST @ 0% (IGST)":gstRates.length===1?"GST @ "+(n(gstRates[0])*100).toFixed(0)+"% (IGST)":"GST (IGST) — Mixed Rates";
     breakupRows.push([gstLabel,"INR "+igst.toLocaleString("en-IN"),""]);
-    doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
-      body:breakupRows.map(r=>[{content:r[0],styles:{fontStyle:"bold",cellWidth:RW*0.55}},{content:r[1],styles:{fontStyle:"bold"}}]),
-      styles:{fontSize:7.5,cellPadding:{top:1.5,bottom:1.5,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+
+    // Two-column block: left = Net/Gross Wt, Amount in Words, Third Party, Bank Details.
+    // Right = CIF/FOB/Freight/Insurance breakup table. Give the breakup table the
+    // wider share since it carries the numeric detail; check space first.
+    y=invChkPg(doc,y,70,"EXPORT INVOICE CUM PACKING LIST",(d)=>{addInvFooter(d);return addInvHeader(d,"EXPORT INVOICE CUM PACKING LIST");});
+    const blockStartY=y;
+    const leftW=74,colGap=6,rightW=RW-leftW-colGap,rightX=M+leftW+colGap;
+
+    doc.autoTable({startY:y,margin:{left:rightX,right:M},tableWidth:rightW,
+      body:breakupRows.map(r=>[{content:r[0],styles:{fontStyle:"bold",cellWidth:rightW*0.6}},{content:r[1],styles:{fontStyle:"bold"}}]),
+      styles:{fontSize:7,cellPadding:{top:1.5,bottom:1.5,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
-    y=doc.lastAutoTable.finalY+4;
+    const rightFinalY=doc.lastAutoTable.finalY;
 
-    // Gross/Net wt summary
+    // Left column content
+    let ly=blockStartY;
     const totNetWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
     const totGrossWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_gross_wt)*100)/100,0);
-    invNF(doc,false,7.5);
-    const wtStr="Total Net Wt: "+totNetWt.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWt.toLocaleString("en-IN")+" Kgs";
-    doc.text(wtStr,M,y,{maxWidth:RW}); y+=5;
+    invNF(doc,true,7.5);
+    const wtLblOff=Math.max(doc.getTextWidth("Net Wt:"),doc.getTextWidth("Gross Wt:"))+3;
+    doc.text("Net Wt:",M,ly);
+    invNF(doc,false,7.5); doc.text(totNetWt.toLocaleString("en-IN")+" Kgs",M+wtLblOff,ly); ly+=4.5;
+    invNF(doc,true,7.5); doc.text("Gross Wt:",M,ly);
+    invNF(doc,false,7.5); doc.text(totGrossWt.toLocaleString("en-IN")+" Kgs",M+wtLblOff,ly); ly+=6;
 
-    // Amount in words
-    invNF(doc,true,7.5); doc.text("Amount in Words:",M,y); y+=4;
+    invNF(doc,true,7.5); doc.text("Amount in Words:",M,ly); ly+=4;
     invNF(doc,false,7.5);
     const amtWordsExp=numWords(totalAmt,form.items[0]?.ccy);
-    const amtLinesExp=doc.splitTextToSize(amtWordsExp,RW);
-    doc.text(amtLinesExp,M,y);
-    y+=amtLinesExp.length*4+3;
+    const amtLinesExp=doc.splitTextToSize(amtWordsExp,leftW);
+    doc.text(amtLinesExp,M,ly);
+    ly+=amtLinesExp.length*4+3;
 
-    // Third party
     if(form.third_party_name){
+      invNF(doc,true,7.5); doc.text("Third Party:",M,ly); ly+=4;
       invNF(doc,false,7.5);
-      doc.text("Third Party: "+form.third_party_name+(form.third_party_gst?"  |  GST: "+form.third_party_gst:""),M,y); y+=5;
+      const tpLines=doc.splitTextToSize(form.third_party_name+(form.third_party_gst?"  |  GST: "+form.third_party_gst:""),leftW);
+      doc.text(tpLines,M,ly); ly+=tpLines.length*4+2;
     }
 
-    // Bank details — check space before drawing
-    if(y+50>282){doc.addPage();addInvFooter(doc);y=addInvHeader(doc,"EXPORT INVOICE CUM PACKING LIST");}
-    invNF(doc,true,8); doc.text("Bank Details:",M,y); y+=4;
+    invNF(doc,true,8); doc.text("Bank Details:",M,ly); ly+=4;
     invNF(doc,false,7.5);
     const bd=BANK_DETAILS.devratan;
-    doc.text("Bank: "+bd.bankName+"  |  Branch: "+bd.branch,M,y); y+=4;
-    doc.text("A/c No.: "+bd.accNo+"  |  AD Code: 0023340",M,y); y+=5;
+    ly=invWRAP(doc,"Bank: "+bd.bankName+"  |  Branch: "+bd.branch,M,ly,leftW,3.8)+0.7;
+    ly=invWRAP(doc,"A/c No.: "+bd.accNo+"  |  AD Code: 0023340",M,ly,leftW,3.8)+0.7;
+
+    y=Math.max(rightFinalY,ly)+4;
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
