@@ -4372,9 +4372,12 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
   doc.setDrawColor(...lgold); doc.setLineWidth(0.3); doc.line(M,y,M+pw,y); y+=3;
 
   // ── Items table ────────────────────────────────────────────────────────────
+  // Contract items use: quantity_mt, price_usd, packing, container_qty, container_type
+  // commodity is at contract level; item-level description field is packing
   const items=contract.items||[];
-  const totQty=items.reduce((s,it)=>s+n(it.qty),0);
-  const totVal=items.reduce((s,it)=>s+n(it.qty)*n(it.rate_per_mt),0);
+  const totQty=items.reduce((s,it)=>s+n(it.quantity_mt),0);
+  const totVal=items.reduce((s,it)=>s+n(it.quantity_mt)*n(it.price_usd),0);
+  const commodity=contract.commodity||contract.product||"";
 
   // Header
   const iCols=[{w:7,lbl:"#"},{w:50,lbl:"Description"},{w:30,lbl:"Packing"},{w:20,lbl:"Qty (MTS)"},{w:24,lbl:"Containers"},{w:22,lbl:"Unit Price"},{w:pw-153,lbl:"Amount (USD)"}];
@@ -4389,8 +4392,11 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
 
   // Item rows
   items.forEach((it,i)=>{
-    const amt=n(it.qty)*n(it.rate_per_mt);
-    const descLines=doc.splitTextToSize(it.description||it.commodity||"",iCols[1].w-4);
+    const qty=n(it.quantity_mt);
+    const price=n(it.price_usd);
+    const amt=qty*price;
+    const containers=(it.container_qty&&it.container_type)?it.container_qty+" x "+it.container_type:"";
+    const descLines=doc.splitTextToSize(commodity,iCols[1].w-4);
     const packLines=doc.splitTextToSize(it.packing||"",iCols[2].w-4);
     const rh=Math.max(8,Math.max(descLines.length,packLines.length)*3.8+3);
     const bg=i%2===0?white:lgray;
@@ -4400,9 +4406,9 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
     NF(false,7,[120,128,148]); doc.text(String(i+1),ix+2,y+rh/2+1.5); ix+=iCols[0].w;
     NF(true,7.5,navy);         doc.text(descLines,ix+2,y+4);            ix+=iCols[1].w;
     NF(false,7,[60,80,115]);   doc.text(packLines,ix+2,y+4);            ix+=iCols[2].w;
-    NF(true,7.5);              doc.text(fmtN(it.qty),ix+2,y+rh/2+1.5); ix+=iCols[3].w;
-    NF(false,7);               doc.text(it.containers||"",ix+2,y+rh/2+1.5); ix+=iCols[4].w;
-    NF(false,7.5);             doc.text(fmtN(it.rate_per_mt),ix+2,y+rh/2+1.5); ix+=iCols[5].w;
+    NF(true,7.5);              doc.text(fmtN(qty),ix+2,y+rh/2+1.5);    ix+=iCols[3].w;
+    NF(false,7);               doc.text(containers,ix+2,y+rh/2+1.5);   ix+=iCols[4].w;
+    NF(false,7.5);             doc.text(fmtN(price),ix+2,y+rh/2+1.5); ix+=iCols[5].w;
     NF(true,7.5,navy);         doc.text(fmtN(amt),ix+2,y+rh/2+1.5);
     y+=rh;
   });
@@ -4410,13 +4416,10 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
   // Total row
   doc.setDrawColor(...navy); doc.setLineWidth(0.5); doc.line(M,y,M+pw,y);
   ix=M; iCols.forEach(c=>{ RECT(ix,y,c.w,8,lgray); ix+=c.w; });
-  ix=M;
-  NF(false,7);           doc.text("",ix+2,y+5.5); ix+=iCols[0].w;
+  ix=M+iCols[0].w;
   NF(true,7.5,navy);     doc.text("TOTAL",ix+2,y+5.5); ix+=iCols[1].w;
   NF(false,6.5,[110,130,160]); doc.text("+/- 5% at seller's option",ix+2,y+5.5); ix+=iCols[2].w;
-  NF(true,7.5,navy);     doc.text(fmtN(totQty),ix+2,y+5.5); ix+=iCols[3].w;
-  NF(false,7);           doc.text("",ix+2,y+5.5); ix+=iCols[4].w;
-  NF(false,7);           doc.text("",ix+2,y+5.5); ix+=iCols[5].w;
+  NF(true,7.5,navy);     doc.text(fmtN(totQty),ix+2,y+5.5); ix+=iCols[3].w+iCols[4].w+iCols[5].w;
   NF(true,7.5,navy);     doc.text("USD "+fmtN(totVal),ix+2,y+5.5);
   y+=8;
 
@@ -4425,14 +4428,15 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
     const advAmt=totVal*(advancePct/100);
     ix=M; iCols.forEach(c=>{ RECT(ix,y,c.w,7,[255,252,235]); ix+=c.w; });
     ix=M+iCols[0].w;
-    NF(true,7.5,amber); doc.text(`Advance (${advancePct}%) Due`,ix+2,y+5); ix+=iCols[1].w+iCols[2].w+iCols[3].w+iCols[4].w+iCols[5].w;
+    NF(true,7.5,amber); doc.text("Advance ("+advancePct+"%) Due",ix+2,y+5);
+    ix+=iCols[1].w+iCols[2].w+iCols[3].w+iCols[4].w+iCols[5].w;
     NF(true,7.5,amber); doc.text("USD "+fmtN(advAmt),ix+2,y+5);
     y+=7;
   }
   y+=2;
 
   // Amount in words
-  const amtWords=numWords?numWords(Math.round(totVal)):"—";
+  const amtWords=(typeof numWords==="function")?numWords(Math.round(totVal)):"";
   doc.setFillColor(...lgray); doc.setDrawColor(...steel); doc.setLineWidth(0.3);
   doc.rect(M,y,pw,7,"FD");
   NF(true,7,navy); doc.text("Amount in Words: ",M+4,y+4.8);
@@ -4456,9 +4460,9 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
 
   const termRows=[
     ["Delivery Terms",contract.delivery_terms||"—"],
-    ["Port of Loading",contract.port_loading||"Any Indian Port"],
-    ["Port of Discharge",contract.port_discharge||"—"],
-    ["Shipment Period",contract.shipment||"—"],
+    ["Port of Loading",contract.loading_port||contract.port_loading||"Any Indian Port"],
+    ["Port of Discharge",contract.destination||contract.port_discharge||"—"],
+    ["Shipment Period",contract.shipment_period||contract.shipment||"—"],
     ["Payment Terms",contract.payment_condition||"—"],
     ["Contract Ref.",contract.contract_no||"—"],
   ];
