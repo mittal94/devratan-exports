@@ -4396,14 +4396,17 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
     const price=n(it.price_usd);
     const amt=qty*price;
     const containers=(it.container_qty&&it.container_type)?it.container_qty+" x "+it.container_type:"";
+    // Set font BEFORE splitTextToSize so measurement uses correct font metrics
+    NF(true,7.5,navy);
     const descLines=doc.splitTextToSize(commodity,iCols[1].w-4);
+    NF(false,7,[60,80,115]);
     const packLines=doc.splitTextToSize(it.packing||"",iCols[2].w-4);
-    const rh=Math.max(8,Math.max(descLines.length,packLines.length)*3.8+3);
+    const lineH=3.8;
+    const rh=Math.max(8,Math.max(descLines.length,packLines.length)*lineH+4);
     const bg=i%2===0?white:lgray;
     ix=M;
     iCols.forEach(c=>{ RECT(ix,y,c.w,rh,bg); ix+=c.w; });
     ix=M;
-    // Draw cells first (backgrounds), then text
     NF(false,7,[120,128,148]); doc.text(String(i+1),ix+2,y+rh/2+1.5); ix+=iCols[0].w;
     NF(true,7.5,navy);         doc.text(descLines,ix+2,y+4);           ix+=iCols[1].w;
     NF(false,7,[60,80,115]);   doc.text(packLines,ix+2,y+4);           ix+=iCols[2].w;
