@@ -7257,6 +7257,7 @@ function InvoicingTab({buyers}){
         const nW=RW/Math.max(row.length,1);
         const rowLines=row.map(e=>doc.splitTextToSize("Notify Party "+e.idx+":\n"+(e.b?e.b.company_name||e.b.name:"")+(e.b&&buyerAddr(e.b)?"\n"+buyerAddr(e.b):""),nW-3));
         const rH=Math.max(...rowLines.map(l=>l.length))*3.8+4;
+        y=invChkPg(doc,y,rH,null,null); // page check before drawing notify row
         row.forEach((e,j)=>{
           invRECT(doc,M+j*nW,y,nW,rH);
           doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
@@ -7508,7 +7509,8 @@ function InvoicingTab({buyers}){
       doc.text("Third Party: "+form.third_party_name+(form.third_party_gst?"  |  GST: "+form.third_party_gst:""),M,y); y+=5;
     }
 
-    // Bank details
+    // Bank details — check space before drawing
+    if(y+50>282){doc.addPage();addInvFooter(doc);y=addInvHeader(doc,"EXPORT INVOICE CUM PACKING LIST");}
     invNF(doc,true,8); doc.text("Bank Details:",M,y); y+=4;
     invNF(doc,false,7.5);
     const bd=BANK_DETAILS.devratan;
