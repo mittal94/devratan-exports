@@ -4403,11 +4403,12 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
     ix=M;
     iCols.forEach(c=>{ RECT(ix,y,c.w,rh,bg); ix+=c.w; });
     ix=M;
+    // Draw cells first (backgrounds), then text
     NF(false,7,[120,128,148]); doc.text(String(i+1),ix+2,y+rh/2+1.5); ix+=iCols[0].w;
-    NF(true,7.5,navy);         doc.text(descLines,ix+2,y+4);            ix+=iCols[1].w;
-    NF(false,7,[60,80,115]);   doc.text(packLines,ix+2,y+4);            ix+=iCols[2].w;
-    NF(true,7.5);              doc.text(fmtN(qty),ix+2,y+rh/2+1.5);    ix+=iCols[3].w;
-    NF(false,7);               doc.text(containers,ix+2,y+rh/2+1.5);   ix+=iCols[4].w;
+    NF(true,7.5,navy);         doc.text(descLines,ix+2,y+4);           ix+=iCols[1].w;
+    NF(false,7,[60,80,115]);   doc.text(packLines,ix+2,y+4);           ix+=iCols[2].w;
+    NF(true,7.5,[0,0,0]);      doc.text(fmtN(qty),ix+2,y+rh/2+1.5);   ix+=iCols[3].w;
+    NF(false,7);               doc.text(containers,ix+2,y+rh/2+1.5);  ix+=iCols[4].w;
     NF(false,7.5);             doc.text(fmtN(price),ix+2,y+rh/2+1.5); ix+=iCols[5].w;
     NF(true,7.5,navy);         doc.text(fmtN(amt),ix+2,y+rh/2+1.5);
     y+=rh;
@@ -4508,14 +4509,28 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
     "3. All terms remain same as per the contract.",
   ];
   if(validityDate) remarks.push("* This Proforma Invoice is valid till: "+validityDate);
-  const rkLines=doc.splitTextToSize(remarks.join("  \u2022  "),pw-12);
-  const rkH=rkLines.length*3.8+6;
+  // Pre-measure each remark line to get correct box height
+  NF(false,7,[60,40,0]);
+  const rkLineH=4;
+  const rkPad=4;
+  let totalRkH=rkPad;
+  const rkWrapped=remarks.map(r=>{
+    const ls=doc.splitTextToSize(r,pw-14);
+    totalRkH+=ls.length*rkLineH;
+    return ls;
+  });
+  totalRkH+=rkPad;
   doc.setFillColor(255,252,232); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
-  doc.rect(M,y,pw,rkH,"FD");
-  NF(false,7,[60,40,0]); doc.text(remarks[0],M+6,y+4);
-  let ry=y+4;
-  remarks.forEach((r,i)=>{ if(i>0){ry+=3.8; doc.text(r,M+6,ry);} });
-  y+=rkH+3;
+  doc.rect(M,y,pw,totalRkH,"FD");
+  NF(false,7,[60,40,0]);
+  let ry=y+rkPad+2.5;
+  rkWrapped.forEach((ls,i)=>{
+    // Bold the validity line
+    if(i===rkWrapped.length-1&&validityDate) NF(false,7,[60,40,0]);
+    doc.text(ls,M+6,ry);
+    ry+=ls.length*rkLineH+0.5;
+  });
+  y+=totalRkH+3;
 
   // ── Signature ──────────────────────────────────────────────────────────────
   const sigW=pw*0.45;
