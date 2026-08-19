@@ -606,7 +606,10 @@ function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[], allBC
           const c = calcShip(s), bc = getBC(s);
           const {paidUSD:csvPaidUSD,paidINR:csvPaidINR}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs,allBCs);
           const bal=c.invoiceAmtUSD-csvPaidUSD;
-          return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.port_code||"",s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.bank_name:"",bc?bc.bc_date:"",bc?bc.brc_entries?.map(b=>b.brc_no).join("; "):"",bc?bc.brc_entries?.map(b=>b.brc_date).join("; "):"",fi(csvPaidUSD),fi(csvPaidINR),fi(bal)];
+          const sBRCs=(allBRCs||[]).filter(b=>b.linked_invoice_no===s.invoice_no);
+          const brcNosCsv=sBRCs.map(b=>b.brc_no).filter(Boolean).join("; ");
+          const brcDatesCsv=sBRCs.map(b=>b.brc_date).filter(Boolean).join("; ");
+          return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.port_code||"",s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.bank_name:"",bc?bc.bc_date:"",brcNosCsv,brcDatesCsv,fi(csvPaidUSD),fi(csvPaidINR),fi(bal)];
         });
         dlCSV(`Devratan_Shipments_${fromDate||"all"}_to_${toDate||"all"}.csv`, toCSV(hdrs, rows));
       }
