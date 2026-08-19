@@ -4296,386 +4296,267 @@ function numberToWords(amount) {
 
 function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePct) {
   const JPDF = getPDF();
-  if (!JPDF) { alert("PDF library not loaded. Please refresh and try again."); return; }
+  if (!JPDF) { alert("PDF library not loaded."); return; }
   const doc = new JPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const M  = 14;
-  const pw = 182; // 210 - 14*2 = 182mm exact
+  const M = 14, pw = 182;
+  const navy=[18,52,96], steel=[70,130,180], ltblue=[220,235,250], gold=[162,120,50],
+        lgold=[210,175,100], lgray=[235,243,252], dgray=[180,192,208],
+        white=[255,255,255], amber=[146,62,14], cream=[248,251,255];
 
-  const navy   = [18,  52,  96];
-  const steel  = [70,  130, 180];
-  const ltblue = [220, 235, 250];
-  const gold   = [162, 120, 50];
-  const lgold  = [210, 175, 100];
-  const lgray  = [235, 243, 252];
-  const dgray  = [180, 192, 208];
-  const white  = [255, 255, 255];
-  const green  = [21,  97,  51];
-  const cream  = [248, 251, 255];
-  const amber  = [146, 64,  14];
+  const seller = COMPANIES[(contract.seller_company||"devratan")]||COMPANIES.devratan;
+  const isVJRA = seller===COMPANIES.vjra;
+  const bank = isVJRA ? BANK_DETAILS.vjra : BANK_DETAILS.devratan;
 
-  const seller = COMPANIES[(contract.seller_company||"devratan")] || COMPANIES.devratan;
-  const bank   = BANK_DETAILS[(contract.seller_company||"devratan")] || BANK_DETAILS.devratan;
+  // ── Header ─────────────────────────────────────────────────────────────────
+  doc.setFillColor(...ltblue); doc.rect(0,0,210,46,"F");
+  if(isVJRA){ doc.setFillColor(...white); doc.rect(0,0,53,46,"F"); }
+  const piLogo=isVJRA?VJRA_LOGO_B64_PNG:LOGO_B64;
+  try{if(piLogo)doc.addImage(piLogo,"PNG",7,4,40,38);}catch(e){}
+  doc.setDrawColor(...steel); doc.setLineWidth(0.4); doc.line(52,6,52,40);
+  doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+  doc.text(seller.name,57,13);
+  const snW=doc.getTextWidth(seller.name);
+  doc.setDrawColor(...gold); doc.setLineWidth(0.6); doc.line(57,14.5,57+snW,14.5);
+  doc.setFontSize(7); doc.setFont("helvetica","italic"); doc.setTextColor(...steel);
+  if(seller.tagline) doc.text(seller.tagline,57,18.5);
+  doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(...navy);
+  doc.text(seller.address,57,23);
+  doc.text((seller.phone||"")+(seller.email?"  |  "+seller.email:""),57,27.5);
+  if(seller.gstin) doc.text(seller.gstin,57,32);
+  // Right: title
+  doc.setFontSize(15); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+  doc.text("PROFORMA INVOICE",210-M,13,{align:"right"});
+  const ptW=doc.getTextWidth("PROFORMA INVOICE");
+  doc.setDrawColor(...gold); doc.setLineWidth(0.7); doc.line(210-M-ptW,15,210-M,15);
+  doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...steel);
+  doc.text("PI NO.",210-M,20,{align:"right"});
+  doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(...navy);
+  doc.text(piNo||"—",210-M,26,{align:"right"});
+  doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...navy);
+  doc.text("Date: "+(contract.contract_date||"—"),210-M,31,{align:"right"});
+  doc.setFont("helvetica","bold");
+  doc.text("Valid till: "+(validityDate||"—"),210-M,36,{align:"right"});
+  doc.setTextColor(0,0,0);
 
-  const items = (contract.items && contract.items.length)
-    ? contract.items
-    : [{packing:contract.packing||"", quantity_mt:contract.quantity_mt||"",
-        container_qty:contract.container_qty||"", container_type:contract.container_type||"",
-        price_usd:contract.price_usd||"", price_per:contract.price_per||"MTs"}];
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const n=v=>parseFloat(String(v||0).replace(/,/g,""))||0;
+  const fmtN=(v,d=2)=>n(v).toLocaleString("en-IN",{minimumFractionDigits:d,maximumFractionDigits:d});
+  const NF=(bold,sz,col)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||8);doc.setTextColor(...(col||[0,0,0]));};
+  const RECT=(x,y,w,h,fill)=>{doc.setDrawColor(...dgray);doc.setLineWidth(0.2);if(fill){doc.setFillColor(...fill);doc.rect(x,y,w,h,"FD");}else{doc.rect(x,y,w,h);}};
 
-  const totQty = items.reduce((s,it) => s + n(it.quantity_mt), 0);
-  const totVal = items.reduce((s,it) => s + n(it.quantity_mt) * n(it.price_usd), 0);
-  const advAmt = advancePct ? (totVal * advancePct / 100) : 0;
-  const fmt2   = v => Number(v).toLocaleString("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
-  const usd    = v => "USD " + fmt2(v);
+  let y=50;
 
-  // ── Footer ────────────────────────────────────────────────────────────────
-  const drawFooter = () => {
-    const tp = doc.getNumberOfPages();
-    for (let i = 1; i <= tp; i++) {
+  // ── Parties ────────────────────────────────────────────────────────────────
+  const partyRows=[
+    {lbl:"SELLER",name:seller.name,addr:seller.address},
+    {lbl:"BUYER",name:buyer?.buyer_name||"",addr:buyer?.address||""},
+  ];
+  const lblW=18,nameW=52,addrW=pw-lblW-nameW;
+  partyRows.forEach(row=>{
+    const addrLines=doc.splitTextToSize(row.addr,addrW-4);
+    const rh=Math.max(10,addrLines.length*3.8+4);
+    // Label cell navy
+    doc.setFillColor(...navy); doc.rect(M,y,lblW,rh,"F");
+    doc.setDrawColor(...steel); doc.setLineWidth(0.3); doc.rect(M,y,lblW,rh);
+    NF(true,7,white); doc.text(row.lbl,M+lblW/2,y+rh/2+2.5,{align:"center"});
+    // Name cell
+    RECT(M+lblW,y,nameW,rh,cream);
+    NF(true,8,navy); doc.text(doc.splitTextToSize(row.name,nameW-4),M+lblW+3,y+5);
+    // Addr cell
+    RECT(M+lblW+nameW,y,addrW,rh,cream);
+    NF(false,7,[50,50,50]); doc.text(addrLines,M+lblW+nameW+3,y+4);
+    y+=rh;
+  });
+  y+=2;
+  doc.setDrawColor(...gold); doc.setLineWidth(0.8); doc.line(M,y,M+pw,y); y+=1;
+  doc.setDrawColor(...lgold); doc.setLineWidth(0.3); doc.line(M,y,M+pw,y); y+=3;
+
+  // ── Items table ────────────────────────────────────────────────────────────
+  const items=contract.items||[];
+  const totQty=items.reduce((s,it)=>s+n(it.qty),0);
+  const totVal=items.reduce((s,it)=>s+n(it.qty)*n(it.rate_per_mt),0);
+
+  // Header
+  const iCols=[{w:7,lbl:"#"},{w:50,lbl:"Description"},{w:30,lbl:"Packing"},{w:20,lbl:"Qty (MTS)"},{w:24,lbl:"Containers"},{w:22,lbl:"Unit Price"},{w:pw-153,lbl:"Amount (USD)"}];
+  let ix=M;
+  iCols.forEach(c=>{
+    doc.setFillColor(...navy); doc.rect(ix,y,c.w,7,"F");
+    doc.setDrawColor(...gold); doc.setLineWidth(0.4); doc.line(ix,y+7,ix+c.w,y+7);
+    NF(true,7,white); doc.text(c.lbl,ix+2,y+4.8);
+    ix+=c.w;
+  });
+  y+=7;
+
+  // Item rows
+  items.forEach((it,i)=>{
+    const amt=n(it.qty)*n(it.rate_per_mt);
+    const descLines=doc.splitTextToSize(it.description||it.commodity||"",iCols[1].w-4);
+    const packLines=doc.splitTextToSize(it.packing||"",iCols[2].w-4);
+    const rh=Math.max(8,Math.max(descLines.length,packLines.length)*3.8+3);
+    const bg=i%2===0?white:lgray;
+    ix=M;
+    iCols.forEach(c=>{ RECT(ix,y,c.w,rh,bg); ix+=c.w; });
+    ix=M;
+    NF(false,7,[120,128,148]); doc.text(String(i+1),ix+2,y+rh/2+1.5); ix+=iCols[0].w;
+    NF(true,7.5,navy);         doc.text(descLines,ix+2,y+4);            ix+=iCols[1].w;
+    NF(false,7,[60,80,115]);   doc.text(packLines,ix+2,y+4);            ix+=iCols[2].w;
+    NF(true,7.5);              doc.text(fmtN(it.qty),ix+2,y+rh/2+1.5); ix+=iCols[3].w;
+    NF(false,7);               doc.text(it.containers||"",ix+2,y+rh/2+1.5); ix+=iCols[4].w;
+    NF(false,7.5);             doc.text(fmtN(it.rate_per_mt),ix+2,y+rh/2+1.5); ix+=iCols[5].w;
+    NF(true,7.5,navy);         doc.text(fmtN(amt),ix+2,y+rh/2+1.5);
+    y+=rh;
+  });
+
+  // Total row
+  doc.setDrawColor(...navy); doc.setLineWidth(0.5); doc.line(M,y,M+pw,y);
+  ix=M; iCols.forEach(c=>{ RECT(ix,y,c.w,8,lgray); ix+=c.w; });
+  ix=M;
+  NF(false,7);           doc.text("",ix+2,y+5.5); ix+=iCols[0].w;
+  NF(true,7.5,navy);     doc.text("TOTAL",ix+2,y+5.5); ix+=iCols[1].w;
+  NF(false,6.5,[110,130,160]); doc.text("+/- 5% at seller's option",ix+2,y+5.5); ix+=iCols[2].w;
+  NF(true,7.5,navy);     doc.text(fmtN(totQty),ix+2,y+5.5); ix+=iCols[3].w;
+  NF(false,7);           doc.text("",ix+2,y+5.5); ix+=iCols[4].w;
+  NF(false,7);           doc.text("",ix+2,y+5.5); ix+=iCols[5].w;
+  NF(true,7.5,navy);     doc.text("USD "+fmtN(totVal),ix+2,y+5.5);
+  y+=8;
+
+  // Advance row
+  if(advancePct){
+    const advAmt=totVal*(advancePct/100);
+    ix=M; iCols.forEach(c=>{ RECT(ix,y,c.w,7,[255,252,235]); ix+=c.w; });
+    ix=M+iCols[0].w;
+    NF(true,7.5,amber); doc.text(`Advance (${advancePct}%) Due`,ix+2,y+5); ix+=iCols[1].w+iCols[2].w+iCols[3].w+iCols[4].w+iCols[5].w;
+    NF(true,7.5,amber); doc.text("USD "+fmtN(advAmt),ix+2,y+5);
+    y+=7;
+  }
+  y+=2;
+
+  // Amount in words
+  const amtWords=numWords?numWords(Math.round(totVal)):"—";
+  doc.setFillColor(...lgray); doc.setDrawColor(...steel); doc.setLineWidth(0.3);
+  doc.rect(M,y,pw,7,"FD");
+  NF(true,7,navy); doc.text("Amount in Words: ",M+4,y+4.8);
+  const awLblW=doc.getTextWidth("Amount in Words: ");
+  NF(false,7); doc.text("USD "+amtWords,M+4+awLblW,y+4.8,{maxWidth:pw-awLblW-6});
+  y+=9;
+
+  // ── Delivery Terms + Bank Details side by side ────────────────────────────
+  const lw=pw*0.47, rw=pw*0.47, gap=pw*0.06;
+  const lblColW_l=lw*0.44, valColW_l=lw-lblColW_l;
+  const lblColW_r=rw*0.38, valColW_r=rw-lblColW_r;
+
+  const drawSideHdr=(x,w,title)=>{
+    doc.setFillColor(...navy); doc.rect(x,y,w,6,"F");
+    doc.setDrawColor(...gold); doc.setLineWidth(0.5); doc.line(x,y+6,x+w,y+6);
+    NF(true,7.5,white); doc.text(title,x+5,y+4.3);
+  };
+  drawSideHdr(M,lw,"Delivery & Shipment Terms");
+  drawSideHdr(M+lw+gap,rw,"Bank Details for Payment");
+  y+=6;
+
+  const termRows=[
+    ["Delivery Terms",contract.delivery_terms||"—"],
+    ["Port of Loading",contract.port_loading||"Any Indian Port"],
+    ["Port of Discharge",contract.port_discharge||"—"],
+    ["Shipment Period",contract.shipment||"—"],
+    ["Payment Terms",contract.payment_condition||"—"],
+    ["Contract Ref.",contract.contract_no||"—"],
+  ];
+  const bankRows=[
+    ["Beneficiary",seller.name],
+    ["Bank",bank?.bankName||"STATE BANK OF INDIA"],
+    ["Branch",bank?.branch||"IFB Branch, Indore"],
+    ["Account No.",bank?.accNo||"41289547389"],
+    ["SWIFT Code",bank?.swift||"SBININBB711"],
+    ["Currency","USD"],
+  ];
+  const sideRowH=6;
+  const maxRows=Math.max(termRows.length,bankRows.length);
+  for(let i=0;i<maxRows;i++){
+    const bg=i%2===0?[249,251,255]:white;
+    // Left col
+    if(termRows[i]){
+      RECT(M,y,lblColW_l,sideRowH,lgray);
+      RECT(M+lblColW_l,y,valColW_l,sideRowH,bg);
+      NF(true,7,navy); doc.text(termRows[i][0],M+3,y+4.2);
+      const isBold=i===4; // payment terms bold
+      NF(isBold,7.5,isBold?navy:[0,0,0]);
+      doc.text(doc.splitTextToSize(termRows[i][1],valColW_l-4),M+lblColW_l+3,y+4.2);
+    }
+    // Right col
+    if(bankRows[i]){
+      const rx=M+lw+gap;
+      RECT(rx,y,lblColW_r,sideRowH,lgray);
+      RECT(rx+lblColW_r,y,valColW_r,sideRowH,bg);
+      NF(true,7,navy); doc.text(bankRows[i][0],rx+3,y+4.2);
+      const isBold=[0,3,4].includes(i);
+      NF(isBold,7.5,isBold?navy:[0,0,0]);
+      doc.text(doc.splitTextToSize(bankRows[i][1],valColW_r-4),rx+lblColW_r+3,y+4.2);
+    }
+    y+=sideRowH;
+  }
+  y+=3;
+
+  // ── Remarks ────────────────────────────────────────────────────────────────
+  const remarks=[
+    "1. This is a Proforma Invoice only and not a Commercial Invoice.",
+    "2. Goods will be shipped upon receipt of payment as per agreed payment terms.",
+    "3. All terms remain same as per the contract.",
+  ];
+  if(validityDate) remarks.push("* This Proforma Invoice is valid till: "+validityDate);
+  const rkLines=doc.splitTextToSize(remarks.join("  \u2022  "),pw-12);
+  const rkH=rkLines.length*3.8+6;
+  doc.setFillColor(255,252,232); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
+  doc.rect(M,y,pw,rkH,"FD");
+  NF(false,7,[60,40,0]); doc.text(remarks[0],M+6,y+4);
+  let ry=y+4;
+  remarks.forEach((r,i)=>{ if(i>0){ry+=3.8; doc.text(r,M+6,ry);} });
+  y+=rkH+3;
+
+  // ── Signature ──────────────────────────────────────────────────────────────
+  const sigW=pw*0.45;
+  const sigX=M+pw-sigW;
+  const sigBoxH=50;
+  doc.setFillColor(...white); doc.setDrawColor(...gold); doc.setLineWidth(0.7);
+  doc.roundedRect(sigX,y,sigW,sigBoxH,2,2,"FD");
+  // Navy header — company name once
+  doc.setFillColor(...navy); doc.roundedRect(sigX,y,sigW,9,2,2,"F");
+  doc.rect(sigX,y+5,sigW,4,"F");
+  doc.setDrawColor(...gold); doc.setLineWidth(0.5); doc.line(sigX,y+9,sigX+sigW,y+9);
+  NF(true,7.5,white); doc.text("FOR "+seller.name,sigX+sigW/2,y+6.2,{align:"center",maxWidth:sigW-6});
+  // Seal
+  const piSealImg=isVJRA?VJRA_SEAL_B64:SEAL_B64;
+  const piSealType=isVJRA?"PNG":"JPEG";
+  const piSealH=isVJRA?28:20;
+  try{if(piSealImg)doc.addImage(piSealImg,piSealType,sigX+sigW/2-14,y+12,28,piSealH);}catch(e){}
+  // Signature line
+  doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
+  doc.line(sigX+8,y+43,sigX+sigW-8,y+43);
+  NF(false,7.5,[100,100,100]); doc.text("Authorized Signatory",sigX+sigW/2,y+48,{align:"center"});
+
+  // ── Footer + Watermark on all pages ────────────────────────────────────────
+  const drawFooter=(doc)=>{
+    const tp=doc.getNumberOfPages();
+    for(let i=1;i<=tp;i++){
       doc.setPage(i);
-      doc.setFillColor(...navy); doc.rect(0, 290, 210, 7, "F");
-      doc.setFontSize(6.5); doc.setFont(undefined,"normal"); doc.setTextColor(...white);
-      doc.text(
-        seller.name
-          + (seller.phone ? "   |   " + seller.phone : "")
-          + (seller.email ? "   |   " + seller.email : "")
-          + (seller.gstin ? "   |   GSTIN: " + seller.gstin : ""),
-        105, 294, { align:"center" }
-      );
-      // Watermark under footer content
-      try {
+      try{
         doc.saveGraphicsState();
         doc.setGState(new doc.GState({opacity:0.18}));
-        if(seller === COMPANIES.vjra){
-          doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
-        } else {
-          doc.addImage(LOGO_B64,"PNG",45,85,120,90);
-        }
+        if(isVJRA) doc.addImage(VJRA_LOGO_B64_PNG,"PNG",45,85,120,90);
+        else doc.addImage(LOGO_B64,"PNG",45,85,120,90);
         doc.restoreGraphicsState();
-      } catch(e){}
-      doc.setFillColor(...gold);
-      doc.roundedRect(M + pw - 18, 283, 18, 7, 1.5, 1.5, "F");
-      doc.setFontSize(7); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-      doc.text(i + " / " + tp, M + pw - 9, 287.2, { align:"center" });
+      }catch(e){}
+      doc.setFillColor(...navy); doc.rect(0,288,210,9,"F");
+      doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...white);
+      doc.text(seller.name+"  |  "+(seller.phone||"")+"  |  "+(seller.email||""),105,293,{align:"center"});
+      doc.setFont("helvetica","bold"); doc.setTextColor(220,220,220);
+      doc.text("Page "+i+" of "+tp,M+pw,293,{align:"right"});
     }
   };
+  drawFooter(doc);
 
-  // ── HEADER ────────────────────────────────────────────────────────────────
-  doc.setFillColor(...ltblue); doc.rect(0, 0, 210, 46, "F");
-  if(seller === COMPANIES.vjra){ doc.setFillColor(...white); doc.rect(0,0,53,46,"F"); }
-  const piLogoB64 = (seller === COMPANIES.vjra) ? VJRA_LOGO_B64_PNG : LOGO_B64;
-  const piLogoType = (seller === COMPANIES.vjra) ? "PNG" : "PNG";
-  try { if (piLogoB64) doc.addImage(piLogoB64, piLogoType, 7, 4, 40, 38); } catch(e) {}
-  doc.setDrawColor(...steel); doc.setLineWidth(0.4);
-  doc.line(52, 6, 52, 40);
-  doc.setFontSize(12); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-  doc.text(seller.name, 57, 13);
-  const cnW = doc.getTextWidth(seller.name);
-  doc.setDrawColor(...gold); doc.setLineWidth(0.6);
-  doc.line(57, 14.5, 57 + cnW, 14.5);
-  doc.setFontSize(7); doc.setFont(undefined,"italic"); doc.setTextColor(...steel);
-  doc.text(seller.tagline || "", 57, 18.5);
-  doc.setFont(undefined,"normal"); doc.setTextColor(...navy); doc.setFontSize(6.5);
-  doc.text(seller.address, 57, 23);
-  doc.text((seller.phone||"") + (seller.email ? "   |   " + seller.email : ""), 57, 27.5);
-  if (seller.gstin) doc.text(seller.gstin, 57, 32);
-
-  doc.setFontSize(16); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-  doc.text("PROFORMA INVOICE", 210 - M, 12, { align:"right" });
-  const tw = doc.getTextWidth("PROFORMA INVOICE");
-  doc.setDrawColor(...gold); doc.setLineWidth(0.8);
-  doc.line(210 - M - tw, 14, 210 - M, 14);
-  doc.setFontSize(7.5); doc.setFont(undefined,"normal"); doc.setTextColor(...steel);
-  doc.text("PI NO.", 210 - M, 20, { align:"right" });
-  doc.setFontSize(10); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-  doc.text(piNo || "---", 210 - M, 26.5, { align:"right" });
-  doc.setFontSize(7); doc.setFont(undefined,"normal"); doc.setTextColor(...navy);
-  doc.text("Date: " + (contract.contract_date || ""), 210 - M, 32, { align:"right" });
-  if (validityDate) {
-    doc.setFontSize(6.5); doc.setTextColor(...steel);
-    doc.text("Valid till: " + validityDate, 210 - M, 37, { align:"right" });
-  }
-
-  let y = 50;
-
-  // ── PARTIES ───────────────────────────────────────────────────────────────
-  const buyerAddr = contract.buyer_address || buyer?.address || "";
-  doc.autoTable({
-    startY: y,
-    body: [
-      [
-        { content:"SELLER", styles:{ fontStyle:"bold", halign:"center", valign:"middle", fillColor:navy, textColor:white, fontSize:8 } },
-        { content:seller.name, styles:{ fontStyle:"bold", textColor:navy, fillColor:cream, fontSize:9 } },
-        { content:seller.address, styles:{ fontSize:7.5, fillColor:cream, textColor:[50,50,50] } },
-      ],
-      [
-        { content:"BUYER", styles:{ fontStyle:"bold", halign:"center", valign:"middle", fillColor:navy, textColor:white, fontSize:8 } },
-        { content:contract.buyer_name || "", styles:{ fontStyle:"bold", textColor:navy, fillColor:cream, fontSize:9 } },
-        { content:buyerAddr, styles:{ fontSize:7.5, fillColor:cream, textColor:[50,50,50] } },
-      ],
-    ],
-    styles:{ cellPadding:{top:4,bottom:4,left:6,right:6}, valign:"top", lineColor:dgray, lineWidth:0.3, fontSize:8 },
-    columnStyles:{ 0:{cellWidth:20,halign:"center"}, 1:{cellWidth:55}, 2:{cellWidth:pw-75} },
-    tableLineColor:steel, tableLineWidth:0.5,
-    margin:{left:M,right:M}, tableWidth:pw,
-  });
-  y = doc.lastAutoTable.finalY + 4;
-
-  doc.setDrawColor(...gold); doc.setLineWidth(0.8);
-  doc.line(M, y, M + pw, y);
-  doc.setDrawColor(...lgold); doc.setLineWidth(0.3);
-  doc.line(M, y + 1.5, M + pw, y + 1.5);
-  y += 7;
-
-  // ── ITEMS TABLE ─────────────────────────────────────────────────────────
-  // pw=182 | cols: 8+52+34+20+24+20+24 = 182
-  const C = { no:8, desc:52, pack:34, qty:20, cont:24, price:20, amt:24 };
-
-  // Cell builders
-  const IH = (txt, w, al) => ({
-    content: txt,
-    styles: {
-      fillColor:navy, textColor:white, fontStyle:"bold",
-      fontSize:8.5, cellPadding:{top:6,bottom:6,left:5,right:5},
-      halign:al||"left", valign:"middle", cellWidth:w, lineWidth:0,
-    }
-  });
-
-  const ID = (txt, w, al, bold, tc, bg) => ({
-    content: String(txt||""),
-    styles: {
-      fillColor: bg || white,
-      textColor: tc || [40,40,40],
-      fontStyle: bold ? "bold" : "normal",
-      fontSize: 8.5,
-      cellPadding:{top:5,bottom:5,left:5,right:5},
-      halign:al||"left", valign:"middle", cellWidth:w,
-      overflow:"linebreak", lineWidth:0.25, lineColor:[215,225,240],
-    }
-  });
-
-  const itemHead = [[
-    IH("#",             C.no,    "center"),
-    IH("Description",   C.desc,  "left"),
-    IH("Packing",       C.pack,  "left"),
-    IH("Qty (MTS)",     C.qty,   "right"),
-    IH("Containers",    C.cont,  "center"),
-    IH("Unit Price",    C.price, "right"),
-    IH("Amount (USD)",  C.amt,   "right"),
-  ]];
-
-  const itemBody = items.map((it, idx) => {
-    const qty   = n(it.quantity_mt);
-    const price = n(it.price_usd);
-    const amt   = qty * price;
-    const bg    = idx % 2 === 0 ? white : [246,249,255];
-    return [
-      ID(idx+1,                                   C.no,    "center", false, [150,160,185], bg),
-      ID(contract.commodity||"",                  C.desc,  "left",   true,  navy,          bg),
-      ID(it.packing||"",                          C.pack,  "left",   false, [60,80,115],   bg),
-      ID(qty   ? fmt2(qty)   : "",               C.qty,   "right",  true,  [30,30,30],    bg),
-      ID(it.container_qty&&it.container_type
-          ? it.container_qty+" x "+it.container_type : "",
-                                                  C.cont,  "center", false, [70,90,130],   bg),
-      ID(price ? fmt2(price) : "",               C.price, "right",  false, [30,30,30],    bg),
-      ID(amt   ? fmt2(amt)   : "",               C.amt,   "right",  true,  green,         bg),
-    ];
-  });
-
-  // TOTAL row
-  itemBody.push([
-    ID("",                C.no,    "center", false, navy,  lgray),
-    ID("TOTAL",           C.desc,  "left",   true,  navy,  lgray),
-    ID(contract.quantity_tolerance||"+/- 5% at seller's option",
-                          C.pack,  "left",   false, [110,130,160], lgray),
-    ID(fmt2(totQty),      C.qty,   "right",  true,  navy,  lgray),
-    ID("",                C.cont,  "center", false, navy,  lgray),
-    ID("",                C.price, "right",  false, navy,  lgray),
-    ID(usd(totVal),       C.amt,   "right",  true,  white, gold),
-  ]);
-
-  // ADVANCE row
-  if (advancePct) {
-    itemBody.push([
-      ID("",              C.no,    "center", false, amber, [255,249,235]),
-      ID("Advance ("+advancePct+"%) Due", C.desc, "left", true, amber, [255,249,235]),
-      ID("",              C.pack,  "left",   false, amber, [255,249,235]),
-      ID("",              C.qty,   "right",  false, amber, [255,249,235]),
-      ID("",              C.cont,  "center", false, amber, [255,249,235]),
-      ID("",              C.price, "right",  false, amber, [255,249,235]),
-      ID(usd(advAmt),     C.amt,   "right",  true,  amber, [255,243,205]),
-    ]);
-  }
-
-  doc.autoTable({
-    startY: y,
-    head: itemHead,
-    body: itemBody,
-    styles: {
-      fontSize:8.5, cellPadding:{top:5,bottom:5,left:5,right:5},
-      valign:"middle", overflow:"linebreak",
-      lineColor:[215,225,240], lineWidth:0.25,
-    },
-    headStyles: {
-      fontSize:8.5, cellPadding:{top:6,bottom:6,left:5,right:5},
-      valign:"middle", lineWidth:0,
-    },
-    columnStyles: {
-      0:{cellWidth:C.no},   1:{cellWidth:C.desc},
-      2:{cellWidth:C.pack}, 3:{cellWidth:C.qty},
-      4:{cellWidth:C.cont}, 5:{cellWidth:C.price},
-      6:{cellWidth:C.amt},
-    },
-    tableLineColor: [170,190,215], tableLineWidth: 0.5,
-    margin:{left:M, right:M}, tableWidth:pw,
-    didDrawCell: (data) => {
-      if (data.section === "head") {
-        // Gold underline on header
-        doc.setDrawColor(...gold); doc.setLineWidth(1.0);
-        doc.line(data.cell.x, data.cell.y+data.cell.height,
-                 data.cell.x+data.cell.width, data.cell.y+data.cell.height);
-      }
-      if (data.section === "body" && data.row.index === items.length) {
-        // Navy top line above TOTAL row
-        doc.setDrawColor(...navy); doc.setLineWidth(0.7);
-        doc.line(data.cell.x, data.cell.y,
-                 data.cell.x+data.cell.width, data.cell.y);
-      }
-    },
-  });
-  y = doc.lastAutoTable.finalY + 3;
-
-  // ── Amount in Words ───────────────────────────────────────────────────
-  const amtWords = numberToWords(totVal);
-  doc.setFillColor(...lgray); doc.setDrawColor(...steel); doc.setLineWidth(0.4);
-  doc.roundedRect(M, y, pw, 8, 1.5, 1.5, "FD");
-  doc.setFontSize(7.5); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-  doc.text("Amount in Words:", M+5, y+5.2);
-  const lblW = doc.getTextWidth("Amount in Words: ");
-  doc.setFont(undefined,"italic"); doc.setTextColor(30,30,30);
-  doc.text(amtWords, M+5+lblW, y+5.2, {maxWidth: pw-10-lblW});
-  y += 11;
-
-  // ── TERMS TABLE ──────────────────────────────────────────────────────────
-  const lSt = { fontStyle:"bold", fillColor:lgray, textColor:navy, fontSize:8.5,
-                cellPadding:{top:3.5,bottom:3.5,left:6,right:6}, valign:"middle", cellWidth:42 };
-  const vSt = { fontSize:8.5, textColor:[20,20,20],
-                cellPadding:{top:3.5,bottom:3.5,left:6,right:6}, valign:"middle", cellWidth:pw-42, overflow:"linebreak" };
-
-  doc.autoTable({
-    startY:y,
-    body:[
-      [{ content:"Delivery Terms",    styles:lSt }, { content:contract.delivery_terms    || "", styles:vSt }],
-      [{ content:"Port of Loading",   styles:lSt }, { content:contract.loading_port      || "", styles:vSt }],
-      [{ content:"Port of Discharge", styles:lSt }, { content:contract.destination       || "", styles:vSt }],
-      [{ content:"Shipment Period",   styles:lSt }, { content:contract.shipment_period   || "", styles:vSt }],
-      [{ content:"Payment Terms",     styles:lSt }, { content:contract.payment_condition || "", styles:{...vSt,fontStyle:"bold"} }],
-      [{ content:"Contract Ref.",     styles:lSt }, { content:contract.contract_no       || "", styles:vSt }],
-    ],
-    styles:{ fontSize:8.5, cellPadding:{top:3.5,bottom:3.5,left:6,right:6}, valign:"middle", lineColor:dgray, lineWidth:0.3 },
-    columnStyles:{ 0:{cellWidth:42}, 1:{cellWidth:pw-42} },
-    tableLineColor:steel, tableLineWidth:0.4,
-    alternateRowStyles:{ fillColor:[249,251,255] },
-    margin:{left:M,right:M}, tableWidth:pw,
-  });
-  y = doc.lastAutoTable.finalY + 6;
-
-  // ── BANK DETAILS ─────────────────────────────────────────────────────────
-  if (y > 218) { doc.addPage(); y = 20; }
-
-  doc.setFillColor(...navy); doc.roundedRect(M, y, pw, 8, 1.5, 1.5, "F");
-  doc.setFillColor(...gold); doc.roundedRect(M, y, 5, 8, 1.5, 1.5, "F");
-  doc.rect(M + 3, y, 2, 8, "F");
-  doc.setFontSize(9); doc.setFont(undefined,"bold"); doc.setTextColor(...white);
-  doc.text("Bank Details for Payment", M + 10, y + 5.5);
-  y += 12;
-
-  const bL = (txt) => ({ content:txt, styles:{ fontStyle:"bold", fillColor:lgray, textColor:navy,
-    fontSize:8.5, cellWidth:40, cellPadding:{top:3.5,bottom:3.5,left:6,right:6}, valign:"middle" } });
-  const bV = (txt, bold) => ({ content:String(txt||""), styles:{ fontStyle:bold?"bold":"normal",
-    fontSize:8.5, textColor:[20,20,20], cellWidth:pw-40,
-    cellPadding:{top:3.5,bottom:3.5,left:6,right:6}, valign:"middle", overflow:"linebreak" } });
-
-  doc.autoTable({
-    startY:y,
-    body:[
-      [ bL("Beneficiary"),  bV(seller.name, true)   ],
-      [ bL("Bank Name"),    bV(bank.bankName)        ],
-      [ bL("Branch"),       bV(bank.branch)          ],
-      [ bL("Account No."),  bV(bank.accNo,  true)    ],
-      ...(bank.ifsc ? [[ bL("IFSC Code"), bV(bank.ifsc) ]] : []),
-      ...(bank.iban ? [[ bL("IBAN"),      bV(bank.iban, true) ]] : []),
-      [ bL("SWIFT Code"),   bV(bank.swift, true)     ],
-      [ bL("Currency"),     bV(bank.currency||"USD") ],
-    ],
-    styles:{ fontSize:8.5, cellPadding:{top:3.5,bottom:3.5,left:6,right:6}, valign:"middle", lineColor:dgray, lineWidth:0.3 },
-    columnStyles:{ 0:{cellWidth:40}, 1:{cellWidth:pw-40} },
-    tableLineColor:steel, tableLineWidth:0.4,
-    alternateRowStyles:{ fillColor:[249,251,255] },
-    margin:{left:M,right:M}, tableWidth:pw,
-  });
-  y = doc.lastAutoTable.finalY + 7;
-
-  // ── REMARKS BOX ──────────────────────────────────────────────────────────
-  if (y > 248) { doc.addPage(); y = 20; }
-
-  doc.setFontSize(8.2); doc.setFont(undefined,"normal");
-  const remarkLines = [
-    "1.  This is a Proforma Invoice only and not a Commercial Invoice.",
-    "2.  Goods will be shipped upon receipt of payment as per agreed payment terms.",
-    "3.  All terms remain same as per the contract.",
-  ];
-  const lineH   = 5.5;
-  const validTxtH = 7;
-  const boxH    = 6 + remarkLines.length * lineH + validTxtH + 4;
-  doc.setFillColor(254, 252, 232); doc.setDrawColor(...gold); doc.setLineWidth(0.6);
-  doc.roundedRect(M, y, pw, boxH, 2, 2, "FD");
-
-  let ry = y + 6.5;
-  doc.setTextColor(60, 40, 5);
-  remarkLines.forEach(line => {
-    doc.text(line, M + 6, ry, { maxWidth: pw - 12 });
-    ry += lineH;
-  });
-
-  ry += 2;
-  const prefix = "* This Proforma Invoice is valid till:  ";
-  doc.setFont(undefined,"normal"); doc.setTextColor(60, 40, 5);
-  doc.text(prefix, M + 6, ry);
-  const prefW = doc.getTextWidth(prefix);
-  doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-  doc.text(validityDate || "", M + 6 + prefW, ry);
-  y += boxH + 8;
-
-  // ── SIGNATURE ────────────────────────────────────────────────────────────
-  if (y > 258) { doc.addPage(); y = 20; }
-
-  const sigW = pw * 0.46;
-  const sigX = M + pw - sigW;
-  doc.setFillColor(...white); doc.setDrawColor(...gold); doc.setLineWidth(0.7);
-  const piIsVJRA=(seller===COMPANIES.vjra);
-  const piBoxH=50;
-  const piSealH=piIsVJRA?28:20;
-  doc.roundedRect(sigX, y, sigW, piBoxH, 2, 2, "FD");
-  doc.setFillColor(...navy);
-  doc.roundedRect(sigX, y, sigW, 9, 2, 2, "F");
-  doc.rect(sigX, y + 5, sigW, 4, "F");
-  doc.setFontSize(8.5); doc.setFont(undefined,"bold"); doc.setTextColor(...white);
-  doc.text("FOR " + seller.name, sigX + sigW / 2, y + 6.2, { align:"center", maxWidth:sigW - 8 });
-  doc.setFontSize(8); doc.setFont(undefined,"bold"); doc.setTextColor(...navy);
-  doc.text(seller.name, sigX + sigW / 2, y + 16, { align:"center", maxWidth:sigW - 8 });
-  const piSealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
-  const piSealType = (seller === COMPANIES.vjra) ? "PNG" : "JPEG";
-  try{ if(piSealImg) doc.addImage(piSealImg, piSealType, sigX + sigW/2 - 16, y + 22, 32, piSealH); }catch(e){}
-  const piLineY=y+43;
-  const piTextY=y+48;
-  doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
-  doc.line(sigX + 10, piLineY, sigX + sigW - 10, piLineY);
-  doc.setFont(undefined,"normal"); doc.setFontSize(7.5); doc.setTextColor(100,100,100);
-  doc.text("Authorized Signatory", sigX + sigW / 2, piTextY, { align:"center" });
-
-  drawFooter();
-  doc.save("PI_" + (piNo || contract.contract_no || "draft") + ".pdf");
+  const fname="ProformaInvoice_"+(piNo||contract.contract_no||"draft")+".pdf";
+  doc.save(fname);
 }
 
 
