@@ -601,12 +601,12 @@ function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[], allBC
       if (fmt === "pdf") {
         exportShipmentsPDF(filtered, getBC);
       } else {
-        const hdrs = ["Invoice No","Date","Buyer","Country","Product","Port Load","Port Disch","SB No","SB Date","Port Code","BL No","BL Date","Qty(MT)","Rate/MT(USD)","Terms","Inv(USD)","ExRate","Inv(INR)","IGST","Gross(INR)","FOB(USD)","FOB(INR)","RODTEP(INR)","RODTEP St","GST St","BC No","BC Bank","BRC No(s)","Pmt(USD)","Pmt(INR)","Balance(USD)"];
+        const hdrs = ["Invoice No","Date","Buyer","Country","Product","Port Load","Port Disch","SB No","SB Date","Port Code","BL No","BL Date","Qty(MT)","Rate/MT(USD)","Terms","Inv(USD)","ExRate","Inv(INR)","IGST","Gross(INR)","FOB(USD)","FOB(INR)","RODTEP(INR)","RODTEP St","GST St","BC No","BC Bank","BC Date","BRC No(s)","BRC Date(s)","Pmt(USD)","Pmt(INR)","Balance(USD)"];
         const rows = filtered.map(s => {
           const c = calcShip(s), bc = getBC(s);
           const {paidUSD:csvPaidUSD,paidINR:csvPaidINR}=calcEffectivePaid(s.invoice_no,allBRCs,allIRMs,allBCs);
           const bal=c.invoiceAmtUSD-csvPaidUSD;
-          return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.port_code||"",s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.bank_name:"",bc?bc.brc_entries?.map(b=>b.brc_no).join("; "):"",fi(csvPaidUSD),fi(csvPaidINR),fi(bal)];
+          return [s.invoice_no,s.invoice_date,s.buyer_name,s.buyer_country,s.product,s.port_of_loading,s.port_of_discharge,s.shipping_bill_no,s.shipping_bill_date,s.port_code||"",s.bl_no,s.bl_date,s.qty,s.rate_per_mt,s.delivery_terms,fi(c.invoiceAmtUSD),s.exchange_rate,fi(c.invoiceAmtINR),fi(s.igst),fi(c.grossTotal),fi(s.fob_value_usd),fi(c.fobValueINR),fi(s.rodtep_amount),s.rodtep_status,s.gst_status,bc?bc.bc_no:"",bc?bc.bank_name:"",bc?bc.bc_date:"",bc?bc.brc_entries?.map(b=>b.brc_no).join("; "):"",bc?bc.brc_entries?.map(b=>b.brc_date).join("; "):"",fi(csvPaidUSD),fi(csvPaidINR),fi(bal)];
         });
         dlCSV(`Devratan_Shipments_${fromDate||"all"}_to_${toDate||"all"}.csv`, toCSV(hdrs, rows));
       }
@@ -4042,8 +4042,8 @@ function exportContractPDF(contract, buyer, consignee) {
       "ENTIRE AGREEMENT & PRECEDENCE|This Contract and its schedules constitute the entire agreement. In case of conflict: (1) signed Special Conditions/Addendum; (2) main commercial terms; (3) these Terms & Conditions; (4) product/packing schedules; (5) other referenced documents. Buyer purchase orders or standard terms shall not override this Contract unless expressly accepted in writing by Seller.",
       "SEVERABILITY|If any provision is invalid, illegal or unenforceable, it shall be severed or limited to the minimum extent necessary and the remainder shall continue in full force and effect.",
       "CONTINUING OBLIGATIONS|Termination or completion shall not extinguish obligations that by nature survive, including outstanding payment, loss reconciliation, indemnities, claims, limitation of liability, document/control rights and dispute resolution.",
-      "GOVERNING LAW|This Contract shall be governed by and construed in accordance with the laws of India, without regard to conflict-of-law principles.",
-      "DISPUTE RESOLUTION & ARBITRATION|The Parties shall first attempt in good faith to resolve disputes through amicable negotiations. If not resolved within 30 days after written notice, the dispute shall be finally settled by arbitration in Indore, Madhya Pradesh, India, under the Arbitration and Conciliation Act, 1996. The arbitration shall be in English by a sole arbitrator mutually appointed; failing agreement, appointment shall be made under applicable law. The seat and legal place shall be Indore. The award shall be final and binding. Seller may seek urgent interim/protective relief from a competent court.",
+      "GOVERNING LAW|This Contract shall be governed by and construed in accordance with the laws of "+((seller===COMPANIES.vjra)?"the United Arab Emirates":"India")+", without regard to conflict-of-law principles.",
+      "DISPUTE RESOLUTION & ARBITRATION|The Parties shall first attempt in good faith to resolve disputes through amicable negotiations. If not resolved within 30 days after written notice, the dispute shall be finally settled by arbitration in "+((seller===COMPANIES.vjra)?"the United Arab Emirates, under the arbitration rules applicable in the United Arab Emirates":"Indore, Madhya Pradesh, India, under the Arbitration and Conciliation Act, 1996")+". The arbitration shall be in English by a sole arbitrator mutually appointed; failing agreement, appointment shall be made under applicable law. The seat and legal place shall be "+((seller===COMPANIES.vjra)?"the United Arab Emirates":"Indore")+". The award shall be final and binding. Seller may seek urgent interim/protective relief from a competent court.",
       "BUYER ACKNOWLEDGEMENT|By signing, Buyer confirms it has read and understood the complete Contract; accepts payment, shipment, default, Force Majeure, claims, resale/mitigation and dispute provisions; understands that document/cargo release is subject to timely payment; accepts Seller’s contractual resale/mitigation rights following default; and confirms the signatory’s authority.",
       isCIF?"CIF – DELIVERY, FREIGHT & INSURANCE|The Goods shall be delivered on CIF basis to the named destination port in accordance with Incoterms® 2020. Seller shall arrange and pay for main carriage to the named destination and arrange the required CIF cargo insurance; risk transfers to Buyer when the Goods are on board at the loading port. Buyer shall provide timely and accurate consignee, notify-party and destination/documentary instructions. Any delay or additional cost caused by Buyer’s late or incorrect instructions shall be for Buyer’s account. The War Risk & Extraordinary Charges clause shall apply notwithstanding the CIF term."
            :"FOB – DELIVERY, VESSEL, FREIGHT & INSURANCE|The Goods shall be delivered on FOB basis at the named port of shipment in accordance with Incoterms® 2020. Buyer shall nominate the vessel/carrier and provide timely shipping instructions. Seller shall complete export clearance and deliver the Goods on board the Buyer-nominated vessel; risk transfers to Buyer when the Goods are on board. Buyer shall arrange and pay for main carriage and cargo insurance. Any delay or additional cost caused by Buyer’s late or incorrect vessel nomination or shipping instructions shall be for Buyer’s account. The War Risk & Extraordinary Charges clause shall apply notwithstanding the FOB term.",
@@ -7478,11 +7478,20 @@ function InvoicingTab({buyers}){
     invNF(doc,true,8.5); doc.text("Items:",M,y); y+=4;
     // Decide whether item rows need to shrink to keep the whole invoice on one page.
     // Reserve ~78mm for the breakup/details block + signature that follows the items table.
-    const reserveAfterItems=85;
+    const reserveAfterItems=95;
     const normalItemsH=measureItemsHeight(doc,RW,false);
     const compactItems = (y+normalItemsH+reserveAfterItems) > 282;
     const {y:y2,totalAmtLocal}=renderItemsTable(doc,M,y,RW,true,false,compactItems);
-    y=y2+3;
+    y=y2+4;
+
+    // Amount in Words — full width, right after items, before Net Wt/Breakup section
+    const amtWordsExp=numWords(totalAmt,form.items[0]?.ccy);
+    y=invChkPg(doc,y,14,"EXPORT INVOICE CUM PACKING LIST",(d)=>{addInvFooter(d);return addInvHeader(d,"EXPORT INVOICE CUM PACKING LIST");});
+    invNF(doc,true,compactItems?7.5:8.5); doc.text("Amount in Words:",M,y); y+=4;
+    invNF(doc,false,compactItems?7.5:8);
+    const amtWordsLines=doc.splitTextToSize(amtWordsExp,RW);
+    doc.text(amtWordsLines,M,y);
+    y+=amtWordsLines.length*(compactItems?4:4.5)+3;
 
     // CIF/FOB/Freight/Insurance breakup
     const ccy=form.items[0]?.ccy||"USD";
@@ -7505,11 +7514,11 @@ function InvoicingTab({buyers}){
     const gstLabel=gstRates.length===0?"GST @ 0% (IGST)":gstRates.length===1?"GST @ "+(n(gstRates[0])*100).toFixed(0)+"% (IGST)":"GST (IGST) — Mixed Rates";
     breakupRows.push([gstLabel,"INR "+igst.toLocaleString("en-IN"),""]);
 
-    // Two-column block: left = Net/Gross Wt, Amount in Words, Third Party, Bank Details
-    // (rendered as an aligned table so labels/values line up cleanly). Right = CIF/FOB/
-    // Freight/Insurance breakup table. Shrink both when the invoice is running long.
+    // Two-column block: left = Net/Gross Wt, Third Party, Bank Details (rendered as an
+    // aligned table so labels/values line up cleanly). Right = CIF/FOB/Freight/Insurance
+    // breakup table. Shrink both when the invoice is running long.
     const compactBlock = compactItems;
-    y=invChkPg(doc,y,compactBlock?65:85,"EXPORT INVOICE CUM PACKING LIST",(d)=>{addInvFooter(d);return addInvHeader(d,"EXPORT INVOICE CUM PACKING LIST");});
+    y=invChkPg(doc,y,compactBlock?55:72,"EXPORT INVOICE CUM PACKING LIST",(d)=>{addInvFooter(d);return addInvHeader(d,"EXPORT INVOICE CUM PACKING LIST");});
     const blockStartY=y;
     const leftW=74,colGap=6,rightW=RW-leftW-colGap,rightX=M+leftW+colGap;
     const bkFont=compactBlock?6.3:7, bkPad=compactBlock?1:1.5;
@@ -7521,16 +7530,14 @@ function InvoicingTab({buyers}){
     });
     const rightFinalY=doc.lastAutoTable.finalY;
 
-    // Left column — Net/Gross Wt, Amount in Words, Third Party, Bank Details as one
-    // aligned table so every label/value pair lines up (fixes the "not aligned" look).
+    // Left column — Net/Gross Wt, Third Party, Bank Details as one aligned table so
+    // every label/value pair lines up.
     const totNetWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
     const totGrossWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_gross_wt)*100)/100,0);
     const bd=BANK_DETAILS.devratan;
-    const amtWordsExp=numWords(totalAmt,form.items[0]?.ccy);
     const leftRows=[
       ["NET WT",totNetWt.toLocaleString("en-IN")+" Kgs"],
       ["GROSS WT",totGrossWt.toLocaleString("en-IN")+" Kgs"],
-      ["AMOUNT IN WORDS",amtWordsExp],
     ];
     if(form.third_party_name) leftRows.push(["THIRD PARTY",form.third_party_name+(form.third_party_gst?"  |  GST: "+form.third_party_gst:"")]);
     leftRows.push(["BANK",bd.bankName]);
