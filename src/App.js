@@ -4070,7 +4070,7 @@ function exportContractPDF(contract, buyer, consignee) {
     const botY=287;
     const lineH=3.2;
     const clauseGap=1.2;
-    const SIG_H=75; // space needed for signature block
+    const SIG_H=58; // space needed for signature block (gap+lines+seal area+line+name+caption)
 
     const tcNF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz);doc.setTextColor(0,0,0);};
 
@@ -4201,12 +4201,19 @@ function exportContractPDF(contract, buyer, consignee) {
     const isSeller=(label==="SELLER");
     const isVJRASeller=isSeller&&(seller===COMPANIES.vjra);
     const lineY = y + sigAreaH;
+
+    // Small grey Seller/Buyer label above the signature line
+    doc.setFont(undefined, "normal"); doc.setFontSize(7); doc.setTextColor(150, 150, 150);
+    doc.text(label, x + sigW / 2, y + 4, { align: "center" });
+
     if(isSeller){
       const sealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
       const sealType = (seller === COMPANIES.vjra) ? "PNG" : "JPEG";
-      const sealW = 28;
-      const sealH = isVJRASeller?28:20;
-      const sealY = lineY - sealH - 2; // sit just above the signature line
+      const sealW = isVJRASeller?28:32;
+      const sealH = isVJRASeller?28:24;
+      // VJRA seal sits just above the line; Devratan seal is bigger and sits a
+      // touch lower (slight overlap with the line, like a real stamp).
+      const sealY = isVJRASeller ? (lineY - sealH - 2) : (lineY - sealH + 2);
       try{ if(sealImg) doc.addImage(sealImg, sealType, x + sigW/2 - sealW/2, sealY, sealW, sealH); }catch(e){}
     }
     doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
@@ -4216,7 +4223,7 @@ function exportContractPDF(contract, buyer, consignee) {
     let ny = lineY + 5;
     nameLines.forEach(nl => { doc.text(nl, x + sigW / 2, ny, { align: "center" }); ny += 4.5; });
     doc.setFont(undefined, "normal"); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
-    doc.text("Authorized Signature & Stamp", x + sigW / 2, ny + 1, { align: "center" });
+    doc.text("Authorized Signature & Stamp", x + sigW / 2, ny - 1.5, { align: "center" });
   };
 
   drawSigBox(M, "SELLER", seller.name);
