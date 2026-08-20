@@ -4185,7 +4185,9 @@ function exportContractPDF(contract, buyer, consignee) {
   }
 
   // ── SIGNATURE BLOCK — continues from y, new page only if not enough space ──
-  if(y+65>287){ doc.addPage(); addPageDecor(); y=12; }
+  // Block needs: 8 (gap) + 6 (gold lines) + 58 (box height) = 72mm. Reserve a
+  // little extra so the box never runs into the footer bar (starts at y=288).
+  if(y+76>283){ doc.addPage(); addPageDecor(); y=12; }
   y+=8; // extra gap so gold line doesn't overlap T&C text
   doc.setDrawColor(...gold); doc.setLineWidth(0.8);
   doc.line(M, y, M + pw, y);
