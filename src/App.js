@@ -4185,9 +4185,9 @@ function exportContractPDF(contract, buyer, consignee) {
   }
 
   // ── SIGNATURE BLOCK — continues from y, new page only if not enough space ──
-  // Block needs: 8 (gap) + 6 (gold lines) + 58 (box height) = 72mm. Reserve a
-  // little extra so the box never runs into the footer bar (starts at y=288).
-  if(y+76>283){ doc.addPage(); addPageDecor(); y=12; }
+  // Block needs: 8 (gap) + 6 (gold lines) + ~26 (blank seal/sign area) + line +
+  // name + caption ≈ 55mm. Reserve a bit extra as a safety margin.
+  if(y+66>283){ doc.addPage(); addPageDecor(); y=12; }
   y+=8; // extra gap so gold line doesn't overlap T&C text
   doc.setDrawColor(...gold); doc.setLineWidth(0.8);
   doc.line(M, y, M + pw, y);
@@ -4196,42 +4196,27 @@ function exportContractPDF(contract, buyer, consignee) {
   y += 6;
 
   const sigW = pw / 2 - 4;
+  const sigAreaH = 26; // blank space above the line reserved for wet signature / seal
   const drawSigBox = (x, label, name) => {
-    doc.setFillColor(255, 255, 255); doc.setDrawColor(...gold); doc.setLineWidth(0.7);
     const isSeller=(label==="SELLER");
     const isVJRASeller=isSeller&&(seller===COMPANIES.vjra);
-    const boxH=58; // uniform box size
-    doc.roundedRect(x, y, sigW, boxH, 2, 2, "FD");
-    doc.setFillColor(...navy);
-    doc.roundedRect(x, y, sigW, 9, 2, 2, "F");
-    doc.rect(x, y + 5, sigW, 4, "F");
-    doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(255, 255, 255);
-    doc.text(label, x + sigW / 2, y + 6.5, { align: "center" });
-    doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
-    const nameLines = doc.splitTextToSize(name, sigW - 10);
-    let ny = y + 16;
-    nameLines.forEach(nl => {
-      const nw = doc.getTextWidth(nl);
-      const nx2 = x + sigW / 2;
-      doc.text(nl, nx2, ny, { align: "center" });
-      doc.setDrawColor(...navy); doc.setLineWidth(0.45);
-      doc.line(nx2 - nw / 2, ny + 1.5, nx2 + nw / 2, ny + 1.5);
-      ny += 5.5;
-    });
+    const lineY = y + sigAreaH;
     if(isSeller){
       const sealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
       const sealType = (seller === COMPANIES.vjra) ? "PNG" : "JPEG";
       const sealW = 28;
       const sealH = isVJRASeller?28:20;
-      const sealY = y + 26;
+      const sealY = lineY - sealH - 2; // sit just above the signature line
       try{ if(sealImg) doc.addImage(sealImg, sealType, x + sigW/2 - sealW/2, sealY, sealW, sealH); }catch(e){}
     }
-    const lineY=y+49;
-    const textY=y+55;
     doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
     doc.line(x + 8, lineY, x + sigW - 8, lineY);
+    doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
+    const nameLines = doc.splitTextToSize(name, sigW - 10);
+    let ny = lineY + 5;
+    nameLines.forEach(nl => { doc.text(nl, x + sigW / 2, ny, { align: "center" }); ny += 4.5; });
     doc.setFont(undefined, "normal"); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
-    doc.text("Authorized Signature & Stamp", x + sigW / 2, textY, { align: "center" });
+    doc.text("Authorized Signature & Stamp", x + sigW / 2, ny + 1, { align: "center" });
   };
 
   drawSigBox(M, "SELLER", seller.name);
