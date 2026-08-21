@@ -4067,10 +4067,11 @@ function exportContractPDF(contract, buyer, consignee) {
 
     const cW=(pw-4)/2;
     const colX=[M, M+cW+4];
-    const botY=287;
+    const SIG_H=62; // space reserved at the bottom of every clause page for the signature block
+    const botY=287-SIG_H; // every page's columns stop here, so whichever page ends up
+                           // last will already have SIG_H of clear room below it
     const lineH=3.2;
     const clauseGap=1.2;
-    const SIG_H=58; // space needed for signature block (gap+lines+seal area+line+name+caption)
 
     const tcNF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz);doc.setTextColor(0,0,0);};
 
@@ -4081,40 +4082,6 @@ function exportContractPDF(contract, buyer, consignee) {
       return {cl,hH,bH,totalH:hH+bH+clauseGap};
     });
 
-    // Simulate layout to find where last page starts and how many clauses fit
-    // Goal: on the LAST page, split clauses between columns so sig block fits below
-    // Strategy: layout all pages, on last page balance columns to leave SIG_H at bottom
-    const pageAvailH=(startY)=>botY-startY;
-
-    // First pass: determine pages
-    let simColIdx=0, simCy=y, simPageStartY=y, simPages=[[]], simColStarts=[y];
-    clauseHeights.forEach((ch,i)=>{
-      if(simCy+ch.totalH>botY-4){
-        if(simColIdx===0){
-          simColIdx=1; simCy=simPageStartY;
-          simPages[simPages.length-1].push({...ch,colIdx:1});
-        } else {
-          simColIdx=0; simCy=12; simPageStartY=12;
-          simPages.push([]);
-          simColStarts.push(12);
-          simPages[simPages.length-1].push({...ch,colIdx:0});
-        }
-      } else {
-        simPages[simPages.length-1].push({...ch,colIdx:simColIdx});
-      }
-      simCy+=ch.totalH;
-    });
-
-    // On last page: try to balance so sig fits
-    // Re-layout last page clauses: fill left until half total height, then right
-    const lastPageClauses=simPages[simPages.length-1].map(ch=>ch.cl);
-    const lastPageStartY=simColStarts[simColStarts.length-1];
-    const availH=botY-lastPageStartY;
-    const totalLastH=clauseHeights.filter(ch=>lastPageClauses.includes(ch.cl)).reduce((s,ch)=>s+ch.totalH,0);
-    // If both columns + sig fit, balance; otherwise just flow
-    const halfH=Math.min(totalLastH/2, availH-SIG_H-4);
-
-    // Now draw everything
     const drawColDivider=(fromY,toY)=>{
       doc.setDrawColor(192,212,236); doc.setLineWidth(0.3);
       doc.line(M+cW+2,fromY,M+cW+2,toY);
@@ -4143,42 +4110,27 @@ function exportContractPDF(contract, buyer, consignee) {
       return localY+clauseGap;
     };
 
+    // Straightforward two-column flow: fill left column top-to-bottom, then right,
+    // then a new page. Every page's usable height already stops SIG_H short of the
+    // true bottom, so the signature block is guaranteed room right after the last
+    // clause — no need to predict which page is "last" or pre-balance columns.
     let colIdx=0, cy=y, pageStartY=y;
-    let isLastPage=(simPages.length===1);
-    let leftColH=0;
 
     for(let i=0;i<clauseHeights.length;i++){
       const {cl,totalH}=clauseHeights[i];
-      const isOnLastPage=lastPageClauses.includes(cl);
-
-      // Determine column switch threshold
-      let switchThreshold;
-      if(isOnLastPage&&simPages.length>1){
-        // On last page: switch to right when left has filled halfH
-        switchThreshold=(colIdx===0&&leftColH>=halfH);
-      } else {
-        switchThreshold=(cy+totalH>botY-4&&colIdx===0)||(cy+totalH>botY-4&&colIdx===1&&false);
-      }
 
       if(cy+totalH>botY-4){
         if(colIdx===0){
           drawColDivider(pageStartY,botY);
-          colIdx=1; cy=pageStartY; leftColH=0;
-          isLastPage=(i>=clauseHeights.length-lastPageClauses.length);
+          colIdx=1; cy=pageStartY;
         } else {
           drawColDivider(pageStartY,botY);
           doc.addPage(); addPageDecor();
-          cy=12; pageStartY=12; colIdx=0; leftColH=0;
-          isLastPage=(i>=clauseHeights.length-lastPageClauses.length);
+          cy=12; pageStartY=12; colIdx=0;
         }
-      } else if(isOnLastPage&&colIdx===0&&leftColH>=halfH){
-        // Switch to right column on last page to balance
-        drawColDivider(pageStartY,cy+2);
-        colIdx=1; cy=pageStartY;
       }
 
       cy=drawClause(cl,colX[colIdx],cy);
-      if(colIdx===0) leftColH+=totalH;
     }
     drawColDivider(pageStartY,cy+2);
     y=cy+4;
@@ -7085,13 +7037,14 @@ function InvoicingTab({buyers}){
   const totalIns=n(form.insurance_per_mt)*totalQty;
   const totalFOB=form.delivery_terms==="FOB"?totalAmt:form.delivery_terms==="CIF"?totalAmt-totalFrt-totalIns:totalAmt-totalIns;
   const totalCIF=form.delivery_terms==="FOB"?totalAmt:totalAmt;
-  const totalINR=Math.round(totalAmt*n(form.exchange_rate));
+  const totalINR=form.decimal_inr ? Math.round(totalAmt*n(form.exchange_rate)*100)/100 : Math.round(totalAmt*n(form.exchange_rate));
   // IGST calculated per item: each item's INR value × its own gst_rate
-  const igst=Math.round(form.items.reduce((s,it)=>{
+  const igstRaw=form.items.reduce((s,it)=>{
     const itemAmt=n(it.qty_mt)*n(it.rate_per_mt);
     const itemINR=itemAmt*n(form.exchange_rate);
     return s+itemINR*n(it.gst_rate!=null&&it.gst_rate!==""?it.gst_rate:"0.05");
-  },0));
+  },0);
+  const igst=form.decimal_inr ? Math.round(igstRaw*100)/100 : Math.round(igstRaw);
   const contTotBags=form.containers.reduce((s,c)=>s+n(c.bags),0);
   const getItemForCont=c=>(form.items[n(c.item_idx)||0]||form.items[0]||{bag_net_wt:"25",bag_gross_wt:"25.13"});
   const contTotGross=form.containers.reduce((s,c)=>{const it=getItemForCont(c);return s+Math.round(n(c.bags)*n(it.bag_gross_wt)*100)/100;},0);
@@ -7492,24 +7445,25 @@ function InvoicingTab({buyers}){
 
     // CIF/FOB/Freight/Insurance breakup
     const ccy=form.items[0]?.ccy||"USD";
+    const inrFmt=v=>form.decimal_inr ? v.toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2}) : v.toLocaleString("en-IN");
     const breakupRows=[];
     if(form.delivery_terms==="CIF"){
-      breakupRows.push(["TOTAL CIF VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+totalINR.toLocaleString("en-IN")]);
+      breakupRows.push(["TOTAL CIF VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+inrFmt(totalINR)]);
       breakupRows.push(["FREIGHT ("+ccy+" "+n(form.freight_per_mt).toFixed(2)+" × "+totalQty+" MT)","("+ccy+" "+totalFrt.toLocaleString("en-IN",{minimumFractionDigits:2})+")"]);
       breakupRows.push(["INSURANCE ("+ccy+" "+n(form.insurance_per_mt).toFixed(2)+" × "+totalQty+" MT)","("+ccy+" "+totalIns.toLocaleString("en-IN",{minimumFractionDigits:2})+")"]);
       breakupRows.push(["FOB VALUE",ccy+" "+totalFOB.toLocaleString("en-IN",{minimumFractionDigits:2}),""]);
     } else if(form.delivery_terms==="FOB"){
-      breakupRows.push(["TOTAL FOB VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+totalINR.toLocaleString("en-IN")]);
+      breakupRows.push(["TOTAL FOB VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+inrFmt(totalINR)]);
     } else {
-      breakupRows.push(["TOTAL C&I VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+totalINR.toLocaleString("en-IN")]);
+      breakupRows.push(["TOTAL C&I VALUE",ccy+" "+totalAmt.toLocaleString("en-IN",{minimumFractionDigits:2}),"INR "+inrFmt(totalINR)]);
       breakupRows.push(["INSURANCE","("+ccy+" "+totalIns.toLocaleString("en-IN",{minimumFractionDigits:2})+")"]);
       breakupRows.push(["FOB VALUE",ccy+" "+totalFOB.toLocaleString("en-IN",{minimumFractionDigits:2}),""]);
     }
     breakupRows.push(["EXCHANGE RATE (1 "+ccy+" = INR "+form.exchange_rate+")",""]);
-    breakupRows.push(["AMOUNT IN INR","INR "+totalINR.toLocaleString("en-IN"),""]);
+    breakupRows.push(["AMOUNT IN INR","INR "+inrFmt(totalINR),""]);
     const gstRates=[...new Set(form.items.map(it=>it.gst_rate||"0").filter(r=>n(r)>0))];
     const gstLabel=gstRates.length===0?"GST @ 0% (IGST)":gstRates.length===1?"GST @ "+(n(gstRates[0])*100).toFixed(0)+"% (IGST)":"GST (IGST) — Mixed Rates";
-    breakupRows.push([gstLabel,"INR "+igst.toLocaleString("en-IN"),""]);
+    breakupRows.push([gstLabel,"INR "+inrFmt(igst),""]);
 
     // Two-column block: left = Net/Gross Wt, Third Party, Bank Details (rendered as an
     // aligned table so labels/values line up cleanly). Right = CIF/FOB/Freight/Insurance
@@ -7733,7 +7687,7 @@ function InvoicingTab({buyers}){
           <h2 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:17}}>📄 Invoicing</h2>
           <p style={{margin:0,fontSize:11,color:"#64748b"}}>Export Invoice cum PL · Commercial Invoice (Buyer/Bank) · Packing List</p>
         </div>
-        <button onClick={()=>{setForm(JSON.parse(JSON.stringify(INVOICE_EMPTY)));setEditId(null);setView("form");}}
+        <button onClick={()=>{setForm({...JSON.parse(JSON.stringify(INVOICE_EMPTY)),decimal_inr:true});setEditId(null);setView("form");}}
           style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:700,fontSize:13}}>
           + New Invoice
         </button>
