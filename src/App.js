@@ -3823,7 +3823,7 @@ function exportContractPDF(contract, buyer, consignee) {
 
   doc.autoTable({
     startY: y, body: partyRows,
-    styles: { cellPadding: { top: 4, bottom: 4, left: 5, right: 5 }, valign: "top", lineColor: dgray, lineWidth: 0.25, overflow: "linebreak" },
+    styles: { cellPadding: { top: 3, bottom: 3, left: 5, right: 5 }, valign: "top", lineColor: dgray, lineWidth: 0.25, overflow: "linebreak" },
     columnStyles: {
       0: { cellWidth: 22, halign: "center" },
       1: { cellWidth: 52 },
@@ -3832,7 +3832,7 @@ function exportContractPDF(contract, buyer, consignee) {
     tableLineColor: steel, tableLineWidth: 0.4,
     margin: { left: M, right: M }, tableWidth: pw,
   });
-  y = doc.lastAutoTable.finalY + 5;
+  y = doc.lastAutoTable.finalY + 3.5;
 
   // ── Gold double rule ──────────────────────────────────────────────────────
   doc.setDrawColor(...gold); doc.setLineWidth(0.7);
@@ -3904,22 +3904,22 @@ function exportContractPDF(contract, buyer, consignee) {
 
   doc.autoTable({
     startY: y, body: termRows,
-    styles: { fontSize: 8.5, cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 5 }, valign: "top", lineColor: dgray, lineWidth: 0.25, overflow: "linebreak" },
+    styles: { fontSize: 8.5, cellPadding: { top: 2.6, bottom: 2.6, left: 5, right: 5 }, valign: "top", lineColor: dgray, lineWidth: 0.25, overflow: "linebreak" },
     columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: pw - 34 } },
     tableLineColor: gold, tableLineWidth: 0.4,
     alternateRowStyles: { fillColor: [249, 251, 255] },
     margin: { left: M, right: M }, tableWidth: pw,
   });
-  y = doc.lastAutoTable.finalY + 6;
+  y = doc.lastAutoTable.finalY + 4;
 
   // ── Special Conditions ────────────────────────────────────────────────────
   if (contract.special_conditions && contract.special_conditions.trim()) {
     // Set font first so splitTextToSize uses correct metrics
     doc.setFontSize(8.2); doc.setFont(undefined, "normal");
     const scLines = doc.splitTextToSize(contract.special_conditions, pw - 12);
-    const lineH = 4.8;
-    const labelH = 8;
-    const padV = 5;
+    const lineH = 4.2;
+    const labelH = 6.5;
+    const padV = 3.5;
     const boxH = labelH + scLines.length * lineH + padV;
 
     // Page break if box won't fit
@@ -3931,7 +3931,7 @@ function exportContractPDF(contract, buyer, consignee) {
 
     // Label
     doc.setFontSize(8.5); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
-    doc.text("Special Conditions:", M + 5, y + 5.5);
+    doc.text("Special Conditions:", M + 5, y + 4.5);
     y += labelH;
 
     // Content lines — draw all on current page, handle overflow properly
@@ -3944,7 +3944,7 @@ function exportContractPDF(contract, buyer, consignee) {
       doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
       doc.roundedRect(M, pageY - labelH, pw, labelH + lines.length * lineH + padV, 2, 2, "FD");
       doc.setFont(undefined, "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
-      doc.text("Special Conditions:", M + 5, pageY - labelH + 5.5);
+      doc.text("Special Conditions:", M + 5, pageY - labelH + 4.5);
       doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
       let ly = pageY;
       lines.forEach(line => { doc.text(line, M + 6, ly); ly += lineH; });
@@ -3958,7 +3958,7 @@ function exportContractPDF(contract, buyer, consignee) {
       doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
       doc.roundedRect(M, y, pw, totalBoxH, 2, 2, "FD");
       doc.setFont(undefined, "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
-      doc.text("Special Conditions:", M + 5, y + 5.5);
+      doc.text("Special Conditions:", M + 5, y + 4.5);
       y += labelH;
       doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
       scLines.forEach(line => { doc.text(line, M + 6, y); y += lineH; });
@@ -3976,7 +3976,7 @@ function exportContractPDF(contract, buyer, consignee) {
         doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
         doc.roundedRect(M, boxStartY, pw, bH, 2, 2, "FD");
         doc.setFont(undefined, "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
-        doc.text("Special Conditions:", M + 5, boxStartY + 5.5);
+        doc.text("Special Conditions:", M + 5, boxStartY + 4.5);
         doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
         let ly = boxStartY + labelH;
         batch.forEach(line => { doc.text(line, M + 6, ly); ly += lineH; });
@@ -3993,7 +3993,7 @@ function exportContractPDF(contract, buyer, consignee) {
   // ── TERMS & CONDITIONS — 2-column, continues from current y ───────────────
   {
     // Gap after special conditions + check space
-    y += 4;
+    y += 3;
     if(y > 248){ doc.addPage(); addPageDecor(); y = 12; }
 
     // "TERMS & CONDITIONS" heading in body (not in header)
@@ -4002,7 +4002,7 @@ function exportContractPDF(contract, buyer, consignee) {
     const tcTW=doc.getTextWidth("TERMS & CONDITIONS");
     doc.setDrawColor(...gold); doc.setLineWidth(0.5);
     doc.line(M+pw/2-tcTW/2,y+1.2,M+pw/2+tcTW/2,y+1.2);
-    y+=7;
+    y+=5.5;
 
     const isCIF=(contract.delivery_terms||"").toUpperCase().includes("CIF");
     const clause40FOB={h:"40. FOB \u2013 Vessel Nomination & Carriage",b:"The Buyer shall nominate the vessel/carrier and provide complete and accurate shipping instructions within the agreed shipment period. Seller shall deliver the Goods on board the Buyer-nominated vessel at the named port of shipment on FOB basis in accordance with Incoterms\u00ae 2020. Risk transfers to Buyer when the Goods are on board. Buyer shall arrange and pay for main carriage and cargo insurance. If Buyer fails to provide timely nomination or instructions, Seller may extend the shipment period, recover resulting costs or cancel the affected unperformed portion without liability."};
@@ -4073,8 +4073,8 @@ function exportContractPDF(contract, buyer, consignee) {
     const cW=(pw-4)/2;
     const colX=[M, M+cW+4];
     const fullBotY=287; // true bottom, used for every page except the last
-    const lineH=3.2;
-    const clauseGap=1.2;
+    const lineH=3.05;
+    const clauseGap=1.0;
 
     const tcNF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz);doc.setTextColor(0,0,0);};
 
