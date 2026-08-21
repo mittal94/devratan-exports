@@ -4113,23 +4113,22 @@ function exportContractPDF(contract, buyer, consignee) {
       return localY+clauseGap;
     };
 
-    // Reserve room for the signature block on every page (not just a predicted
-    // "last" page). This is slightly less space-efficient than trying to only
-    // reserve on the true last page, but it removes an entire class of bugs
-    // where a misprediction let clause text run into the signature block.
-    const botY = fullBotY - SIG_H;
-
+    // Clauses always flow at FULL page capacity — this keeps the page
+    // distribution stable (e.g. clauses 1-19 on page 2, 20-40 on page 3)
+    // regardless of the signature block below. No space is pre-reserved here;
+    // whether the signature needs a new page is decided once, after the last
+    // clause, based on how much room is actually left (see below).
     let colIdx=0, cy=y, pageStartY=y;
 
     for(let i=0;i<clauseHeights.length;i++){
       const {cl,totalH}=clauseHeights[i];
 
-      if(cy+totalH>botY-4){
+      if(cy+totalH>fullBotY-4){
         if(colIdx===0){
-          drawColDivider(pageStartY,botY);
+          drawColDivider(pageStartY,fullBotY);
           colIdx=1; cy=pageStartY;
         } else {
-          drawColDivider(pageStartY,botY);
+          drawColDivider(pageStartY,fullBotY);
           doc.addPage(); addPageDecor();
           cy=12; pageStartY=12; colIdx=0;
         }
@@ -4141,9 +4140,8 @@ function exportContractPDF(contract, buyer, consignee) {
     y=cy+4;
   }
 
-  // ── SIGNATURE BLOCK — continues from y, new page only if not enough space ──
-  // Uses the SAME SIG_H reserved during clause layout above, against the true page
-  // bottom (287) — this must match, or the two checks can disagree (see comment above).
+  // ── SIGNATURE BLOCK — continues right after the last clause; only jumps to
+  // a new page if there genuinely isn't SIG_H worth of room left on this one ──
   if(y+SIG_H>287){ doc.addPage(); addPageDecor(); y=12; }
   y+=8; // extra gap so gold line doesn't overlap T&C text
   doc.setDrawColor(...gold); doc.setLineWidth(0.8);
