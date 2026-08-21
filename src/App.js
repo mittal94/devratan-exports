@@ -3634,6 +3634,11 @@ function exportContractPDF(contract, buyer, consignee) {
   const doc = new JPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const M = 15;
   const pw = 210 - M * 2;
+  // Space reserved for the signature block. Used both to cap how far clause columns
+  // may run on every page (so whichever page ends up last already has room) and by
+  // the final safety check below — both MUST use the same number and the same true
+  // page-bottom (287), or the two can disagree and force an unnecessary extra page.
+  const SIG_H = 62;
   const navy  = [18, 52, 96];      // deep navy (logo color)
   const steel = [70, 130, 180];    // steel blue (mid tone)
   const ltblue= [220, 235, 250];   // light blue (header bg)
@@ -4067,7 +4072,6 @@ function exportContractPDF(contract, buyer, consignee) {
 
     const cW=(pw-4)/2;
     const colX=[M, M+cW+4];
-    const SIG_H=62; // space reserved at the bottom of every clause page for the signature block
     const botY=287-SIG_H; // every page's columns stop here, so whichever page ends up
                            // last will already have SIG_H of clear room below it
     const lineH=3.2;
@@ -4137,9 +4141,9 @@ function exportContractPDF(contract, buyer, consignee) {
   }
 
   // ── SIGNATURE BLOCK — continues from y, new page only if not enough space ──
-  // Block needs: 8 (gap) + 6 (gold lines) + ~26 (blank seal/sign area) + line +
-  // name + caption ≈ 55mm. Reserve a bit extra as a safety margin.
-  if(y+66>283){ doc.addPage(); addPageDecor(); y=12; }
+  // Uses the SAME SIG_H reserved during clause layout above, against the true page
+  // bottom (287) — this must match, or the two checks can disagree (see comment above).
+  if(y+SIG_H>287){ doc.addPage(); addPageDecor(); y=12; }
   y+=8; // extra gap so gold line doesn't overlap T&C text
   doc.setDrawColor(...gold); doc.setLineWidth(0.8);
   doc.line(M, y, M + pw, y);
