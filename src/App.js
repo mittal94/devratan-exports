@@ -4072,8 +4072,7 @@ function exportContractPDF(contract, buyer, consignee) {
 
     const cW=(pw-4)/2;
     const colX=[M, M+cW+4];
-    const botY=287-SIG_H; // every page's columns stop here, so whichever page ends up
-                           // last will already have SIG_H of clear room below it
+    const fullBotY=287; // true bottom, used for every page except the last
     const lineH=3.2;
     const clauseGap=1.2;
 
@@ -4085,6 +4084,19 @@ function exportContractPDF(contract, buyer, consignee) {
       tcNF(false,6); const bH=doc.splitTextToSize(cl.b,cW-3).length*lineH;
       return {cl,hH,bH,totalH:hH+bH+clauseGap};
     });
+
+    // Pass 1 — simulate with FULL page capacity (same as the original, working
+    // layout) purely to find which page number ends up last. This does not draw
+    // anything.
+    let simColIdx=0, simCy=y, simPageStartY=y, simPageNum=0;
+    clauseHeights.forEach(ch=>{
+      if(simCy+ch.totalH>fullBotY-4){
+        if(simColIdx===0){ simColIdx=1; simCy=simPageStartY; }
+        else { simColIdx=0; simCy=12; simPageStartY=12; simPageNum++; }
+      }
+      simCy+=ch.totalH;
+    });
+    const lastPageNum=simPageNum;
 
     const drawColDivider=(fromY,toY)=>{
       doc.setDrawColor(192,212,236); doc.setLineWidth(0.3);
@@ -4114,14 +4126,19 @@ function exportContractPDF(contract, buyer, consignee) {
       return localY+clauseGap;
     };
 
-    // Straightforward two-column flow: fill left column top-to-bottom, then right,
-    // then a new page. Every page's usable height already stops SIG_H short of the
-    // true bottom, so the signature block is guaranteed room right after the last
-    // clause — no need to predict which page is "last" or pre-balance columns.
-    let colIdx=0, cy=y, pageStartY=y;
+    // Pass 2 — real render. Every page before the predicted last page uses the
+    // FULL true bottom (287), exactly matching the simulation above and the
+    // original layout — so clause 1..N page placement stays exactly as before.
+    // Only once we reach the predicted last page (pageNum>=lastPageNum, so this
+    // also covers the rare case where reserving space pushes a few clauses to a
+    // genuinely new page) do we cap columns SIG_H short of the bottom, guaranteeing
+    // room for the signature block right after the final clause.
+    let colIdx=0, cy=y, pageStartY=y, pageNum=0;
 
     for(let i=0;i<clauseHeights.length;i++){
       const {cl,totalH}=clauseHeights[i];
+      const onLastPage = pageNum>=lastPageNum;
+      const botY = onLastPage ? (fullBotY-SIG_H) : fullBotY;
 
       if(cy+totalH>botY-4){
         if(colIdx===0){
@@ -4130,7 +4147,7 @@ function exportContractPDF(contract, buyer, consignee) {
         } else {
           drawColDivider(pageStartY,botY);
           doc.addPage(); addPageDecor();
-          cy=12; pageStartY=12; colIdx=0;
+          cy=12; pageStartY=12; colIdx=0; pageNum++;
         }
       }
 
