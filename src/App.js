@@ -3638,7 +3638,7 @@ function exportContractPDF(contract, buyer, consignee) {
   // may run on every page (so whichever page ends up last already has room) and by
   // the final safety check below — both MUST use the same number and the same true
   // page-bottom (287), or the two can disagree and force an unnecessary extra page.
-  const SIG_H = 66; // reserved space for the signature block below the last clause
+  const SIG_H = 52; // reserved space for the signature block below the last clause
   const navy  = [18, 52, 96];      // deep navy (logo color)
   const steel = [70, 130, 180];    // steel blue (mid tone)
   const ltblue= [220, 235, 250];   // light blue (header bg)
@@ -4113,45 +4113,67 @@ function exportContractPDF(contract, buyer, consignee) {
       return localY+clauseGap;
     };
 
-    // Clauses always flow at FULL page capacity — this keeps the page
-    // distribution stable (e.g. clauses 1-19 on page 2, 20-40 on page 3)
-    // regardless of the signature block below. No space is pre-reserved here;
-    // whether the signature needs a new page is decided once, after the last
-    // clause, based on how much room is actually left (see below).
-    let colIdx=0, cy=y, pageStartY=y;
+    // Balanced two-column pagination: for each page, pack as many clauses as
+    // fit across both columns combined, then split them so the two columns
+    // end near the same height — rather than always filling column 0 solid
+    // before touching column 1. That old approach could leave an entire
+    // column empty when only a few short clauses were left for a page,
+    // stranding the signature block on its own near-empty trailing page.
+    let idx=0, pageStartY=y, cy0=y, cy1=y;
 
-    for(let i=0;i<clauseHeights.length;i++){
-      const {cl,totalH}=clauseHeights[i];
+    while(idx<clauseHeights.length){
+      const capacity=fullBotY-4-pageStartY;
 
-      if(cy+totalH>fullBotY-4){
-        if(colIdx===0){
-          drawColDivider(pageStartY,fullBotY);
-          colIdx=1; cy=pageStartY;
-        } else {
-          drawColDivider(pageStartY,fullBotY);
-          doc.addPage(); addPageDecor();
-          cy=12; pageStartY=12; colIdx=0;
-        }
+      // How many upcoming clauses fit on this page across both columns combined?
+      let total=0, m=idx;
+      while(m<clauseHeights.length && total+clauseHeights[m].totalH<=2*capacity){
+        total+=clauseHeights[m].totalH; m++;
       }
+      if(m===idx) m=idx+1; // pathological: a single clause taller than one column — place it anyway
 
-      cy=drawClause(cl,colX[colIdx],cy);
+      // Find the split point that balances the two columns without letting
+      // either exceed the per-column capacity. Ties favour putting more in
+      // column 0 (matches the old "fill left first" convention for a single
+      // leftover clause).
+      let bestJ=idx, bestDiff=Infinity, leftSum=0;
+      for(let j=idx;j<=m;j++){
+        const left=leftSum, right=total-left;
+        if(left<=capacity+0.01 && right<=capacity+0.01){
+          const diff=Math.abs(left-right);
+          if(diff<=bestDiff){bestDiff=diff; bestJ=j;}
+        }
+        if(j<m) leftSum+=clauseHeights[j].totalH;
+      }
+      if(bestDiff===Infinity) bestJ=m; // fallback (single oversized clause): everything in column 0
+
+      cy0=pageStartY;
+      for(let i=idx;i<bestJ;i++) cy0=drawClause(clauseHeights[i].cl,colX[0],cy0);
+      cy1=pageStartY;
+      for(let i=bestJ;i<m;i++) cy1=drawClause(clauseHeights[i].cl,colX[1],cy1);
+      drawColDivider(pageStartY,Math.max(cy0,cy1,pageStartY)+2);
+
+      idx=m;
+      if(idx<clauseHeights.length){
+        doc.addPage(); addPageDecor();
+        pageStartY=12;
+      }
     }
-    drawColDivider(pageStartY,cy+2);
-    y=cy+4;
+    // Signature starts below whichever column ended up taller — never the
+    // shorter one, which is what let the signature climb into clause text
+    // whenever the two columns on the final page weren't the same height.
+    y=Math.max(cy0,cy1)+4;
   }
 
   // ── SIGNATURE BLOCK — continues right after the last clause; only jumps to
   // a new page if there genuinely isn't SIG_H worth of room left on this one ──
   if(y+SIG_H>287){ doc.addPage(); addPageDecor(); y=12; }
-  y+=8; // extra gap so gold line doesn't overlap T&C text
-  doc.setDrawColor(...gold); doc.setLineWidth(0.8);
+  y+=5; // small gap so the gold line doesn't touch T&C text
+  doc.setDrawColor(...gold); doc.setLineWidth(0.7);
   doc.line(M, y, M + pw, y);
-  doc.setDrawColor(...lgold); doc.setLineWidth(0.3);
-  doc.line(M, y + 1.5, M + pw, y + 1.5);
-  y += 6;
+  y += 4;
 
   const sigW = pw / 2 - 4;
-  const sigAreaH = 26; // blank space above the line reserved for wet signature / seal
+  const sigAreaH = 22; // blank space above the line reserved for wet signature / seal
   const drawSigBox = (x, label, name) => {
     const isSeller=(label==="SELLER");
     const isVJRASeller=isSeller&&(seller===COMPANIES.vjra);
@@ -4178,8 +4200,9 @@ function exportContractPDF(contract, buyer, consignee) {
     doc.line(x + 8, lineY, x + sigW - 8, lineY);
     doc.setFontSize(9); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
     const nameLines = doc.splitTextToSize(name, sigW - 10);
-    let ny = lineY + 5;
-    nameLines.forEach(nl => { doc.text(nl, x + sigW / 2, ny, { align: "center" }); ny += 4.5; });
+    let ny = lineY + 4.5;
+    nameLines.forEach(nl => { doc.text(nl, x + sigW / 2, ny, { align: "center" }); ny += 4; });
+
     doc.setFont(undefined, "normal"); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
     doc.text("Authorized Signature & Stamp", x + sigW / 2, ny - 1.5, { align: "center" });
   };
