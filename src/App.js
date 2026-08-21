@@ -4082,7 +4082,10 @@ function exportContractPDF(contract, buyer, consignee) {
     const clauseHeights=baseClauses.map(cl=>{
       tcNF(true,6); const hH=doc.splitTextToSize(cl.h,cW-3).length*lineH;
       tcNF(false,6); const bH=doc.splitTextToSize(cl.b,cW-3).length*lineH;
-      return {cl,hH,bH,totalH:hH+bH+clauseGap};
+      // +0.5 matches the fixed heading-to-body gap drawClause() actually
+      // applies below — without it, the estimate used for page-fit planning
+      // silently undercounts every clause's real drawn height.
+      return {cl,hH,bH,totalH:hH+bH+clauseGap+0.5};
     });
 
     const drawColDivider=(fromY,toY)=>{
@@ -4113,38 +4116,57 @@ function exportContractPDF(contract, buyer, consignee) {
       return localY+clauseGap;
     };
 
-    // Balanced two-column pagination: for each page, pack as many clauses as
-    // fit across both columns combined, then split them so the two columns
-    // end near the same height — rather than always filling column 0 solid
-    // before touching column 1. That old approach could leave an entire
-    // column empty when only a few short clauses were left for a page,
-    // stranding the signature block on its own near-empty trailing page.
+    // Balanced two-column pagination: for each page, work out how far column 0
+    // safely reaches under capacity (greedy, exactly like the old algorithm),
+    // then how far column 1 safely reaches continuing from there — this pair
+    // (j0, j1) is a page range that is GUARANTEED never to overflow either
+    // column, no matter what. Only *within* that already-safe range do we
+    // then look for a more even split, and we only ever accept a candidate
+    // split that itself keeps both columns within capacity. If no better
+    // split exists, we simply keep the safe default — we never invent an
+    // unchecked split, which is what previously let content silently overflow
+    // hundreds of millimetres past the page when no evenly-balanced split
+    // existed for a given batch of clauses.
     let idx=0, pageStartY=y, cy0=y, cy1=y;
 
     while(idx<clauseHeights.length){
-      const capacity=fullBotY-4-pageStartY;
+      let capacity=fullBotY-4-pageStartY;
 
-      // How many upcoming clauses fit on this page across both columns combined?
-      let total=0, m=idx;
-      while(m<clauseHeights.length && total+clauseHeights[m].totalH<=2*capacity){
-        total+=clauseHeights[m].totalH; m++;
+      // If the very next clause doesn't even fit in the remaining space on
+      // this page (typically because this page started mid-way down, e.g.
+      // right after Special Conditions), roll to a fresh full-height page
+      // first rather than forcing an overflow below the margin.
+      if(clauseHeights[idx].totalH>capacity+0.01 && pageStartY!==12){
+        doc.addPage(); addPageDecor();
+        pageStartY=12;
+        capacity=fullBotY-4-pageStartY;
       }
-      if(m===idx) m=idx+1; // pathological: a single clause taller than one column — place it anyway
 
-      // Find the split point that balances the two columns without letting
-      // either exceed the per-column capacity. Ties favour putting more in
-      // column 0 (matches the old "fill left first" convention for a single
-      // leftover clause).
-      let bestJ=idx, bestDiff=Infinity, leftSum=0;
+      let j0=idx, sum0=0;
+      while(j0<clauseHeights.length && sum0+clauseHeights[j0].totalH<=capacity+0.01){
+        sum0+=clauseHeights[j0].totalH; j0++;
+      }
+      if(j0===idx){ sum0=clauseHeights[idx].totalH; j0=idx+1; } // truly pathological: doesn't fit even on a fresh full-height page — place anyway rather than loop forever
+
+      let j1=j0, sum1=0;
+      while(j1<clauseHeights.length && sum1+clauseHeights[j1].totalH<=capacity+0.01){
+        sum1+=clauseHeights[j1].totalH; j1++;
+      }
+
+      const m=j1;
+      const totalBatch=sum0+sum1;
+
+      // Look for a split that balances the two columns better than the safe
+      // default (j0/m) — but only accept it if it also respects capacity.
+      let bestJ=j0, bestDiff=Math.abs(sum0-sum1), leftSum=0;
       for(let j=idx;j<=m;j++){
-        const left=leftSum, right=total-left;
+        const left=leftSum, right=totalBatch-left;
         if(left<=capacity+0.01 && right<=capacity+0.01){
           const diff=Math.abs(left-right);
-          if(diff<=bestDiff){bestDiff=diff; bestJ=j;}
+          if(diff<bestDiff){bestDiff=diff; bestJ=j;}
         }
         if(j<m) leftSum+=clauseHeights[j].totalH;
       }
-      if(bestDiff===Infinity) bestJ=m; // fallback (single oversized clause): everything in column 0
 
       cy0=pageStartY;
       for(let i=idx;i<bestJ;i++) cy0=drawClause(clauseHeights[i].cl,colX[0],cy0);
@@ -4188,12 +4210,12 @@ function exportContractPDF(contract, buyer, consignee) {
       const sealType = "PNG"; // both Devratan and VJRA seals are transparent PNGs
       // Devratan's image is signature + round stamp side by side (aspect ~1.63:1),
       // so it needs a wider/shorter box than the square VJRA stamp.
-      const sealW = isVJRASeller?28:34;
-      const sealH = isVJRASeller?28:(34/1.626);
-      // VJRA seal sits just above the line; Devratan signature+seal sits a touch
-      // lower (slight overlap with the line, like a real stamp), but stays fully
-      // inside sigAreaH so it never climbs into the clause text above.
-      const sealY = isVJRASeller ? (lineY - sealH - 2) : (lineY - sealH + 2);
+      const sealW = isVJRASeller?24:34;
+      const sealH = isVJRASeller?24:(34/1.626);
+      // Both seals sit just below the label and touch (slightly overlap) the
+      // grey signature line beneath them, like a real stamp — never pushed
+      // up into the gold divider line above.
+      const sealY = lineY - sealH + 2;
       try{ if(sealImg) doc.addImage(sealImg, sealType, x + sigW/2 - sealW/2, sealY, sealW, sealH); }catch(e){}
     }
     doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
