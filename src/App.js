@@ -3900,6 +3900,12 @@ function exportContractPDF(contract, buyer, consignee) {
     [{ content: "Shipment",        styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.shipment_period || "" }],
     [{ content: "Payment Terms",   styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: contract.payment_condition || "", styles: { fontStyle: "bold" } }],
     [{ content: "Documents Required", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy } }, { content: docsText }],
+    ...(contract.special_conditions && contract.special_conditions.trim()
+      ? [[
+          { content: "Special Conditions", styles: { fontStyle: "bold", fillColor: lgray, textColor: navy, cellPadding: { top: 1.5, bottom: 1.5, left: 5, right: 5 } } },
+          { content: contract.special_conditions, styles: { cellPadding: { top: 1.5, bottom: 1.5, left: 5, right: 5 } } },
+        ]]
+      : []),
   ];
 
   doc.autoTable({
@@ -3911,84 +3917,6 @@ function exportContractPDF(contract, buyer, consignee) {
     margin: { left: M, right: M }, tableWidth: pw,
   });
   y = doc.lastAutoTable.finalY + 4;
-
-  // ── Special Conditions ────────────────────────────────────────────────────
-  if (contract.special_conditions && contract.special_conditions.trim()) {
-    // Set font first so splitTextToSize uses correct metrics
-    doc.setFontSize(8.2); doc.setFont(undefined, "normal");
-    const scLines = doc.splitTextToSize(contract.special_conditions, pw - 12);
-    const lineH = 4.2;
-    const labelH = 6.5;
-    const padV = 3.5;
-    const boxH = labelH + scLines.length * lineH + padV;
-
-    // Page break if box won't fit
-    if (y + boxH > 275) { doc.addPage(); addPageDecor(); y = 24; }
-
-    // Draw box
-    doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
-    doc.roundedRect(M, y, pw, boxH, 2, 2, "FD");
-
-    // Label
-    doc.setFontSize(8.5); doc.setFont(undefined, "bold"); doc.setTextColor(...navy);
-    doc.text("Special Conditions:", M + 5, y + 4.5);
-    y += labelH;
-
-    // Content lines — draw all on current page, handle overflow properly
-    doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
-    let scPageY = y; // track where current box started on this page
-    let scLinesOnPage = [];
-    const flushScLines = (lines, pageY) => {
-      // Draw box around all lines on this page
-      const bH = lines.length * lineH + (pageY === scPageY ? 0 : 2);
-      doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
-      doc.roundedRect(M, pageY - labelH, pw, labelH + lines.length * lineH + padV, 2, 2, "FD");
-      doc.setFont(undefined, "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
-      doc.text("Special Conditions:", M + 5, pageY - labelH + 4.5);
-      doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
-      let ly = pageY;
-      lines.forEach(line => { doc.text(line, M + 6, ly); ly += lineH; });
-    };
-
-    // Simpler: redraw box properly when page breaks
-    y -= labelH; // back to box top
-    const totalBoxH = labelH + scLines.length * lineH + padV;
-    if (y + totalBoxH <= 275) {
-      // Fits on current page — draw normally
-      doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
-      doc.roundedRect(M, y, pw, totalBoxH, 2, 2, "FD");
-      doc.setFont(undefined, "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
-      doc.text("Special Conditions:", M + 5, y + 4.5);
-      y += labelH;
-      doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
-      scLines.forEach(line => { doc.text(line, M + 6, y); y += lineH; });
-      y += padV;
-    } else {
-      // Split across pages
-      let lineIdx = 0;
-      let boxStartY = y;
-      while (lineIdx < scLines.length) {
-        const linesLeft = scLines.slice(lineIdx);
-        const spaceForLines = Math.floor((275 - (boxStartY + labelH)) / lineH);
-        const linesOnThisPage = Math.max(1, spaceForLines);
-        const batch = linesLeft.slice(0, linesOnThisPage);
-        const bH = labelH + batch.length * lineH + padV;
-        doc.setFillColor(...lgray); doc.setDrawColor(...gold); doc.setLineWidth(0.5);
-        doc.roundedRect(M, boxStartY, pw, bH, 2, 2, "FD");
-        doc.setFont(undefined, "bold"); doc.setFontSize(8.5); doc.setTextColor(...navy);
-        doc.text("Special Conditions:", M + 5, boxStartY + 4.5);
-        doc.setFont(undefined, "normal"); doc.setTextColor(40, 40, 40); doc.setFontSize(8.2);
-        let ly = boxStartY + labelH;
-        batch.forEach(line => { doc.text(line, M + 6, ly); ly += lineH; });
-        lineIdx += batch.length;
-        y = ly + padV;
-        if (lineIdx < scLines.length) {
-          doc.addPage(); addPageDecor();
-          boxStartY = 16; y = 16;
-        }
-      }
-    }
-  }
 
   // ── TERMS & CONDITIONS — 2-column, continues from current y ───────────────
   {
