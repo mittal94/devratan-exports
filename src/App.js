@@ -4085,19 +4085,6 @@ function exportContractPDF(contract, buyer, consignee) {
       return {cl,hH,bH,totalH:hH+bH+clauseGap};
     });
 
-    // Pass 1 — simulate with FULL page capacity (same as the original, working
-    // layout) purely to find which page number ends up last. This does not draw
-    // anything.
-    let simColIdx=0, simCy=y, simPageStartY=y, simPageNum=0;
-    clauseHeights.forEach(ch=>{
-      if(simCy+ch.totalH>fullBotY-4){
-        if(simColIdx===0){ simColIdx=1; simCy=simPageStartY; }
-        else { simColIdx=0; simCy=12; simPageStartY=12; simPageNum++; }
-      }
-      simCy+=ch.totalH;
-    });
-    const lastPageNum=simPageNum;
-
     const drawColDivider=(fromY,toY)=>{
       doc.setDrawColor(192,212,236); doc.setLineWidth(0.3);
       doc.line(M+cW+2,fromY,M+cW+2,toY);
@@ -4126,19 +4113,16 @@ function exportContractPDF(contract, buyer, consignee) {
       return localY+clauseGap;
     };
 
-    // Pass 2 — real render. Every page before the predicted last page uses the
-    // FULL true bottom (287), exactly matching the simulation above and the
-    // original layout — so clause 1..N page placement stays exactly as before.
-    // Only once we reach the predicted last page (pageNum>=lastPageNum, so this
-    // also covers the rare case where reserving space pushes a few clauses to a
-    // genuinely new page) do we cap columns SIG_H short of the bottom, guaranteeing
-    // room for the signature block right after the final clause.
-    let colIdx=0, cy=y, pageStartY=y, pageNum=0;
+    // Reserve room for the signature block on every page (not just a predicted
+    // "last" page). This is slightly less space-efficient than trying to only
+    // reserve on the true last page, but it removes an entire class of bugs
+    // where a misprediction let clause text run into the signature block.
+    const botY = fullBotY - SIG_H;
+
+    let colIdx=0, cy=y, pageStartY=y;
 
     for(let i=0;i<clauseHeights.length;i++){
       const {cl,totalH}=clauseHeights[i];
-      const onLastPage = pageNum>=lastPageNum;
-      const botY = onLastPage ? (fullBotY-SIG_H) : fullBotY;
 
       if(cy+totalH>botY-4){
         if(colIdx===0){
@@ -4147,7 +4131,7 @@ function exportContractPDF(contract, buyer, consignee) {
         } else {
           drawColDivider(pageStartY,botY);
           doc.addPage(); addPageDecor();
-          cy=12; pageStartY=12; colIdx=0; pageNum++;
+          cy=12; pageStartY=12; colIdx=0;
         }
       }
 
