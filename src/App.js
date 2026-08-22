@@ -7156,29 +7156,30 @@ function InvoicingTab({buyers}){
     const navy=[18,52,96]; const lgray=[230,239,250];
     const hW=showBL?RW/3:RW/2;
     const nCols=notifyEntries.length>0?Math.min(notifyEntries.length,3):0;
+    const pLH=3.2; // tightened line spacing for party boxes
 
     // Row 1: Consignee | Buyer
     const consLines=doc.splitTextToSize("Consignee:\n"+(cons?cons.company_name||cons.name:"")+(cons?"\n"+buyerAddr(cons):""),hW-3);
     const buyerLines=doc.splitTextToSize("Buyer:\n"+(buyer?buyer.company_name||buyer.name:"")+(buyer?"\n"+buyerAddr(buyer):""),hW-3);
     const blLines=showBL?doc.splitTextToSize("BL No.: "+(blNo||"")+(blDate?"\nBL Date: "+blDate:""),hW-3):[];
-    const r1H=Math.max(Math.max(consLines.length,buyerLines.length,blLines.length)*3.8+4,14);
+    const r1H=Math.max(Math.max(consLines.length,buyerLines.length,blLines.length)*pLH+3,11);
     invRECT(doc,M,y,hW,r1H); invRECT(doc,M+hW,y,hW,r1H);
     if(showBL) invRECT(doc,M+hW*2,y,hW,r1H);
     invNF(doc,false,8);
     doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-    doc.text("Consignee:",M+1,y+3.5);
+    doc.text("Consignee:",M+1,y+3.2);
     invNF(doc,false,7.5);
-    if(cons){doc.text(cons.company_name||cons.name||"",M+1,y+7);doc.text(buyerAddr(cons),M+1,y+10.5,{maxWidth:hW-2});}
+    if(cons){doc.text(cons.company_name||cons.name||"",M+1,y+6.2);doc.text(buyerAddr(cons),M+1,y+9.2,{maxWidth:hW-2});}
     doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-    doc.text("Buyer:",M+hW+1,y+3.5);
+    doc.text("Buyer:",M+hW+1,y+3.2);
     invNF(doc,false,7.5);
-    if(buyer){doc.text(buyer.company_name||buyer.name||"",M+hW+1,y+7);doc.text(buyerAddr(buyer),M+hW+1,y+10.5,{maxWidth:hW-2});}
+    if(buyer){doc.text(buyer.company_name||buyer.name||"",M+hW+1,y+6.2);doc.text(buyerAddr(buyer),M+hW+1,y+9.2,{maxWidth:hW-2});}
     if(showBL){
       doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-      doc.text("BL No.:",M+hW*2+1,y+3.5);
+      doc.text("BL No.:",M+hW*2+1,y+3.2);
       invNF(doc,false,7.5);
-      doc.text(blNo||"—",M+hW*2+1,y+7);
-      doc.text("BL Date: "+(blDate||"—"),M+hW*2+1,y+10.5);
+      doc.text(blNo||"—",M+hW*2+1,y+6.2);
+      doc.text("BL Date: "+(blDate||"—"),M+hW*2+1,y+9.2);
     }
     doc.setTextColor(0,0,0);
     y+=r1H;
@@ -7190,16 +7191,16 @@ function InvoicingTab({buyers}){
       rows.forEach(row=>{
         const nW=RW/Math.max(row.length,1);
         const rowLines=row.map(e=>doc.splitTextToSize("Notify Party "+e.idx+":\n"+(e.b?e.b.company_name||e.b.name:"")+(e.b&&buyerAddr(e.b)?"\n"+buyerAddr(e.b):""),nW-3));
-        const rH=Math.max(...rowLines.map(l=>l.length))*3.8+4;
+        const rH=Math.max(Math.max(...rowLines.map(l=>l.length))*pLH+3,11);
         y=invChkPg(doc,y,rH,null,null); // page check before drawing notify row
         row.forEach((e,j)=>{
           invRECT(doc,M+j*nW,y,nW,rH);
           doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-          doc.text("Notify Party "+e.idx+":",M+j*nW+1,y+3.5);
+          doc.text("Notify Party "+e.idx+":",M+j*nW+1,y+3.2);
           invNF(doc,false,7.5); doc.setTextColor(0,0,0);
           if(e.b){
-            doc.text(e.b.company_name||e.b.name||"",M+j*nW+1,y+7);
-            const adr=buyerAddr(e.b); if(adr)doc.text(adr,M+j*nW+1,y+10.5,{maxWidth:nW-2});
+            doc.text(e.b.company_name||e.b.name||"",M+j*nW+1,y+6.2);
+            const adr=buyerAddr(e.b); if(adr)doc.text(adr,M+j*nW+1,y+9.2,{maxWidth:nW-2});
           }
         });
         y+=rH;
@@ -7243,7 +7244,8 @@ function InvoicingTab({buyers}){
   // Items table
   const renderItemsTable=(doc,M,y,RW,showPrice,useBuyerRate,compact)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
-    const hdrH=compact?5.5:7, minRowH=compact?6:8, lineH=compact?3.3:3.8, hdrFont=compact?6.3:7, bodyFont=compact?6.5:7.5, totalsH=compact?5.5:7;
+    const hdrH=compact?5:6, minRowH=compact?5:6.5, lineH=compact?2.8:3.2, hdrFont=compact?6.3:7, bodyFont=compact?6.5:7.5, totalsH=compact?5:6;
+    const topOff=lineH-0.3; // single top-aligned offset used by every column, for uniform alignment
     const cols=showPrice
       ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
       :[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Gross Wt (Kg)",28],["Net Wt (Kg)",RW-10-45-55-20-28]];
@@ -7265,24 +7267,24 @@ function InvoicingTab({buyers}){
       const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
       const descLines=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
       const pkgLines=doc.splitTextToSize(pkgStr,cols[1][1]-2);
-      const rh=Math.max(Math.max(descLines.length,pkgLines.length)*lineH+2,minRowH);
+      const rh=Math.max(Math.max(descLines.length,pkgLines.length)*lineH+1.3,minRowH);
       y=invChkPg(doc,y,rh,null,null);
       let rx=M;
       cols.forEach(([h,w],ci)=>{
         invRECT(doc,rx,y,w,rh);
         invNF(doc,false,bodyFont); doc.setTextColor(0,0,0);
-        const descL1=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
-        const descL2=it.desc2?doc.splitTextToSize(it.desc2,cols[2][1]-2):[];
-        if(ci===0) doc.text(String(i+1),rx+0.5,y+rh*0.55);
-        else if(ci===1){invNF(doc,false,bodyFont-0.5);doc.text(pkgStr,rx+0.5,y+rh*0.55,{maxWidth:cols[1][1]-2});}
-        else if(ci===2){invNF(doc,true,bodyFont);doc.text(descL1,rx+0.5,y+lineH-0.3);}
-        else if(ci===3) doc.text(qty?(qty.toFixed(3)+" "+(it.qty_unit||"MT")):"",rx+0.5,y+rh*0.55);
+        // Every column is top-aligned at the same offset, for uniform alignment
+        // across the row regardless of how many lines any single cell wraps to.
+        if(ci===0) doc.text(String(i+1),rx+0.5,y+topOff);
+        else if(ci===1){invNF(doc,false,bodyFont-0.5);doc.text(pkgLines,rx+0.5,y+topOff,{maxWidth:cols[1][1]-2});}
+        else if(ci===2){invNF(doc,true,bodyFont);doc.text(descLines,rx+0.5,y+topOff);}
+        else if(ci===3) doc.text(qty?(qty.toFixed(3)+" "+(it.qty_unit||"MT")):"",rx+0.5,y+topOff);
         else if(showPrice){
-          if(ci===4){invNF(doc,false,bodyFont);doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+rh*0.55);}
-          if(ci===5){invNF(doc,true,bodyFont);doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+rh*0.55);}
+          if(ci===4){invNF(doc,false,bodyFont);doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+topOff);}
+          if(ci===5){invNF(doc,true,bodyFont);doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+topOff);}
         } else {
-          if(ci===4) doc.text(gross?gross.toFixed(3):"",rx+0.5,y+rh*0.55);
-          if(ci===5) doc.text(net?net.toFixed(3):"",rx+0.5,y+rh*0.55);
+          if(ci===4) doc.text(gross?gross.toFixed(3):"",rx+0.5,y+topOff);
+          if(ci===5) doc.text(net?net.toFixed(3):"",rx+0.5,y+topOff);
         }
         invNF(doc,false,bodyFont);
         rx+=w;
@@ -7315,14 +7317,14 @@ function InvoicingTab({buyers}){
   // Measures items-table height without drawing, so callers can decide whether to
   // switch to compact row sizing to keep the invoice on one page.
   const measureItemsHeight=(doc,RW,compact)=>{
-    const hdrH=compact?5.5:7, minRowH=compact?6:8, lineH=compact?3.3:3.8, totalsH=compact?5.5:7;
+    const hdrH=compact?5:6, minRowH=compact?5:6.5, lineH=compact?2.8:3.2, totalsH=compact?5:6;
     const descColW=55-2, pkgColW=45-2;
     let h=hdrH;
     form.items.forEach(it=>{
       const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
       const descLines=doc.splitTextToSize(it.desc1||"",descColW).length;
       const pkgLines=doc.splitTextToSize(pkgStr,pkgColW).length;
-      h+=Math.max(Math.max(descLines,pkgLines)*lineH+2,minRowH);
+      h+=Math.max(Math.max(descLines,pkgLines)*lineH+1.3,minRowH);
     });
     h+=totalsH;
     return h;
@@ -7930,7 +7932,7 @@ function InvoicingTab({buyers}){
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <button onClick={exportExpInv} style={{background:"linear-gradient(135deg,#1e3a5f,#0369a1)",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>Export Invoice cum PL</button>
           <button onClick={()=>exportCommInv("buyer","COMMERCIAL INVOICE")} style={{background:"linear-gradient(135deg,#15803d,#16a34a)",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>Comm. Invoice (Buyer)</button>
-          <button onClick={()=>exportCommInv("bank","COMMERCIAL INVOICE — BANK")} style={{background:"linear-gradient(135deg,#7c3aed,#6d28d9)",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>Comm. Invoice (Bank)</button>
+          <button onClick={()=>exportCommInv("bank","COMMERCIAL INVOICE")} style={{background:"linear-gradient(135deg,#7c3aed,#6d28d9)",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>Comm. Invoice (Bank)</button>
           <button onClick={exportPL} style={{background:"linear-gradient(135deg,#d97706,#b45309)",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontWeight:600,fontSize:12}}>Packing List</button>
         </div>
       </div>
@@ -8151,26 +8153,26 @@ function VJRAInvoicingTab({buyers}){
     const consAddrL=doc.splitTextToSize(cons?buyerAddr(cons):"",hW-4);
     const buyerNameL=doc.splitTextToSize(buyer?buyer.company_name||buyer.name||"":"",hW-4);
     const buyerAddrL=doc.splitTextToSize(buyer?buyerAddr(buyer):"",hW-4);
-    const LH=3.8;
-    const r1H=Math.max(22,Math.max(
-      (consNameL.length+consAddrL.length)*LH+8,
-      (buyerNameL.length+buyerAddrL.length)*LH+8));
+    const LH=3.2; // tightened line spacing for party boxes
+    const r1H=Math.max(18,Math.max(
+      (consNameL.length+consAddrL.length)*LH+6,
+      (buyerNameL.length+buyerAddrL.length)*LH+6));
     // Draw boxes
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.2);
     doc.rect(M,y,hW,r1H); doc.rect(M+hW,y,hW,r1H);
     doc.setFillColor(...lgray); doc.rect(M,y,hW,5,"F"); doc.rect(M+hW,y,hW,5,"F");
     // Consignee label + content
     doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-    doc.text("Consignee:",M+1,y+3.8);
+    doc.text("Consignee:",M+1,y+3.6);
     doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
-    let cy=y+7.5;
+    let cy=y+6.8;
     if(cons){doc.text(consNameL,M+1,cy);cy+=consNameL.length*LH;}
     if(cons&&consAddrL.length){doc.text(consAddrL,M+1,cy,{maxWidth:hW-2});}
     // Buyer label + content
     doc.setTextColor(...navy); doc.setFont("helvetica","bold");
-    doc.text("Buyer:",M+hW+1,y+3.8);
+    doc.text("Buyer:",M+hW+1,y+3.6);
     doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
-    let by=y+7.5;
+    let by=y+6.8;
     if(buyer){doc.text(buyerNameL,M+hW+1,by);by+=buyerNameL.length*LH;}
     if(buyer&&buyerAddrL.length){doc.text(buyerAddrL,M+hW+1,by,{maxWidth:hW-2});}
     y+=r1H;
@@ -8183,20 +8185,20 @@ function VJRAInvoicingTab({buyers}){
         const rHs=row.map(e=>{
           const nl=doc.splitTextToSize(e.b?e.b.company_name||e.b.name||"":"",nW-4);
           const al=doc.splitTextToSize(e.b?buyerAddr(e.b):"",nW-4);
-          return Math.max(20,(nl.length+al.length)*LH+8);
+          return Math.max(16,(nl.length+al.length)*LH+6);
         });
         const rH=Math.max(...rHs);
         row.forEach((e,j)=>{
           doc.setDrawColor(100,100,100); doc.rect(M+j*nW,y,nW,rH);
           doc.setFillColor(...lgray); doc.rect(M+j*nW,y,nW,5,"F");
           doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-          doc.text("Notify Party "+e.idx+":",M+j*nW+1,y+3.8);
+          doc.text("Notify Party "+e.idx+":",M+j*nW+1,y+3.6);
           doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
           if(e.b){
             const nl=doc.splitTextToSize(e.b.company_name||e.b.name||"",nW-4);
             const al=doc.splitTextToSize(buyerAddr(e.b),nW-4);
-            doc.text(nl,M+j*nW+1,y+7.5);
-            if(al.length) doc.text(al,M+j*nW+1,y+7.5+nl.length*LH,{maxWidth:nW-2});
+            doc.text(nl,M+j*nW+1,y+6.8);
+            if(al.length) doc.text(al,M+j*nW+1,y+6.8+nl.length*LH,{maxWidth:nW-2});
           }
         });
         y+=rH;
@@ -8237,17 +8239,18 @@ function VJRAInvoicingTab({buyers}){
 
   const vjraItemsTable=(doc,M,y,RW,showPrice)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
+    const hdrH=6, lineH=3.2, minRowH=6.5, topOff=lineH-0.3; // tightened spacing + single top-aligned offset for uniform alignment
     const cols=showPrice
       ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
       :[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Gross Wt (Kg)",28],["Net Wt (Kg)",RW-10-45-55-20-28]];
     let hx=M;
     cols.forEach(([h,w])=>{
-      doc.setDrawColor(100,100,100); doc.setLineWidth(0.2); doc.rect(hx,y,w,7);
-      doc.setFillColor(...lgray); doc.rect(hx,y,w,7,"F");
+      doc.setDrawColor(100,100,100); doc.setLineWidth(0.2); doc.rect(hx,y,w,hdrH);
+      doc.setFillColor(...lgray); doc.rect(hx,y,w,hdrH,"F");
       doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7);
-      doc.text(h,hx+0.5,y+4.5,{maxWidth:w-1}); hx+=w;
+      doc.text(h,hx+0.5,y+hdrH*0.65,{maxWidth:w-1}); hx+=w;
     });
-    y+=7;
+    y+=hdrH;
     let totQty=0,totAmt=0,totGross=0,totNet=0;
     form.items.forEach((it,i)=>{
       const qty=n(it.qty_mt),rate=n(it.rate_per_mt),amt=qty*rate;
@@ -8256,24 +8259,25 @@ function VJRAInvoicingTab({buyers}){
       const net=Math.round(bags_count*n(it.bag_net_wt||"25")*100)/100;
       totQty+=qty; totAmt+=amt; totGross+=gross; totNet+=net;
       const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
-      const descL1=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
+      const descLines=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
       const pkgLines=doc.splitTextToSize(pkgStr,cols[1][1]-2);
-      const rh=Math.max(Math.max(descL1.length,pkgLines.length)*3.8+2,8);
+      const rh=Math.max(Math.max(descLines.length,pkgLines.length)*lineH+1.3,minRowH);
       if(y+rh>282){doc.addPage();y=52;}
       let rx=M;
       cols.forEach(([h,w],ci)=>{
         doc.setDrawColor(100,100,100); doc.setLineWidth(0.2); doc.rect(rx,y,w,rh);
         doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0);
-        if(ci===0) doc.text(String(i+1),rx+0.5,y+4);
-        else if(ci===1) doc.text(pkgStr,rx+0.5,y+4,{maxWidth:w-2});
-        else if(ci===2){doc.setFont("helvetica","bold");doc.text(descL1,rx+0.5,y+3.5);}
-        else if(ci===3) doc.text(qty?(qty.toFixed(3)+" "+(it.qty_unit||"MT")):"",rx+0.5,y+4);
+        // Every column top-aligned at the same offset, for uniform alignment.
+        if(ci===0) doc.text(String(i+1),rx+0.5,y+topOff);
+        else if(ci===1) doc.text(pkgLines,rx+0.5,y+topOff,{maxWidth:w-2});
+        else if(ci===2){doc.setFont("helvetica","bold");doc.text(descLines,rx+0.5,y+topOff);}
+        else if(ci===3) doc.text(qty?(qty.toFixed(3)+" "+(it.qty_unit||"MT")):"",rx+0.5,y+topOff);
         else if(showPrice){
-          if(ci===4){doc.setFont("helvetica","normal");doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+4);}
-          if(ci===5){doc.setFont("helvetica","bold");doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+4);}
+          if(ci===4){doc.setFont("helvetica","normal");doc.text(rate?(it.ccy||"USD")+" "+rate.toFixed(2):"",rx+0.5,y+topOff);}
+          if(ci===5){doc.setFont("helvetica","bold");doc.text(amt?(it.ccy||"USD")+" "+amt.toLocaleString("en-IN",{minimumFractionDigits:2}):"",rx+0.5,y+topOff);}
         } else {
-          if(ci===4) doc.text(gross?gross.toFixed(3):"",rx+0.5,y+4);
-          if(ci===5) doc.text(net?net.toFixed(3):"",rx+0.5,y+4);
+          if(ci===4) doc.text(gross?gross.toFixed(3):"",rx+0.5,y+topOff);
+          if(ci===5) doc.text(net?net.toFixed(3):"",rx+0.5,y+topOff);
         }
         rx+=w;
       });
@@ -8282,14 +8286,14 @@ function VJRAInvoicingTab({buyers}){
     // Totals row
     let tx=M;
     cols.forEach(([h,w],ci)=>{
-      doc.setDrawColor(100,100,100); doc.setLineWidth(0.2); doc.rect(tx,y,w,7);
-      doc.setFillColor(...lgray); doc.rect(tx,y,w,7,"F");
+      doc.setDrawColor(100,100,100); doc.setLineWidth(0.2); doc.rect(tx,y,w,hdrH);
+      doc.setFillColor(...lgray); doc.rect(tx,y,w,hdrH,"F");
       doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(...navy);
       const v=ci===2?"TOTAL":ci===3?totQty.toFixed(3):showPrice&&ci===5?(form.items[0]?.ccy||"USD")+" "+totAmt.toLocaleString("en-IN",{minimumFractionDigits:2}):!showPrice&&ci===4?totGross.toFixed(3):!showPrice&&ci===5?totNet.toFixed(3):"";
-      doc.text(v,tx+0.5,y+4.5,{maxWidth:w-1}); tx+=w;
+      doc.text(v,tx+0.5,y+hdrH*0.65,{maxWidth:w-1}); tx+=w;
     });
     doc.setTextColor(0,0,0);
-    return {y:y+7,totAmt,totQty,totGross,totNet};
+    return {y:y+hdrH,totAmt,totQty,totGross,totNet};
   };
 
   const vjraContainerTable=(doc,M,y,RW)=>{
