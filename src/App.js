@@ -7528,14 +7528,9 @@ function InvoicingTab({buyers}){
     const {y:y2,totalAmtLocal}=renderItemsTable(doc,M,y,RW,true,partyKey==="buyer");
     y=y2+5;
 
-    // Gross/Net wt summary (Comm Invoice)
+    // Advance & Extra Charges (Comm Invoice Buyer only)
     const totNetWtC=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
     const totGrossWtC=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_gross_wt)*100)/100,0);
-    invNF(doc,false,8);
-    const wtStrC="Total Net Wt: "+totNetWtC.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWtC.toLocaleString("en-IN")+" Kgs";
-    doc.text(wtStrC,M,y,{maxWidth:RW}); y+=6;
-
-    // Advance & Extra Charges (Comm Invoice Buyer only)
     const commBuyerAmt=partyKey==="buyer"
       ? form.items.reduce((s,it)=>{const r=it.rate_per_mt_buyer?n(it.rate_per_mt_buyer):n(it.rate_per_mt);return s+n(it.qty_mt)*r;},0)
       : totalAmt;
@@ -7555,20 +7550,13 @@ function InvoicingTab({buyers}){
       y=doc.lastAutoTable.finalY+4;
     }
 
-    // Amount in words
-    y=invChkPg(doc,y,16,null,null);
-    invNF(doc,true,8); doc.text("Amount in Words:",M,y); y+=4.5;
-    invNF(doc,false,8);
+    // ── Two-column block: Net/Gross Wt + Amount in Words (left) | Bank Details (right) ──
+    const scLeftW=78, scGap=6, scRightX=M+scLeftW+scGap, scRightW=RW-scLeftW-scGap;
     const amtForWords=partyKey==="buyer"?(advAmt>0||extraCharges.length>0?finalDue:commBuyerAmt):totalAmt;
     const amtWordsComm=numWords(amtForWords,form.items[0]?.ccy);
-    const amtLinesComm=doc.splitTextToSize(amtWordsComm,RW);
-    doc.text(amtLinesComm,M,y);
-    y+=amtLinesComm.length*4.5+4;
-
-    // Bank details
-    y=invChkPg(doc,y,22,null,null);
-    invNF(doc,true,8.5); doc.text("Bank Details:",M,y); y+=5;
     invNF(doc,false,8);
+    const amtLinesComm=doc.splitTextToSize(amtWordsComm,scLeftW);
+    const leftEstH=4.5+4.5+6+4.5+amtLinesComm.length*4.5;
     const bdc=BANK_DETAILS.devratan;
     const bdRows=[
       ["BENEFICIARY NAME","DEVRATAN ENTERPRISES LLP"],
@@ -7577,12 +7565,28 @@ function InvoicingTab({buyers}){
       ["ACCOUNT NO.",bdc.accNo],
       ["SWIFT CODE",bdc.swift],
     ];
-    doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
-      body:bdRows.map(([l,v])=>[{content:l,styles:{fontStyle:"bold",fillColor:[230,239,250],textColor:[18,52,96],cellWidth:RW*0.4}},{content:v,styles:{fontStyle:"bold"}}]),
-      styles:{fontSize:8,cellPadding:{top:2,bottom:2,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+    const bankEstH=5+bdRows.length*7.5;
+    y=invChkPg(doc,y,Math.max(leftEstH,bankEstH)+6,null,null);
+    const blockStartY=y;
+
+    invNF(doc,false,8);
+    doc.text("Total Net Wt: "+totNetWtC.toLocaleString("en-IN")+" Kgs",M,y); y+=4.5;
+    doc.text("Total Gross Wt: "+totGrossWtC.toLocaleString("en-IN")+" Kgs",M,y); y+=6;
+    invNF(doc,true,8); doc.text("Amount in Words:",M,y); y+=4.5;
+    invNF(doc,false,8);
+    doc.text(amtLinesComm,M,y);
+    const leftEndY=y+amtLinesComm.length*4.5;
+
+    let ry=blockStartY;
+    invNF(doc,true,8.5); doc.text("Bank Details:",scRightX,ry); ry+=5;
+    doc.autoTable({startY:ry,margin:{left:scRightX,right:M},tableWidth:scRightW,
+      body:bdRows.map(([l,v])=>[{content:l,styles:{fontStyle:"bold",fillColor:[230,239,250],textColor:[18,52,96],cellWidth:scRightW*0.42}},{content:v,styles:{fontStyle:"bold"}}]),
+      styles:{fontSize:7.3,cellPadding:{top:1.6,bottom:1.6,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2,overflow:"linebreak"},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
-    y=doc.lastAutoTable.finalY+5;
+    const rightEndY=doc.lastAutoTable.finalY;
+
+    y=Math.max(leftEndY,rightEndY)+5;
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
@@ -8364,8 +8368,6 @@ function VJRAInvoicingTab({buyers}){
     // Gross/Net wt
     const totNetWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt||"25")*100)/100,0);
     const totGrossWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_gross_wt||"25.13")*100)/100,0);
-    doc.setFont("helvetica","normal"); doc.setFontSize(8);
-    doc.text("Total Net Wt: "+totNetWt.toLocaleString("en-IN")+" Kgs  |  Total Gross Wt: "+totGrossWt.toLocaleString("en-IN")+" Kgs",M,y,{maxWidth:RW}); y+=6;
 
     // Advance & Extra Charges (VJRA)
     const vjraAdvAmt=n(form.advance_amt||0);
@@ -8384,31 +8386,43 @@ function VJRAInvoicingTab({buyers}){
       y=doc.lastAutoTable.finalY+4;
     }
 
-    // Amount in words
-    if(y+16>282){doc.addPage();y=52;}
-    doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.text("Amount in Words:",M,y); y+=4.5;
-    doc.setFont("helvetica","normal"); doc.setFontSize(8);
+    // ── Two-column block: Net/Gross Wt + Amount in Words (left) | Bank Details (right) ──
+    const scLeftW=78, scGap=6, scRightX=M+scLeftW+scGap, scRightW=RW-scLeftW-scGap;
     const amtForWordsVJRA=(vjraAdvAmt>0||vjraExtraCharges.length>0)?vjraFinalDue:totAmt;
     const amtW=numWords(amtForWordsVJRA,form.items[0]?.ccy||"USD");
-    const amtLines=doc.splitTextToSize(amtW,RW);
-    doc.text(amtLines,M,y); y+=amtLines.length*4.5+4;
+    doc.setFont("helvetica","normal"); doc.setFontSize(8);
+    const amtLines=doc.splitTextToSize(amtW,scLeftW);
+    const leftEstH=4.5+4.5+6+4.5+amtLines.length*4.5;
+    const vjraBdRows=[
+      ["BENEFICIARY NAME",vjraCo.name],
+      ["BENEFICIARY BANK",vjraBank.bankName],
+      ["BRANCH",vjraBank.branch],
+      ["ACCOUNT NO.",vjraBank.accNo],
+      ["IBAN",vjraBank.iban||""],
+      ["SWIFT CODE",vjraBank.swift],
+    ];
+    const bankEstH=5+vjraBdRows.length*7.5;
+    if(y+Math.max(leftEstH,bankEstH)+6>287){doc.addPage();y=52;}
+    const blockStartY=y;
 
-    // Bank details + sign block — check if both fit on current page (need ~78mm)
-    if(y+78>287){doc.addPage();y=52;}
-    doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.text("Bank Details:",M,y); y+=5;
-    doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,
-      body:[
-        [{content:"BENEFICIARY NAME",styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:RW*0.4}},{content:vjraCo.name,styles:{fontStyle:"bold"}}],
-        [{content:"BENEFICIARY BANK",styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:RW*0.4}},{content:vjraBank.bankName,styles:{fontStyle:"bold"}}],
-        [{content:"BRANCH",styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:RW*0.4}},{content:vjraBank.branch,styles:{fontStyle:"bold"}}],
-        [{content:"ACCOUNT NO.",styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:RW*0.4}},{content:vjraBank.accNo,styles:{fontStyle:"bold"}}],
-        [{content:"IBAN",styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:RW*0.4}},{content:vjraBank.iban||"",styles:{fontStyle:"bold"}}],
-        [{content:"SWIFT CODE",styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:RW*0.4}},{content:vjraBank.swift,styles:{fontStyle:"bold"}}],
-      ],
-      styles:{fontSize:7.5,cellPadding:{top:1.5,bottom:1.5,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+    doc.setFont("helvetica","normal"); doc.setFontSize(8);
+    doc.text("Total Net Wt: "+totNetWt.toLocaleString("en-IN")+" Kgs",M,y); y+=4.5;
+    doc.text("Total Gross Wt: "+totGrossWt.toLocaleString("en-IN")+" Kgs",M,y); y+=6;
+    doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.text("Amount in Words:",M,y); y+=4.5;
+    doc.setFont("helvetica","normal"); doc.setFontSize(8);
+    doc.text(amtLines,M,y);
+    const leftEndY=y+amtLines.length*4.5;
+
+    let ry=blockStartY;
+    doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.text("Bank Details:",scRightX,ry); ry+=5;
+    doc.autoTable({startY:ry,margin:{left:scRightX,right:M},tableWidth:scRightW,
+      body:vjraBdRows.map(([l,v])=>[{content:l,styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:scRightW*0.42}},{content:v,styles:{fontStyle:"bold"}}]),
+      styles:{fontSize:7.3,cellPadding:{top:1.6,bottom:1.6,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2,overflow:"linebreak"},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
-    y=doc.lastAutoTable.finalY+4;
+    const rightEndY=doc.lastAutoTable.finalY;
+
+    y=Math.max(leftEndY,rightEndY)+5;
 
     y=vjraSignBlock(doc,M,y,RW);
     addVJRAFooter(doc);
