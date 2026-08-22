@@ -7517,7 +7517,7 @@ function InvoicingTab({buyers}){
     y=doc.lastAutoTable.finalY+1.5;
 
     y=renderParties(doc,form.parties[partyKey],M,y,RW,false,"","");
-    y+=1.5; y=renderInfoRow(doc,M,y,RW); y+=2;
+    y+=1.5; y=renderInfoRow(doc,M,y,RW); y+=4;
 
     // Container nos (compact)
     if(form.containers.some(c=>c.cont_no)){
@@ -7549,7 +7549,7 @@ function InvoicingTab({buyers}){
       doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,body:summRows,
         styles:{fontSize:7.3,cellPadding:{top:0.8,bottom:0.8,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2},
         tableLineColor:[100,100,100],tableLineWidth:0.2});
-      y=doc.lastAutoTable.finalY+2;
+      y=doc.lastAutoTable.finalY+4.5;
     }
 
     // ── Two-column block: Net/Gross Wt + Amount in Words (left) | Bank Details (right) ──
@@ -8356,7 +8356,7 @@ function VJRAInvoicingTab({buyers}){
     y=doc.lastAutoTable.finalY+1.5;
 
     y=vjraRenderParties(doc,form.parties.buyer,M,y,RW); y+=1.5;
-    y=vjraInfoRow(doc,M,y,RW); y+=2;
+    y=vjraInfoRow(doc,M,y,RW); y+=4;
 
     // Container nos
     if(form.containers.some(c=>c.cont_no)){
@@ -8387,7 +8387,7 @@ function VJRAInvoicingTab({buyers}){
       doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,body:summRows,
         styles:{fontSize:7.3,cellPadding:{top:0.8,bottom:0.8,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2},
         tableLineColor:[100,100,100],tableLineWidth:0.2});
-      y=doc.lastAutoTable.finalY+2;
+      y=doc.lastAutoTable.finalY+4.5;
     }
 
     // ── Two-column block: Net/Gross Wt + Amount in Words (left) | Bank Details (right) ──
