@@ -7156,30 +7156,30 @@ function InvoicingTab({buyers}){
     const navy=[18,52,96]; const lgray=[230,239,250];
     const hW=showBL?RW/3:RW/2;
     const nCols=notifyEntries.length>0?Math.min(notifyEntries.length,3):0;
-    const pLH=3.2; // tightened line spacing for party boxes
+    const pLH=2.7; // tightened line spacing for party boxes
 
     // Row 1: Consignee | Buyer
     const consLines=doc.splitTextToSize("Consignee:\n"+(cons?cons.company_name||cons.name:"")+(cons?"\n"+buyerAddr(cons):""),hW-3);
     const buyerLines=doc.splitTextToSize("Buyer:\n"+(buyer?buyer.company_name||buyer.name:"")+(buyer?"\n"+buyerAddr(buyer):""),hW-3);
     const blLines=showBL?doc.splitTextToSize("BL No.: "+(blNo||"")+(blDate?"\nBL Date: "+blDate:""),hW-3):[];
-    const r1H=Math.max(Math.max(consLines.length,buyerLines.length,blLines.length)*pLH+3,11);
+    const r1H=Math.max(Math.max(consLines.length,buyerLines.length,blLines.length)*pLH+2,9);
     invRECT(doc,M,y,hW,r1H); invRECT(doc,M+hW,y,hW,r1H);
     if(showBL) invRECT(doc,M+hW*2,y,hW,r1H);
     invNF(doc,false,8);
     doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-    doc.text("Consignee:",M+1,y+3.2);
+    doc.text("Consignee:",M+1,y+2.9);
     invNF(doc,false,7.5);
-    if(cons){doc.text(cons.company_name||cons.name||"",M+1,y+6.2);doc.text(buyerAddr(cons),M+1,y+9.2,{maxWidth:hW-2});}
+    if(cons){doc.text(cons.company_name||cons.name||"",M+1,y+5.5);doc.text(buyerAddr(cons),M+1,y+8.1,{maxWidth:hW-2});}
     doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-    doc.text("Buyer:",M+hW+1,y+3.2);
+    doc.text("Buyer:",M+hW+1,y+2.9);
     invNF(doc,false,7.5);
-    if(buyer){doc.text(buyer.company_name||buyer.name||"",M+hW+1,y+6.2);doc.text(buyerAddr(buyer),M+hW+1,y+9.2,{maxWidth:hW-2});}
+    if(buyer){doc.text(buyer.company_name||buyer.name||"",M+hW+1,y+5.5);doc.text(buyerAddr(buyer),M+hW+1,y+8.1,{maxWidth:hW-2});}
     if(showBL){
       doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-      doc.text("BL No.:",M+hW*2+1,y+3.2);
+      doc.text("BL No.:",M+hW*2+1,y+2.9);
       invNF(doc,false,7.5);
-      doc.text(blNo||"—",M+hW*2+1,y+6.2);
-      doc.text("BL Date: "+(blDate||"—"),M+hW*2+1,y+9.2);
+      doc.text(blNo||"—",M+hW*2+1,y+5.5);
+      doc.text("BL Date: "+(blDate||"—"),M+hW*2+1,y+8.1);
     }
     doc.setTextColor(0,0,0);
     y+=r1H;
@@ -7191,16 +7191,16 @@ function InvoicingTab({buyers}){
       rows.forEach(row=>{
         const nW=RW/Math.max(row.length,1);
         const rowLines=row.map(e=>doc.splitTextToSize("Notify Party "+e.idx+":\n"+(e.b?e.b.company_name||e.b.name:"")+(e.b&&buyerAddr(e.b)?"\n"+buyerAddr(e.b):""),nW-3));
-        const rH=Math.max(Math.max(...rowLines.map(l=>l.length))*pLH+3,11);
+        const rH=Math.max(Math.max(...rowLines.map(l=>l.length))*pLH+2,9);
         y=invChkPg(doc,y,rH,null,null); // page check before drawing notify row
         row.forEach((e,j)=>{
           invRECT(doc,M+j*nW,y,nW,rH);
           doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(7.5);
-          doc.text("Notify Party "+e.idx+":",M+j*nW+1,y+3.2);
+          doc.text("Notify Party "+e.idx+":",M+j*nW+1,y+2.9);
           invNF(doc,false,7.5); doc.setTextColor(0,0,0);
           if(e.b){
-            doc.text(e.b.company_name||e.b.name||"",M+j*nW+1,y+6.2);
-            const adr=buyerAddr(e.b); if(adr)doc.text(adr,M+j*nW+1,y+9.2,{maxWidth:nW-2});
+            doc.text(e.b.company_name||e.b.name||"",M+j*nW+1,y+5.5);
+            const adr=buyerAddr(e.b); if(adr)doc.text(adr,M+j*nW+1,y+8.1,{maxWidth:nW-2});
           }
         });
         y+=rH;
@@ -7225,17 +7225,17 @@ function InvoicingTab({buyers}){
     // Row height based on tallest wrapped cell
     const rowH=cols.reduce((maxH,[l,v,w])=>{
       const lines=doc.splitTextToSize(String(v||"—"),w-2);
-      return Math.max(maxH, 5+lines.length*4);
-    },10);
+      return Math.max(maxH, 4.3+lines.length*3.5);
+    },8.3);
     let cx=M;
     cols.forEach(([l,v,w])=>{
       invRECT(doc,cx,y,w,rowH);
-      doc.setFillColor(230,239,250); doc.rect(cx,y,w,4.5,"F");
+      doc.setFillColor(230,239,250); doc.rect(cx,y,w,4,"F");
       doc.setTextColor(...navy); doc.setFont("helvetica","bold"); doc.setFontSize(6);
-      doc.text(l,cx+0.5,y+3.5,{maxWidth:w-1});
+      doc.text(l,cx+0.5,y+3,{maxWidth:w-1});
       invNF(doc,false,7); doc.setTextColor(0,0,0);
       const lines=doc.splitTextToSize(String(v||"—"),w-1.5);
-      doc.text(lines,cx+0.5,y+8);
+      doc.text(lines,cx+0.5,y+7);
       cx+=w;
     });
     return y+rowH;
@@ -7244,7 +7244,7 @@ function InvoicingTab({buyers}){
   // Items table
   const renderItemsTable=(doc,M,y,RW,showPrice,useBuyerRate,compact)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
-    const hdrH=compact?5:6, minRowH=compact?5:6.5, lineH=compact?2.8:3.2, hdrFont=compact?6.3:7, bodyFont=compact?6.5:7.5, totalsH=compact?5:6;
+    const hdrH=compact?4.5:5.3, minRowH=compact?4.3:5.3, lineH=compact?2.4:2.7, hdrFont=compact?6.3:7, bodyFont=compact?6.5:7.5, totalsH=compact?4.5:5.3;
     const topOff=lineH-0.3; // single top-aligned offset used by every column, for uniform alignment
     const cols=showPrice
       ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
@@ -7267,7 +7267,7 @@ function InvoicingTab({buyers}){
       const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
       const descLines=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
       const pkgLines=doc.splitTextToSize(pkgStr,cols[1][1]-2);
-      const rh=Math.max(Math.max(descLines.length,pkgLines.length)*lineH+1.3,minRowH);
+      const rh=Math.max(Math.max(descLines.length,pkgLines.length)*lineH+1.0,minRowH);
       y=invChkPg(doc,y,rh,null,null);
       let rx=M;
       cols.forEach(([h,w],ci)=>{
@@ -7324,7 +7324,7 @@ function InvoicingTab({buyers}){
       const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
       const descLines=doc.splitTextToSize(it.desc1||"",descColW).length;
       const pkgLines=doc.splitTextToSize(pkgStr,pkgColW).length;
-      h+=Math.max(Math.max(descLines,pkgLines)*lineH+1.3,minRowH);
+      h+=Math.max(Math.max(descLines,pkgLines)*lineH+1.0,minRowH);
     });
     h+=totalsH;
     return h;
@@ -7373,19 +7373,19 @@ function InvoicingTab({buyers}){
   const signBlock=(doc,M,y,RW,co)=>{
     const seller=co||COMPANIES.devratan;
     const sealImg=co?null:SEAL_B64;
-    // Compact sign block: ~28mm total — only add page if genuinely no space
-    if(y+30>287){doc.addPage();y=52;}
+    // Compact sign block: ~26mm total — only add page if genuinely no space
+    if(y+27>287){doc.addPage();y=52;}
     invNF(doc,false,8);
-    y+=3;
+    y+=2;
     doc.text("For "+seller.name,M+RW-42,y); y+=1;
     const svSealW=32, svSealH=svSealW/1.626; // preserve signature+seal image's true aspect
     try{if(sealImg)doc.addImage(sealImg,"PNG",M+RW-42,y,svSealW,svSealH);}catch(e){}
-    y+=21;
+    y+=20;
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
-    doc.line(M+RW-42,y,M+RW,y); y+=4;
+    doc.line(M+RW-42,y,M+RW,y); y+=3;
     invNF(doc,false,7);
     doc.text("Authorised Signatory",M+RW-42,y);
-    return y+5;
+    return y+4;
   };
 
   // ── PDF: Export Invoice cum Packing List ───────────────────────────────────
@@ -7511,24 +7511,24 @@ function InvoicingTab({buyers}){
         {content:"BL No.:\n"+(form.bl_no||"—"),styles:{fontStyle:"bold",fontSize:8}},
         {content:"BL Date:\n"+(form.bl_date||"—"),styles:{fontSize:8}},
       ]],
-      styles:{cellPadding:{top:2,bottom:2,left:2,right:2},lineColor:[100,100,100],lineWidth:0.2},
+      styles:{cellPadding:{top:1.4,bottom:1.4,left:2,right:2},lineColor:[100,100,100],lineWidth:0.2},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
-    y=doc.lastAutoTable.finalY+2;
+    y=doc.lastAutoTable.finalY+1.5;
 
     y=renderParties(doc,form.parties[partyKey],M,y,RW,false,"","");
-    y+=2; y=renderInfoRow(doc,M,y,RW); y+=3;
+    y+=1.5; y=renderInfoRow(doc,M,y,RW); y+=2;
 
     // Container nos (compact)
     if(form.containers.some(c=>c.cont_no)){
       invNF(doc,false,7.5);
       const contStr=form.containers.filter(c=>c.cont_no).map((c,i)=>(i+1)+". "+c.cont_no+(c.seal_no?" / "+c.seal_no:"")).join("   ");
-      y=invWRAP(doc,"Containers: "+contStr,M,y,RW,4); y+=3;
+      y=invWRAP(doc,"Containers: "+contStr,M,y,RW,4); y+=2;
     }
 
-    invNF(doc,true,8.5); doc.text("Items:",M,y); y+=4;
+    invNF(doc,true,8.5); doc.text("Items:",M,y); y+=3;
     const {y:y2,totalAmtLocal}=renderItemsTable(doc,M,y,RW,true,partyKey==="buyer");
-    y=y2+5;
+    y=y2+3;
 
     // Advance & Extra Charges (Comm Invoice Buyer only)
     const totNetWtC=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt)*100)/100,0);
@@ -7547,18 +7547,18 @@ function InvoicingTab({buyers}){
       extraCharges.forEach(c=>summRows.push([{content:"Add: "+c.label,styles:{cellWidth:RW*0.6}},{content:(form.items[0]?.ccy||"USD")+" "+n(c.amount).toLocaleString("en-IN",{minimumFractionDigits:2}),styles:{halign:"right"}}]));
       summRows.push([{content:"NET AMOUNT DUE",styles:{fontStyle:"bold",fillColor:[230,239,250],textColor:[18,52,96],cellWidth:RW*0.6}},{content:(form.items[0]?.ccy||"USD")+" "+finalDue.toLocaleString("en-IN",{minimumFractionDigits:2}),styles:{fontStyle:"bold",halign:"right",fillColor:[230,239,250],textColor:[18,52,96]}}]);
       doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,body:summRows,
-        styles:{fontSize:8,cellPadding:{top:1.5,bottom:1.5,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+        styles:{fontSize:7.3,cellPadding:{top:0.8,bottom:0.8,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2},
         tableLineColor:[100,100,100],tableLineWidth:0.2});
-      y=doc.lastAutoTable.finalY+4;
+      y=doc.lastAutoTable.finalY+2;
     }
 
     // ── Two-column block: Net/Gross Wt + Amount in Words (left) | Bank Details (right) ──
     const scLeftW=78, scGap=6, scRightX=M+scLeftW+scGap, scRightW=RW-scLeftW-scGap;
     const amtForWords=partyKey==="buyer"?(advAmt>0||extraCharges.length>0?finalDue:commBuyerAmt):totalAmt;
     const amtWordsComm=numWords(amtForWords,form.items[0]?.ccy);
-    invNF(doc,false,8);
+    invNF(doc,false,7.5);
     const amtLinesComm=doc.splitTextToSize(amtWordsComm,scLeftW);
-    const leftEstH=4.5+4.5+6+4.5+amtLinesComm.length*4.5;
+    const leftEstH=3.8+3.8+4.5+3.8+amtLinesComm.length*3.8;
     const bdc=BANK_DETAILS.devratan;
     const bdRows=[
       ["BENEFICIARY NAME","DEVRATAN ENTERPRISES LLP"],
@@ -7567,28 +7567,28 @@ function InvoicingTab({buyers}){
       ["ACCOUNT NO.",bdc.accNo],
       ["SWIFT CODE",bdc.swift],
     ];
-    const bankEstH=5+bdRows.length*7.5;
-    y=invChkPg(doc,y,Math.max(leftEstH,bankEstH)+6,null,null);
+    const bankEstH=4+bdRows.length*6.2;
+    y=invChkPg(doc,y,Math.max(leftEstH,bankEstH)+4,null,null);
     const blockStartY=y;
 
-    invNF(doc,false,8);
-    doc.text("Total Net Wt: "+totNetWtC.toLocaleString("en-IN")+" Kgs",M,y); y+=4.5;
-    doc.text("Total Gross Wt: "+totGrossWtC.toLocaleString("en-IN")+" Kgs",M,y); y+=6;
-    invNF(doc,true,8); doc.text("Amount in Words:",M,y); y+=4.5;
-    invNF(doc,false,8);
+    invNF(doc,false,7.5);
+    doc.text("Total Net Wt: "+totNetWtC.toLocaleString("en-IN")+" Kgs",M,y); y+=3.8;
+    doc.text("Total Gross Wt: "+totGrossWtC.toLocaleString("en-IN")+" Kgs",M,y); y+=4.5;
+    invNF(doc,true,7.5); doc.text("Amount in Words:",M,y); y+=3.8;
+    invNF(doc,false,7.5);
     doc.text(amtLinesComm,M,y);
-    const leftEndY=y+amtLinesComm.length*4.5;
+    const leftEndY=y+amtLinesComm.length*3.8;
 
     let ry=blockStartY;
-    invNF(doc,true,8.5); doc.text("Bank Details:",scRightX,ry); ry+=5;
+    invNF(doc,true,8); doc.text("Bank Details:",scRightX,ry); ry+=4;
     doc.autoTable({startY:ry,margin:{left:scRightX,right:M},tableWidth:scRightW,
       body:bdRows.map(([l,v])=>[{content:l,styles:{fontStyle:"bold",fillColor:[230,239,250],textColor:[18,52,96],cellWidth:scRightW*0.42}},{content:v,styles:{fontStyle:"bold"}}]),
-      styles:{fontSize:7.3,cellPadding:{top:1.6,bottom:1.6,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2,overflow:"linebreak"},
+      styles:{fontSize:7,cellPadding:{top:1.1,bottom:1.1,left:2.2,right:2.2},lineColor:[100,100,100],lineWidth:0.2,overflow:"linebreak"},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
     const rightEndY=doc.lastAutoTable.finalY;
 
-    y=Math.max(leftEndY,rightEndY)+5;
+    y=Math.max(leftEndY,rightEndY)+3;
 
     y=signBlock(doc,M,y,RW);
     addInvFooter(doc);
@@ -8128,17 +8128,17 @@ function VJRAInvoicingTab({buyers}){
   };
 
   const vjraSignBlock=(doc,M,y,RW)=>{
-    if(y+28>287){doc.addPage();y=20;}
+    if(y+27>287){doc.addPage();y=20;}
     doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(0,0,0);
-    y+=3;
+    y+=2;
     doc.text("For "+vjraCo.name,M+RW-42,y); y+=1;
     try{if(VJRA_SEAL_B64)doc.addImage(VJRA_SEAL_B64,"PNG",M+RW-42,y,28,28);}catch(e){}
-    y+=29;
+    y+=26;
     doc.setDrawColor(100,100,100); doc.setLineWidth(0.3);
-    doc.line(M+RW-42,y,M+RW,y); y+=4;
+    doc.line(M+RW-42,y,M+RW,y); y+=3;
     doc.setFont("helvetica","normal"); doc.setFontSize(7);
     doc.text("Authorised Signatory",M+RW-42,y);
-    return y+5;
+    return y+4;
   };
 
   const vjraRenderParties=(doc,pdata,M,y,RW)=>{
@@ -8239,7 +8239,7 @@ function VJRAInvoicingTab({buyers}){
 
   const vjraItemsTable=(doc,M,y,RW,showPrice)=>{
     const navy=[18,52,96]; const lgray=[230,239,250];
-    const hdrH=6, lineH=3.2, minRowH=6.5, topOff=lineH-0.3; // tightened spacing + single top-aligned offset for uniform alignment
+    const hdrH=5.3, lineH=2.7, minRowH=5.3, topOff=lineH-0.3; // tightened spacing + single top-aligned offset for uniform alignment
     const cols=showPrice
       ?[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty",20],["Rate/MT",20],["Amount",RW-10-45-55-20-20]]
       :[["S.No.",10],["No. & Kind of Pkgs",45],["Description of Goods",55],["Qty (MT)",20],["Gross Wt (Kg)",28],["Net Wt (Kg)",RW-10-45-55-20-28]];
@@ -8261,7 +8261,7 @@ function VJRAInvoicingTab({buyers}){
       const pkgStr=(it.cont_qty&&it.cont_type?it.cont_qty+"×"+it.cont_type:"")+(it.bags?" "+it.bags+" BAGS":"")+(it.desc2?" "+it.desc2:"");
       const descLines=doc.splitTextToSize(it.desc1||"",cols[2][1]-2);
       const pkgLines=doc.splitTextToSize(pkgStr,cols[1][1]-2);
-      const rh=Math.max(Math.max(descLines.length,pkgLines.length)*lineH+1.3,minRowH);
+      const rh=Math.max(Math.max(descLines.length,pkgLines.length)*lineH+1.0,minRowH);
       if(y+rh>282){doc.addPage();y=52;}
       let rx=M;
       cols.forEach(([h,w],ci)=>{
@@ -8350,24 +8350,24 @@ function VJRAInvoicingTab({buyers}){
         {content:"BL No.:\n"+(form.bl_no||"—"),styles:{fontStyle:"bold",fontSize:8}},
         {content:"BL Date:\n"+(form.bl_date||"—"),styles:{fontSize:8}},
       ]],
-      styles:{cellPadding:{top:2,bottom:2,left:2,right:2},lineColor:[100,100,100],lineWidth:0.2},
+      styles:{cellPadding:{top:1.4,bottom:1.4,left:2,right:2},lineColor:[100,100,100],lineWidth:0.2},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
-    y=doc.lastAutoTable.finalY+2;
+    y=doc.lastAutoTable.finalY+1.5;
 
-    y=vjraRenderParties(doc,form.parties.buyer,M,y,RW); y+=2;
-    y=vjraInfoRow(doc,M,y,RW); y+=3;
+    y=vjraRenderParties(doc,form.parties.buyer,M,y,RW); y+=1.5;
+    y=vjraInfoRow(doc,M,y,RW); y+=2;
 
     // Container nos
     if(form.containers.some(c=>c.cont_no)){
       doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0);
       const contStr=form.containers.filter(c=>c.cont_no).map((c,i)=>(i+1)+". "+c.cont_no+(c.seal_no?" / "+c.seal_no:"")).join("   ");
       const cLines=doc.splitTextToSize("Containers: "+contStr,RW);
-      doc.text(cLines,M,y); y+=cLines.length*4+3;
+      doc.text(cLines,M,y); y+=cLines.length*4+2;
     }
 
-    doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.text("Items:",M,y); y+=4;
-    const {y:y2,totAmt}=vjraItemsTable(doc,M,y,RW,true); y=y2+3;
+    doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.text("Items:",M,y); y+=3;
+    const {y:y2,totAmt}=vjraItemsTable(doc,M,y,RW,true); y=y2+2;
 
     // Gross/Net wt
     const totNetWt=form.items.reduce((s,it)=>s+Math.round(n(it.bags)*n(it.bag_net_wt||"25")*100)/100,0);
@@ -8385,18 +8385,18 @@ function VJRAInvoicingTab({buyers}){
       vjraExtraCharges.forEach(c=>summRows.push([{content:"Add: "+c.label,styles:{cellWidth:RW*0.6}},{content:(form.items[0]?.ccy||"USD")+" "+n(c.amount).toLocaleString("en-IN",{minimumFractionDigits:2}),styles:{halign:"right"}}]));
       summRows.push([{content:"NET AMOUNT DUE",styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:RW*0.6}},{content:(form.items[0]?.ccy||"USD")+" "+vjraFinalDue.toLocaleString("en-IN",{minimumFractionDigits:2}),styles:{fontStyle:"bold",halign:"right",fillColor:lgray,textColor:navy}}]);
       doc.autoTable({startY:y,margin:{left:M,right:M},tableWidth:RW,body:summRows,
-        styles:{fontSize:8,cellPadding:{top:1.5,bottom:1.5,left:3,right:3},lineColor:[100,100,100],lineWidth:0.2},
+        styles:{fontSize:7.3,cellPadding:{top:0.8,bottom:0.8,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2},
         tableLineColor:[100,100,100],tableLineWidth:0.2});
-      y=doc.lastAutoTable.finalY+4;
+      y=doc.lastAutoTable.finalY+2;
     }
 
     // ── Two-column block: Net/Gross Wt + Amount in Words (left) | Bank Details (right) ──
     const scLeftW=78, scGap=6, scRightX=M+scLeftW+scGap, scRightW=RW-scLeftW-scGap;
     const amtForWordsVJRA=(vjraAdvAmt>0||vjraExtraCharges.length>0)?vjraFinalDue:totAmt;
     const amtW=numWords(amtForWordsVJRA,form.items[0]?.ccy||"USD");
-    doc.setFont("helvetica","normal"); doc.setFontSize(8);
+    doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
     const amtLines=doc.splitTextToSize(amtW,scLeftW);
-    const leftEstH=4.5+4.5+6+4.5+amtLines.length*4.5;
+    const leftEstH=3.8+3.8+4.5+3.8+amtLines.length*3.8;
     const vjraBdRows=[
       ["BENEFICIARY NAME",vjraCo.name],
       ["BENEFICIARY BANK",vjraBank.bankName],
@@ -8405,28 +8405,28 @@ function VJRAInvoicingTab({buyers}){
       ["IBAN",vjraBank.iban||""],
       ["SWIFT CODE",vjraBank.swift],
     ];
-    const bankEstH=5+vjraBdRows.length*7.5;
-    if(y+Math.max(leftEstH,bankEstH)+6>287){doc.addPage();y=52;}
+    const bankEstH=4+vjraBdRows.length*6.2;
+    if(y+Math.max(leftEstH,bankEstH)+4>287){doc.addPage();y=52;}
     const blockStartY=y;
 
-    doc.setFont("helvetica","normal"); doc.setFontSize(8);
-    doc.text("Total Net Wt: "+totNetWt.toLocaleString("en-IN")+" Kgs",M,y); y+=4.5;
-    doc.text("Total Gross Wt: "+totGrossWt.toLocaleString("en-IN")+" Kgs",M,y); y+=6;
-    doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.text("Amount in Words:",M,y); y+=4.5;
-    doc.setFont("helvetica","normal"); doc.setFontSize(8);
+    doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
+    doc.text("Total Net Wt: "+totNetWt.toLocaleString("en-IN")+" Kgs",M,y); y+=3.8;
+    doc.text("Total Gross Wt: "+totGrossWt.toLocaleString("en-IN")+" Kgs",M,y); y+=4.5;
+    doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.text("Amount in Words:",M,y); y+=3.8;
+    doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
     doc.text(amtLines,M,y);
-    const leftEndY=y+amtLines.length*4.5;
+    const leftEndY=y+amtLines.length*3.8;
 
     let ry=blockStartY;
-    doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.text("Bank Details:",scRightX,ry); ry+=5;
+    doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.text("Bank Details:",scRightX,ry); ry+=4;
     doc.autoTable({startY:ry,margin:{left:scRightX,right:M},tableWidth:scRightW,
       body:vjraBdRows.map(([l,v])=>[{content:l,styles:{fontStyle:"bold",fillColor:lgray,textColor:navy,cellWidth:scRightW*0.42}},{content:v,styles:{fontStyle:"bold"}}]),
-      styles:{fontSize:7.3,cellPadding:{top:1.6,bottom:1.6,left:2.5,right:2.5},lineColor:[100,100,100],lineWidth:0.2,overflow:"linebreak"},
+      styles:{fontSize:7,cellPadding:{top:1.1,bottom:1.1,left:2.2,right:2.2},lineColor:[100,100,100],lineWidth:0.2,overflow:"linebreak"},
       tableLineColor:[100,100,100],tableLineWidth:0.2,
     });
     const rightEndY=doc.lastAutoTable.finalY;
 
-    y=Math.max(leftEndY,rightEndY)+5;
+    y=Math.max(leftEndY,rightEndY)+3;
 
     y=vjraSignBlock(doc,M,y,RW);
     addVJRAFooter(doc);
