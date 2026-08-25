@@ -5331,6 +5331,7 @@ function InwardRemittanceOtherForm(){
     services_nature:"", purpose_code:"", services_doc_no:"", services_country:"",
     // C. Merchanting Trade
     merchant_shipment_date:"", merchant_txn_ref:"",
+    purpose_a:false, purpose_b:false, purpose_c:false,
     // Credit the proceeds to
     ca_cc_acc_no:"41289547389", ca_cc_amt:"",
     eefc_dda_acc_no:"", eefc_dda_amt:"",
@@ -5456,25 +5457,29 @@ function InwardRemittanceOtherForm(){
     field("IEC",'AARFD8883D');
     y+=1;
 
+    // Justified paragraph — wraps naturally like normal text instead of forcing
+    // fixed line breaks; only the last line is left-aligned (standard justify rule).
+    const justifyPara=(text,x,yPos,mw,lh)=>{
+      const lines=doc.splitTextToSize(text,mw);
+      lines.forEach((line,li)=>{
+        const isLast=li===lines.length-1;
+        if(!isLast&&line.trim()){
+          const words=line.split(" ");
+          if(words.length>1){
+            const lw=doc.getTextWidth(line);
+            const sw=(mw-lw)/(words.length-1);
+            let wx=x;
+            words.forEach(w=>{doc.text(w,wx,yPos);wx+=doc.getTextWidth(w)+doc.getTextWidth(" ")+sw;});
+          } else doc.text(line,x,yPos);
+        } else doc.text(line,x,yPos);
+        yPos+=lh;
+      });
+      return yPos;
+    };
     NF(false,9);
-    const amtPre="I/We request you to process the Foreign Inward Remittance of ";
-    doc.text(amtPre,M,y,{maxWidth:RW});
-    y+=4.5;
-    const ccyBlankW=28, amtBlankW=45;
-    doc.setDrawColor(60,60,60); doc.setLineWidth(0.25);
-    doc.line(M,y+0.8,M+ccyBlankW,y+0.8);
-    doc.line(M+ccyBlankW+6,y+0.8,M+ccyBlankW+6+amtBlankW,y+0.8);
-    NF(true,8.5);
-    doc.text(f.ccy,M+1,y,{maxWidth:ccyBlankW-2});
-    doc.text(f.amount,M+ccyBlankW+7,y,{maxWidth:amtBlankW-2});
-    NF(false,9);
-    doc.text("received",M+ccyBlankW+6+amtBlankW+6,y);
+    const introLine="I/We request you to process the Foreign Inward Remittance of "+f.ccy+" "+(f.amount||"________")+" received by you in our favour, as mentioned below –";
+    y=justifyPara(introLine,M,y,RW,4.5);
     y+=3;
-    NF(false,6.5); doc.setFont("helvetica","italic");
-    doc.text("CCY",M+1,y); doc.text("Amount",M+ccyBlankW+7,y);
-    doc.setFont("helvetica","normal"); y+=4.5;
-    NF(false,9);
-    doc.text("by you in our favour, as mentioned below –",M,y); y+=7.5;
 
     // 1 — Name of the Remitter
     field("1.  Name of the Remitter",f.remitter_name);
@@ -5483,16 +5488,31 @@ function InwardRemittanceOtherForm(){
     NF(false,9);
     doc.text("2.  Remitter's Address  (with Country Name)",M,y);
     doc.text(":",colonX,y); y+=4;
-    noteItalic("(If Remitter of funds is a Third Party, such Remitter's name must be mentioned/declared in the Shipping Bill / Softex and Commercial Invoice/Tripartite Agreement)",3);
+    // Note wraps within the label column only — must not cross past the ":" —
+    // so it stays under "Remitter's Address (with Country Name)" specifically.
+    NF(false,7); doc.setFont("helvetica","italic"); doc.setTextColor(50,50,50);
+    const remNoteW=colonX-M-3-2;
+    const remNoteLines=doc.splitTextToSize("(If Remitter of funds is a Third Party, such Remitter's name must be mentioned/declared in the Shipping Bill / Softex and Commercial Invoice/Tripartite Agreement)",remNoteW);
+    doc.text(remNoteLines,M+3,y,{maxWidth:remNoteW});
+    y+=remNoteLines.length*3.4+1.5;
+    doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
+    // Address blank starts after the ":" like every other field; supports
+    // wrapping to multiple blank lines if the address is long.
     doc.setDrawColor(60,60,60); doc.setLineWidth(0.25);
-    doc.line(M,y+0.8,blankEndX,y+0.8);
-    if(f.remitter_address){NF(false,8.5);doc.text(f.remitter_address,M+1,y,{maxWidth:RW-2});}
-    y+=6.5;
+    NF(false,8.5);
+    const addrW=blankEndX-blankStartX-2;
+    const addrLines=f.remitter_address?doc.splitTextToSize(f.remitter_address,addrW):[""];
+    addrLines.forEach(line=>{
+      doc.line(blankStartX,y+0.8,blankEndX,y+0.8);
+      if(line)doc.text(line,blankStartX+1,y);
+      y+=6.5;
+    });
 
     // 3 — Amount
     NF(false,9);
     doc.text("3.  Amount",M,y);
     doc.text(":",colonX,y);
+    const ccyBlankW=28, amtBlankW=45;
     doc.setDrawColor(60,60,60); doc.setLineWidth(0.25);
     doc.line(blankStartX,y+0.8,blankStartX+ccyBlankW,y+0.8);
     doc.line(blankStartX+ccyBlankW+6,y+0.8,blankStartX+ccyBlankW+6+amtBlankW,y+0.8);
@@ -5522,7 +5542,7 @@ function InwardRemittanceOtherForm(){
       doc.text(label,x+5,y);
     };
 
-    checkbox("A.   Export of Goods / Software",M,false); y+=5.5;
+    checkbox("A.   Export of Goods / Software",M,f.purpose_a); y+=5.5;
     NF(false,8.5);
     doc.text("Bill Ref. No(s).",M+7,y); doc.text(":",colonX,y);
     doc.setDrawColor(60,60,60); doc.setLineWidth(0.25); doc.line(blankStartX,y+0.8,blankEndX,y+0.8);
@@ -5539,7 +5559,7 @@ function InwardRemittanceOtherForm(){
     doc.text("(In case of multiple invoices, details to be furnished in an Annexure in Tabular format)",blankEndX,y,{align:"right",maxWidth:90});
     doc.setFont("helvetica","normal"); y+=6;
 
-    checkbox("B.   Export of Services / Misc. Remittances",M,false); y+=5.5;
+    checkbox("B.   Export of Services / Misc. Remittances",M,f.purpose_b); y+=5.5;
     field("Nature of Service / Remittance",f.services_nature,{indent:7});
     field("Purpose Code",f.purpose_code,{indent:7});
     NF(false,9);
@@ -5557,7 +5577,7 @@ function InwardRemittanceOtherForm(){
     if(f.services_country){NF(false,8.5);doc.text(f.services_country,blankStartX+1,y,{maxWidth:blankEndX-blankStartX-2});}
     y+=8;
 
-    checkbox("C.   If Merchanting Trade, Import Leg Details",M,false); y+=5.5;
+    checkbox("C.   If Merchanting Trade, Import Leg Details",M,f.purpose_c); y+=5.5;
     NF(false,8.5);
     doc.text("Shipment Date",M+7,y);
     doc.setDrawColor(60,60,60); doc.setLineWidth(0.25); doc.line(M+35,y+0.8,M+80,y+0.8);
@@ -5742,16 +5762,34 @@ function InwardRemittanceOtherForm(){
       <FRow label="Remitter's Address (with Country)"><FTextarea value={f.remitter_address} onChange={v=>sf("remitter_address",v)}/></FRow>
 
       <SectionHeader title="Purpose of Remittance — A. Export of Goods / Software"/>
+      <FRow label="Tick if applicable">
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer"}}>
+          <input type="checkbox" checked={f.purpose_a} onChange={e=>sf("purpose_a",e.target.checked)} style={{width:16,height:16,accentColor:"#1e3a5f"}}/>
+          This applies to this transaction (marks the checkbox on the PDF)
+        </label>
+      </FRow>
       <FRow label="Bill Ref. No(s)"><FInput value={f.goods_bill_ref} onChange={v=>sf("goods_bill_ref",v)} placeholder="if export documents already lodged with the Bank"/></FRow>
       <FRow label="Invoice / Shipping Bill / Softex No(s)"><FInput value={f.goods_inv_sb_no} onChange={v=>sf("goods_inv_sb_no",v)} placeholder="if export documents not lodged with the Bank"/></FRow>
 
       <SectionHeader title="Purpose of Remittance — B. Export of Services / Misc. Remittances"/>
+      <FRow label="Tick if applicable">
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer"}}>
+          <input type="checkbox" checked={f.purpose_b} onChange={e=>sf("purpose_b",e.target.checked)} style={{width:16,height:16,accentColor:"#1e3a5f"}}/>
+          This applies to this transaction (marks the checkbox on the PDF)
+        </label>
+      </FRow>
       <FRow label="Nature of Service / Remittance"><FInput value={f.services_nature} onChange={v=>sf("services_nature",v)}/></FRow>
       <FRow label="Purpose Code"><FInput value={f.purpose_code} onChange={v=>sf("purpose_code",v)}/></FRow>
       <FRow label="Underlying Document No. (Contract/Invoice etc.)"><FInput value={f.services_doc_no} onChange={v=>sf("services_doc_no",v)}/></FRow>
       <FRow label="Ultimate Country of Export of Services"><FInput value={f.services_country} onChange={v=>sf("services_country",v)}/></FRow>
 
       <SectionHeader title="Purpose of Remittance — C. Merchanting Trade (Import Leg)"/>
+      <FRow label="Tick if applicable">
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer"}}>
+          <input type="checkbox" checked={f.purpose_c} onChange={e=>sf("purpose_c",e.target.checked)} style={{width:16,height:16,accentColor:"#1e3a5f"}}/>
+          This applies to this transaction (marks the checkbox on the PDF)
+        </label>
+      </FRow>
       <FRow label="Shipment Date">
         <SmartDate value={f.merchant_shipment_date} onChange={v=>sf("merchant_shipment_date",v)}/>
       </FRow>
