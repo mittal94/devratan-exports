@@ -5417,60 +5417,155 @@ function InwardRemittanceOtherForm(){
     doc.text("To,",M,y); y+=5;
     doc.text("The Branch Head, State Bank of India",M,y); y+=5;
     doc.text("Industrial Finance Branch, YN Road, Indore",M,y); y+=5;
-    doc.text("Dear Sir / Madam,",M,y); y+=7;
+    doc.text("Dear Sir / Madam,",M,y); y+=8;
 
-    NF(true,9);
-    doc.text("Processing of Foreign Inward Remittance",M,y); y+=6;
+    // Helper: draws "label :" then an underlined blank with the value sitting on it —
+    // matches the original SBI form's fill-in-the-blank look instead of inline prose.
+    const colonX=M+78, blankStartX=M+82, blankEndX=M+RW;
+    const field=(label,value,opts={})=>{
+      NF(false,9);
+      const indent=opts.indent||0;
+      const lx=M+indent;
+      doc.text(label,lx,y);
+      doc.text(":",colonX,y);
+      const bStartX=opts.blankStartX||blankStartX;
+      if(opts.sameLine!==false){
+        doc.setDrawColor(60,60,60); doc.setLineWidth(0.25);
+        doc.line(bStartX,y+0.8,blankEndX,y+0.8);
+        if(value){NF(false,8.5);doc.text(String(value),bStartX+1,y,{maxWidth:blankEndX-bStartX-2});}
+        y+=6.5;
+      } else {
+        y+=5;
+      }
+    };
+    const noteItalic=(text,indent)=>{
+      NF(false,7); doc.setFont("helvetica","italic"); doc.setTextColor(50,50,50);
+      y=WRAP(text,M+indent,y,RW-indent-4,3.4);
+      doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
+      y+=1.5;
+    };
 
-    NF(false,9);
-    const naPre="Name of the Applicant: ";
-    doc.text(naPre,M,y);
-    NF(true,9);
-    const naW=doc.getStringUnitWidth(naPre)*9/doc.internal.scaleFactor;
-    doc.text("DEVRATAN ENTERPRISES LLP",M+naW,y);
-    NF(false,9);
-    const naW2=doc.getStringUnitWidth("DEVRATAN ENTERPRISES LLP")*9/doc.internal.scaleFactor;
-    doc.text("   IEC: AARFD8883D",M+naW+naW2,y);
-    y+=6;
+    // Subject — underlined
+    NF(true,9.5);
+    doc.text("Processing of Foreign Inward Remittance",M,y);
+    const subjW=doc.getStringUnitWidth("Processing of Foreign Inward Remittance")*9.5/doc.internal.scaleFactor;
+    doc.setDrawColor(0,0,0); doc.setLineWidth(0.3); doc.line(M,y+0.8,M+subjW,y+0.8);
+    y+=8;
+
+    field("Name of the Applicant",'DEVRATAN ENTERPRISES LLP');
+    field("IEC",'AARFD8883D');
+    y+=1;
 
     NF(false,9);
     const amtPre="I/We request you to process the Foreign Inward Remittance of ";
-    const amtVal=f.ccy+" "+f.amount;
-    doc.text(amtPre,M,y);
-    NF(true,9);
-    const preW=doc.getStringUnitWidth(amtPre)*9/doc.internal.scaleFactor;
-    doc.text(amtVal,M+preW,y);
-    NF(false,9);
-    const valW=doc.getStringUnitWidth(amtVal)*9/doc.internal.scaleFactor;
-    doc.text(" received by",M+preW+valW,y);
+    doc.text(amtPre,M,y,{maxWidth:RW});
     y+=4.5;
-    doc.text("you in our favour, as mentioned below –",M,y); y+=7;
+    const ccyBlankW=28, amtBlankW=45;
+    doc.setDrawColor(60,60,60); doc.setLineWidth(0.25);
+    doc.line(M,y+0.8,M+ccyBlankW,y+0.8);
+    doc.line(M+ccyBlankW+6,y+0.8,M+ccyBlankW+6+amtBlankW,y+0.8);
+    NF(true,8.5);
+    doc.text(f.ccy,M+1,y,{maxWidth:ccyBlankW-2});
+    doc.text(f.amount,M+ccyBlankW+7,y,{maxWidth:amtBlankW-2});
+    NF(false,9);
+    doc.text("received",M+ccyBlankW+6+amtBlankW+6,y);
+    y+=3;
+    NF(false,6.5); doc.setFont("helvetica","italic");
+    doc.text("CCY",M+1,y); doc.text("Amount",M+ccyBlankW+7,y);
+    doc.setFont("helvetica","normal"); y+=4.5;
+    NF(false,9);
+    doc.text("by you in our favour, as mentioned below –",M,y); y+=7.5;
 
-    // 1 & 2 — Remitter details
-    NF(true,9); doc.text("1. Name of the Remitter",M,y); y+=4.5;
-    NF(false,8.5); y=WRAP(f.remitter_name,M+5,y,RW-5,4); y+=2;
-    NF(true,9); doc.text("2. Remitter's Address (with Country Name)",M,y); y+=4;
-    NF(false,7.5); y=WRAP("(If Remitter of funds is a Third Party, such Remitter's name must be mentioned/declared in the Shipping Bill / Softex and Commercial Invoice/Tripartite Agreement)",M+5,y,RW-5,3.6); y+=1;
-    NF(false,8.5); y=WRAP(f.remitter_address,M+5,y,RW-5,4); y+=3;
+    // 1 — Name of the Remitter
+    field("1.  Name of the Remitter",f.remitter_name);
+
+    // 2 — Remitter's Address
+    NF(false,9);
+    doc.text("2.  Remitter's Address  (with Country Name)",M,y);
+    doc.text(":",colonX,y); y+=4;
+    noteItalic("(If Remitter of funds is a Third Party, such Remitter's name must be mentioned/declared in the Shipping Bill / Softex and Commercial Invoice/Tripartite Agreement)",3);
+    doc.setDrawColor(60,60,60); doc.setLineWidth(0.25);
+    doc.line(M,y+0.8,blankEndX,y+0.8);
+    if(f.remitter_address){NF(false,8.5);doc.text(f.remitter_address,M+1,y,{maxWidth:RW-2});}
+    y+=6.5;
 
     // 3 — Amount
-    NF(true,9); doc.text("3. Amount",M,y); y+=4.5;
-    NF(false,8.5); doc.text(f.ccy+" "+f.amount,M+5,y); y+=6;
+    NF(false,9);
+    doc.text("3.  Amount",M,y);
+    doc.text(":",colonX,y);
+    doc.setDrawColor(60,60,60); doc.setLineWidth(0.25);
+    doc.line(blankStartX,y+0.8,blankStartX+ccyBlankW,y+0.8);
+    doc.line(blankStartX+ccyBlankW+6,y+0.8,blankStartX+ccyBlankW+6+amtBlankW,y+0.8);
+    NF(true,8.5);
+    doc.text(f.ccy,blankStartX+1,y,{maxWidth:ccyBlankW-2});
+    doc.text(f.amount,blankStartX+ccyBlankW+7,y,{maxWidth:amtBlankW-2});
+    y+=3;
+    NF(false,6.5); doc.setFont("helvetica","italic");
+    doc.text("CCY",blankStartX+1,y); doc.text("Amount",blankStartX+ccyBlankW+7,y);
+    doc.setFont("helvetica","normal"); y+=5;
 
     // 4 — Purpose of Remittance
-    y=chkPg(y,45);
-    NF(true,9); doc.text("4. Purpose of Remittance:",M,y); y+=4.5;
-    NF(true,8.5); doc.text("A. Export of Goods / Software:",M+5,y); y+=4.2;
-    NF(false,8); doc.text("Bill Ref. No(s). (if export documents already lodged with the Bank): "+(f.goods_bill_ref||"—"),M+9,y,{maxWidth:RW-9}); y+=4.5;
-    doc.text("Invoice / Shipping Bill / Softex No(s). (if not lodged): "+(f.goods_inv_sb_no||"—"),M+9,y,{maxWidth:RW-9}); y+=6;
-    NF(true,8.5); doc.text("B. Export of Services / Misc. Remittances:",M+5,y); y+=4.2;
-    NF(false,8);
-    doc.text("Nature of Service / Remittance: "+(f.services_nature||"—"),M+9,y,{maxWidth:RW-9}); y+=4.5;
-    doc.text("Purpose Code: "+(f.purpose_code||"—")+"    Underlying Document No.: "+(f.services_doc_no||"—"),M+9,y,{maxWidth:RW-9}); y+=4.5;
-    doc.text("Name of the ultimate country to which services are exported: "+(f.services_country||"—"),M+9,y,{maxWidth:RW-9}); y+=6;
-    NF(true,8.5); doc.text("C. If Merchanting Trade, Import Leg Details:",M+5,y); y+=4.2;
-    NF(false,8);
-    doc.text("Shipment Date: "+(f.merchant_shipment_date?toDisplayDate(f.merchant_shipment_date):"—")+"    Txn. Ref. No.: "+(f.merchant_txn_ref||"—"),M+9,y,{maxWidth:RW-9}); y+=7;
+    y=chkPg(y,60);
+    NF(false,9);
+    doc.text("4.  Purpose of Remittance",M,y);
+    doc.text(":",colonX,y);
+    NF(false,8); doc.setFont("helvetica","italic"); doc.setTextColor(30,60,140);
+    doc.text("(Tick whichever is applicable)",blankEndX,y,{align:"right"});
+    doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0);
+    y+=6;
+
+    const checkbox=(label,x,checked)=>{
+      doc.setDrawColor(0,0,0); doc.setLineWidth(0.3);
+      doc.rect(x,y-3.2,3,3);
+      if(checked){NF(true,8);doc.text("X",x+0.5,y-0.8);}
+      NF(true,8.5);
+      doc.text(label,x+5,y);
+    };
+
+    checkbox("A.   Export of Goods / Software",M,false); y+=5.5;
+    NF(false,8.5);
+    doc.text("Bill Ref. No(s).",M+7,y); doc.text(":",colonX,y);
+    doc.setDrawColor(60,60,60); doc.setLineWidth(0.25); doc.line(blankStartX,y+0.8,blankEndX,y+0.8);
+    if(f.goods_bill_ref){doc.text(f.goods_bill_ref,blankStartX+1,y,{maxWidth:blankEndX-blankStartX-2});}
+    y+=3.6;
+    noteItalic("(If export documents already lodged with the Bank)",7);
+    NF(false,8.5); doc.text("(OR)",105,y,{align:"center"}); y+=4.5;
+    doc.text("Invoice / Shipping Bill / Softex No(s).",M+7,y); doc.text(":",colonX,y);
+    doc.line(blankStartX,y+0.8,blankEndX,y+0.8);
+    if(f.goods_inv_sb_no){doc.text(f.goods_inv_sb_no,blankStartX+1,y,{maxWidth:blankEndX-blankStartX-2});}
+    y+=3.6;
+    NF(false,7); doc.setFont("helvetica","italic");
+    doc.text("(If export documents not lodged with the Bank)",M+10,y);
+    doc.text("(In case of multiple invoices, details to be furnished in an Annexure in Tabular format)",blankEndX,y,{align:"right",maxWidth:90});
+    doc.setFont("helvetica","normal"); y+=6;
+
+    checkbox("B.   Export of Services / Misc. Remittances",M,false); y+=5.5;
+    field("Nature of Service / Remittance",f.services_nature,{indent:7});
+    field("Purpose Code",f.purpose_code,{indent:7});
+    NF(false,9);
+    doc.text("Underlying Document No.",M+7,y);
+    doc.text("(Contract / Invoice etc.)",M+7,y+3.6);
+    doc.text(":",colonX,y);
+    doc.setDrawColor(60,60,60); doc.setLineWidth(0.25); doc.line(blankStartX,y+0.8,blankEndX,y+0.8);
+    if(f.services_doc_no){NF(false,8.5);doc.text(f.services_doc_no,blankStartX+1,y,{maxWidth:blankEndX-blankStartX-2});}
+    y+=6.5;
+    NF(false,9);
+    doc.text("Name of the ultimate country to which",M+7,y);
+    doc.text("services are exported",M+7,y+3.6);
+    doc.text(":",colonX,y);
+    doc.line(blankStartX,y+0.8,blankEndX,y+0.8);
+    if(f.services_country){NF(false,8.5);doc.text(f.services_country,blankStartX+1,y,{maxWidth:blankEndX-blankStartX-2});}
+    y+=8;
+
+    checkbox("C.   If Merchanting Trade, Import Leg Details",M,false); y+=5.5;
+    NF(false,8.5);
+    doc.text("Shipment Date",M+7,y);
+    doc.setDrawColor(60,60,60); doc.setLineWidth(0.25); doc.line(M+35,y+0.8,M+80,y+0.8);
+    if(f.merchant_shipment_date){doc.text(toDisplayDate(f.merchant_shipment_date),M+36,y);}
+    doc.text("Txn. Ref. No.",M+90,y);
+    doc.line(M+118,y+0.8,blankEndX,y+0.8);
+    if(f.merchant_txn_ref){doc.text(f.merchant_txn_ref,M+119,y,{maxWidth:blankEndX-M-119});}
+    y+=8;
 
     // 5 — Credit the proceeds to
     y=chkPg(y,35);
