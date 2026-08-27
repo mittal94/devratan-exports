@@ -6470,7 +6470,7 @@ function LodgementExportBillsForm(){
     sb_no:"", sb_date:"",
     other_docs:"",
     mt_shipdate:"", mt_txn_ref:"",
-    late_reason:"",
+    late_reason:"Delay in documents from customs and shipping line.",
     third_party:"No",
     debit_account:"41289547389",
     contact_name:"Akshay Mittal", contact_mobile:"9111282828", contact_email:"Mittal94@gmail.com",
@@ -6535,18 +6535,18 @@ function LodgementExportBillsForm(){
     NF(true,10); doc.setTextColor(...navy);
     doc.text("APPLICATION FOR LODGEMENT OF EXPORT DOCUMENTS",105,y,{align:"center"}); y+=5;
     doc.text("(Direct Dispatch - for Regularization in EDPMS)",105,y,{align:"center"});
-    doc.setTextColor(0,0,0); y+=8;
+    doc.setTextColor(0,0,0); y+=6;
 
     // Date + address
     NF(false,9);
-    doc.text("Date: "+f.date,M,y); y+=5.5;
-    doc.text("The Branch Head State Bank of India",M,y); y+=5;
-    doc.text("Industrial Finance Branch, YN Road, Indore",M,y); y+=7;
-    doc.text("Dear Sir / Madam,",M,y); y+=7;
+    doc.text("Date: "+f.date,M,y); y+=4.5;
+    doc.text("The Branch Head State Bank of India",M,y); y+=4;
+    doc.text("Industrial Finance Branch, YN Road, Indore",M,y); y+=5;
+    doc.text("Dear Sir / Madam,",M,y); y+=5;
 
     // Subject
-    NF(true,9); doc.text("Submission of Export Documents for Lodgement",M,y); y+=5;
-    NF(false,9); doc.text("I/We submit copies of the following export documents directly sent by us to the Buyer for lodgement \u2013",M,y,{maxWidth:RW}); y+=6;
+    NF(true,9); doc.text("Submission of Export Documents for Lodgement",M,y); y+=4;
+    NF(false,9); doc.text("I/We submit copies of the following export documents directly sent by us to the Buyer for lodgement \u2013",M,y,{maxWidth:RW}); y+=4.5;
 
     // Exporter / Importer table — dynamic height
     const eiCols=[90,RW-90];
@@ -6557,14 +6557,14 @@ function LodgementExportBillsForm(){
     const buyerNameL=doc.splitTextToSize(f.buyer_name||"",eiCols[1]-3);
     const buyerAddrL=doc.splitTextToSize(f.buyer_address||"",eiCols[1]-3);
     const impLineCount=buyerNameL.length+buyerAddrL.length;
-    const eiH=Math.max(30,Math.max(expLineCount,impLineCount)*4+10);
+    const eiH=Math.max(24,Math.max(expLineCount,impLineCount)*3.6+7);
     RECT(M,y,eiCols[0],eiH); RECT(M+eiCols[0],y,eiCols[1],eiH);
-    NF(true,8); doc.text("Exporter's (Drawer) Name & Address :",M+1,y+4);
+    NF(true,8); doc.text("Exporter's (Drawer) Name & Address :",M+1,y+3.6);
     NF(false,8);
-    doc.text("DEVRATAN ENTERPRISES LLP",M+1,y+9);
-    doc.text(expAddrL,M+1,y+13);
-    let expY=y+13+expAddrL.length*4;
-    doc.text("IEC: AARFD8883D",M+1,expY); expY+=5;
+    doc.text("DEVRATAN ENTERPRISES LLP",M+1,y+7.2);
+    doc.text(expAddrL,M+1,y+10.2);
+    let expY=y+10.2+expAddrL.length*3.6;
+    doc.text("IEC: AARFD8883D",M+1,expY); expY+=4;
     NF(true,7.5); doc.text("Status:",M+1,expY);
     NF(false,7.5);
     let sx=M+1+TW("Status:",7.5)+3;
@@ -6572,28 +6572,28 @@ function LodgementExportBillsForm(){
       const chk=(checked?"[X]":"[ ]")+" "+lbl;
       doc.text(chk,sx,expY); sx+=TW(chk,7.5)+5;
     });
-    NF(true,8); doc.text("Importer's (Drawee) Name & Address :",M+eiCols[0]+1,y+4);
+    NF(true,8); doc.text("Importer's (Drawee) Name & Address :",M+eiCols[0]+1,y+3.6);
     NF(false,8);
-    doc.text(buyerNameL,M+eiCols[0]+1,y+9);
-    if(f.buyer_address) doc.text(buyerAddrL,M+eiCols[0]+1,y+9+buyerNameL.length*4);
-    y+=eiH+4;
+    doc.text(buyerNameL,M+eiCols[0]+1,y+7.2);
+    if(f.buyer_address) doc.text(buyerAddrL,M+eiCols[0]+1,y+7.2+buyerNameL.length*3.6);
+    y+=eiH+3;
 
     // Bill Details
-    NF(true,9); doc.text("1.  Bill Details:",M,y); y+=4;
+    NF(true,9); doc.text("1.  Bill Details:",M,y); y+=3.5;
     const c0=8,c1=68,c2=5,c3=RW-c0-c1-c2;
     NF(false,8.5);
 
     // a. Type of Export
     {
-      const rh=7;
+      const rh=6;
       RECT(M,y,c0,rh); RECT(M+c0,y,c1,rh); RECT(M+c0+c1,y,c2,rh); RECT(M+c0+c1+c2,y,c3,rh);
-      doc.text("a.",M+1,y+4.5);
-      NF(true,8.5); doc.text("Type of Export",M+c0+1,y+4.5); NF(false,8.5);
-      doc.text(":",M+c0+c1+1,y+4.5);
+      doc.text("a.",M+1,y+4);
+      NF(true,8.5); doc.text("Type of Export",M+c0+1,y+4); NF(false,8.5);
+      doc.text(":",M+c0+c1+1,y+4);
       let ox=M+c0+c1+c2+2;
       [["Regular","Regular"],["Deemed","Deemed"],["Consignment","Consignment"],["Merchanting Trade","Merchanting Trade"]].forEach(([lbl,val])=>{
         const chk=(f.export_type===val?"[X]":"[ ]")+" "+lbl;
-        doc.text(chk,ox,y+4.5); ox+=TW(chk,8.5)+6;
+        doc.text(chk,ox,y+4); ox+=TW(chk,8.5)+6;
       });
       y+=rh;
     }
@@ -6601,47 +6601,47 @@ function LodgementExportBillsForm(){
     // b. Nature of Export (with "specify" line if Miscellaneous)
     {
       const showOther=f.nature==="Miscellaneous";
-      const rh=showOther?11:7;
+      const rh=showOther?9:6;
       RECT(M,y,c0,rh); RECT(M+c0,y,c1,rh); RECT(M+c0+c1,y,c2,rh); RECT(M+c0+c1+c2,y,c3,rh);
-      doc.text("b.",M+1,y+4.5);
-      NF(true,8.5); doc.text("Nature of Export",M+c0+1,y+4.5); NF(false,8.5);
-      doc.text(":",M+c0+c1+1,y+4.5);
+      doc.text("b.",M+1,y+4);
+      NF(true,8.5); doc.text("Nature of Export",M+c0+1,y+4); NF(false,8.5);
+      doc.text(":",M+c0+c1+1,y+4);
       let ox=M+c0+c1+c2+2;
       [["Goods","Goods"],["Software","Software"],["Services","Services"],["Miscellaneous","Miscellaneous"]].forEach(([lbl,val])=>{
         const chk=(f.nature===val?"[X]":"[ ]")+" "+lbl;
-        doc.text(chk,ox,y+4.5); ox+=TW(chk,8.5)+5;
+        doc.text(chk,ox,y+4); ox+=TW(chk,8.5)+5;
       });
-      if(showOther){NF(false,8);doc.text("Specify: "+(f.nature_other||""),M+c0+c1+c2+2,y+8.5,{maxWidth:c3-4});}
+      if(showOther){NF(false,8);doc.text("Specify: "+(f.nature_other||""),M+c0+c1+c2+2,y+7.2,{maxWidth:c3-4});}
       y+=rh;
     }
 
     // c. Bill Amount
     {
-      const rh=7;
+      const rh=6;
       RECT(M,y,c0,rh); RECT(M+c0,y,c1,rh); RECT(M+c0+c1,y,c2,rh); RECT(M+c0+c1+c2,y,c3,rh);
-      doc.text("c.",M+1,y+4.5);
-      NF(true,8.5); doc.text("Bill Amount",M+c0+1,y+4.5); NF(false,8.5);
-      doc.text(":",M+c0+c1+1,y+4.5);
-      NF(true,8.5); doc.text(f.bill_ccy+" "+f.bill_amount,M+c0+c1+c2+2,y+4.5);
+      doc.text("c.",M+1,y+4);
+      NF(true,8.5); doc.text("Bill Amount",M+c0+1,y+4); NF(false,8.5);
+      doc.text(":",M+c0+c1+1,y+4);
+      NF(true,8.5); doc.text(f.bill_ccy+" "+f.bill_amount,M+c0+c1+c2+2,y+4);
       NF(false,8.5);
       y+=rh;
     }
 
     // d. Terms of Payment (Sight | Usance + days/from | Mixed Payment + desc)
     {
-      const rh=11;
+      const rh=9;
       RECT(M,y,c0,rh); RECT(M+c0,y,c1,rh); RECT(M+c0+c1,y,c2,rh); RECT(M+c0+c1+c2,y,c3,rh);
-      doc.text("d.",M+1,y+4.5);
-      NF(true,8.5); doc.text("Terms of Payment",M+c0+1,y+4.5); NF(false,8.5);
-      doc.text(":",M+c0+c1+1,y+4.5);
+      doc.text("d.",M+1,y+4);
+      NF(true,8.5); doc.text("Terms of Payment",M+c0+1,y+4); NF(false,8.5);
+      doc.text(":",M+c0+c1+1,y+4);
       let ox=M+c0+c1+c2+2;
       const sightChk=(f.payment_terms==="Sight"?"[X]":"[ ]")+" Sight";
-      doc.text(sightChk,ox,y+4.5); ox+=TW(sightChk,8.5)+6;
+      doc.text(sightChk,ox,y+4); ox+=TW(sightChk,8.5)+6;
       const usanceChk=(f.payment_terms==="Usance"?"[X]":"[ ]")+" Usance "+(f.usance_days||"___")+" Days from "+(f.usance_from_date?f.usance_from_date:"____________");
-      doc.text(usanceChk,ox,y+4.5,{maxWidth:M+c0+c1+c2+c3-ox});
+      doc.text(usanceChk,ox,y+4,{maxWidth:M+c0+c1+c2+c3-ox});
       NF(false,8);
       const mixedChk=(f.payment_terms==="Mixed Payment"?"[X]":"[ ]")+" Mixed Payment "+(f.mixed_payment_desc||"");
-      doc.text(mixedChk,M+c0+c1+c2+2,y+8.5,{maxWidth:c3-4});
+      doc.text(mixedChk,M+c0+c1+c2+2,y+7.2,{maxWidth:c3-4});
       NF(false,8.5);
       y+=rh;
     }
@@ -6654,67 +6654,67 @@ function LodgementExportBillsForm(){
       NF(false,8);
       const refText=(f.adv_ref_no||"")+"   "+(f.adv_type==="Full"?"[X] Full":"[ ] Full")+"   "+(f.adv_type==="Partial"?"[X] Partial":"[ ] Partial");
       const vls=doc.splitTextToSize(refText,valW);
-      const rh=Math.max(7,Math.max(lls.length,vls.length)*4+3);
+      const rh=Math.max(6,Math.max(lls.length,vls.length)*3.6+2.5);
       RECT(M,y,c0,rh); RECT(M+c0,y,c1,rh); RECT(M+c0+c1,y,c2,rh); RECT(M+c0+c1+c2,y,c3,rh);
-      NF(false,8.5); doc.text("e.",M+1,y+4.5);
-      NF(true,8); doc.text(lls,M+c0+1,y+4);
-      NF(false,8.5); doc.text(":",M+c0+c1+1,y+4.5);
-      NF(false,8); doc.text(vls,M+c0+c1+c2+2,y+4);
+      NF(false,8.5); doc.text("e.",M+1,y+4);
+      NF(true,8); doc.text(lls,M+c0+1,y+3.6);
+      NF(false,8.5); doc.text(":",M+c0+c1+1,y+4);
+      NF(false,8); doc.text(vls,M+c0+c1+c2+2,y+3.6);
       y+=rh;
     }
-    y+=4;
+    y+=2;
 
     // 2. Documents Submitted
-    y=chkPg(y,30);
-    NF(true,9); doc.text("2.  Documents Submitted:",M,y,{maxWidth:RW}); y+=4;
+    y=chkPg(y,26);
+    NF(true,9); doc.text("2.  Documents Submitted:",M,y,{maxWidth:RW}); y+=3.5;
     NF(false,7.5); doc.setFont("helvetica","italic");
-    y=WRAP("(In case of multiple invoices / Shipping Bills/Softex, details to be furnished in Annexure)",M+5,y,RW-5,3.6);
-    doc.setFont("helvetica","normal"); y+=2;
+    y=WRAP("(In case of multiple invoices / Shipping Bills/Softex, details to be furnished in Annexure)",M+5,y,RW-5,3.2);
+    doc.setFont("helvetica","normal"); y+=1.5;
     NF(false,8.5);
-    y=WRAP("a.  Commercial Invoice (No. & Date): "+f.inv_no+(f.inv_date?" Dated "+f.inv_date:""),M+5,y,RW-5,4.5); y+=3;
-    y=WRAP("b.  Transport document (Airway Bill/Bill of Lading/Lorry receipt etc.)",M+5,y,RW-5,4.5); y+=3;
-    y=WRAP("c.  Shipping Bill/Softex (No & Date): "+f.sb_no+(f.sb_date?" Dated "+f.sb_date:""),M+5,y,RW-5,4.5); y+=3;
-    y=WRAP("d.  Other documents (please specify, if any): "+(f.other_docs||""),M+5,y,RW-5,4.5); y+=5;
+    y=WRAP("a.  Commercial Invoice (No. & Date): "+f.inv_no+(f.inv_date?" Dated "+f.inv_date:""),M+5,y,RW-5,3.8); y+=1.8;
+    y=WRAP("b.  Transport document (Airway Bill/Bill of Lading/Lorry receipt etc.)",M+5,y,RW-5,3.8); y+=1.8;
+    y=WRAP("c.  Shipping Bill/Softex (No & Date): "+f.sb_no+(f.sb_date?" Dated "+f.sb_date:""),M+5,y,RW-5,3.8); y+=1.8;
+    y=WRAP("d.  Other documents (please specify, if any): "+(f.other_docs||""),M+5,y,RW-5,3.8); y+=3;
 
     // 3. Merchanting Trade
-    y=chkPg(y,12);
+    y=chkPg(y,10);
     NF(false,8.5);
-    y=WRAP("3.  If Merchanting Trade: Import Leg details - Shipment Date "+(f.mt_shipdate?toDisplay(f.mt_shipdate):"________________")+", Txn. Ref. No. "+(f.mt_txn_ref||"___________________"),M,y,RW,4.5);
-    y+=4;
+    y=WRAP("3.  If Merchanting Trade: Import Leg details - Shipment Date "+(f.mt_shipdate?toDisplay(f.mt_shipdate):"________________")+", Txn. Ref. No. "+(f.mt_txn_ref||"___________________"),M,y,RW,3.8);
+    y+=2.5;
 
     // 4. Additional Information
-    y=chkPg(y,26);
-    NF(true,9); doc.text("4.  Additional Information:",M,y); y+=5;
+    y=chkPg(y,22);
+    NF(true,9); doc.text("4.  Additional Information:",M,y); y+=4;
     NF(false,8.5);
-    y=WRAP("a.  If documents are submitted after 21 days from the date of export, reasons for delay: "+(f.late_reason||""),M+5,y,RW-5,4.5);
-    y+=4;
+    y=WRAP("a.  If documents are submitted after 21 days from the date of export, reasons for delay: "+(f.late_reason||"Delay in documents from customs and shipping line."),M+5,y,RW-5,3.8);
+    y+=2.5;
     const tpChk=f.third_party==="Yes";
-    doc.text("b.  Is Remitter of Funds a Third Party:  Yes: "+(tpChk?"[X]":"[ ]")+"     No: "+(tpChk?"[ ]":"[X]"),M+5,y); y+=5;
+    doc.text("b.  Is Remitter of Funds a Third Party:  Yes: "+(tpChk?"[X]":"[ ]")+"     No: "+(tpChk?"[ ]":"[X]"),M+5,y); y+=4;
     NF(false,7.5); doc.setFont("helvetica","italic");
-    y=WRAP("(* If Yes, Third Party's name must be mentioned/declared in the Shipping Bill / Softex and Commercial Invoice / Tripartite Agreement)",M+5,y,RW-5,3.8);
-    doc.setFont("helvetica","normal"); y+=4;
+    y=WRAP("(* If Yes, Third Party's name must be mentioned/declared in the Shipping Bill / Softex and Commercial Invoice / Tripartite Agreement)",M+5,y,RW-5,3.4);
+    doc.setFont("helvetica","normal"); y+=2.5;
 
     // 5. Debit account
-    y=chkPg(y,12);
+    y=chkPg(y,10);
     NF(false,8.5);
-    y=WRAP("5.  I/We authorise you to debit our Account No. "+f.debit_account+" with yourselves towards all charges & expenses in connection with the lodgement of the bill.",M,y,RW,4.5);
-    y+=5;
+    y=WRAP("5.  I/We authorise you to debit our Account No. "+f.debit_account+" with yourselves towards all charges & expenses in connection with the lodgement of the bill.",M,y,RW,3.8);
+    y+=3;
 
     // 6. Contact table
-    y=chkPg(y,32);
-    NF(true,9); doc.text("6.  Contact Details for this transaction:",M,y); y+=5.5;
+    y=chkPg(y,26);
+    NF(true,9); doc.text("6.  Contact Details for this transaction:",M,y); y+=4;
     [["Name",":",f.contact_name],["Mobile No.",":",f.contact_mobile],["Email ID",":",f.contact_email]].forEach(([l,c2,v])=>{
-      RECT(M,y,50,5); RECT(M+50,y,5,5); RECT(M+55,y,RW-55,5);
-      NF(false,8.5); doc.text(l,M+1,y+3.5); doc.text(c2,M+51,y+3.5); doc.text(String(v||""),M+56,y+3.5);
-      y+=5;
+      RECT(M,y,50,4.5); RECT(M+50,y,5,4.5); RECT(M+55,y,RW-55,4.5);
+      NF(false,8.5); doc.text(l,M+1,y+3.2); doc.text(c2,M+51,y+3.2); doc.text(String(v||""),M+56,y+3.2);
+      y+=4.5;
     });
-    y+=12;
+    y+=6;
 
     // Sign block
     y=chkPg(y,14);
     NF(true,9);
-    doc.text("Date: "+f.date,M,y); doc.text("Authorised Signatory",M+RW-45,y); y+=5;
-    doc.text("Place: "+f.place,M,y); y+=6;
+    doc.text("Date: "+f.date,M,y); doc.text("Authorised Signatory",M+RW-45,y); y+=4.5;
+    doc.text("Place: "+f.place,M,y); y+=5;
     NF(false,8); doc.text("(Please affix Company/Firm Stamp)",M+RW-65,y);
 
     // ── PAGE 2: TERMS & CONDITIONS ────────────────────────────────────────────
