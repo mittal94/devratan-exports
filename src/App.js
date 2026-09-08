@@ -6946,211 +6946,208 @@ function FormA2(){
     const JPDF=getPDF(); if(!JPDF) return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const M=20, RW=170;
-    const NF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||9);doc.setTextColor(0,0,0);};
-    const TW=(t,sz)=>doc.getStringUnitWidth(String(t||""))*(sz||9)/doc.internal.scaleFactor;
-    const WRAP=(t,x,y2,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y2);return y2+ls.length*(lh||4.5);};
+    const NF=(bold,sz)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(sz||9.5);doc.setTextColor(0,0,0);};
+    const TW=(t,sz)=>doc.getStringUnitWidth(String(t||""))*(sz||9.5)/doc.internal.scaleFactor;
+    const WRAP=(t,x,y2,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y2);return y2+ls.length*(lh||5);};
     const LINE=(x1,y1,x2,y2)=>{doc.setDrawColor(100,100,100);doc.setLineWidth(0.25);doc.line(x1,y1,x2,y2);};
     const UNDERLINE=(x,y2,w)=>{doc.setDrawColor(60,60,60);doc.setLineWidth(0.2);doc.line(x,y2+0.8,x+w,y2+0.8);};
     const chkPg=(yPos,need)=>{if(yPos+(need||8)>282){doc.addPage();return 20;}return yPos;};
     const RECT=(x,y2,w,h)=>{doc.setDrawColor(80,80,80);doc.setLineWidth(0.2);doc.rect(x,y2,w,h);};
-    const pdfFooter=()=>{
-      const tp=doc.getNumberOfPages();
-      for(let i=1;i<=tp;i++){
-        doc.setPage(i);
-        NF(false,7.5); doc.setTextColor(120,120,120);
-        doc.text("Page "+i+" of "+tp,105,290,{align:"center"});
-        doc.setTextColor(0,0,0);
-      }
-    };
 
     let y=16;
 
     // ── Title block — centred, matching the RBI-prescribed layout ──────────────
-    NF(true,13); doc.text("FORM A2",105,y,{align:"center"}); y+=6;
-    NF(false,9); doc.text("(To be completed by the applicant)",105,y,{align:"center"}); y+=4.5;
-    NF(false,7.5); doc.setFont("helvetica","italic");
-    doc.text("(For payments other than imports and remittances covering intermediary trade)",105,y,{align:"center"}); y+=5;
+    NF(true,15); doc.text("FORM A2",105,y,{align:"center"}); y+=7;
+    NF(false,10); doc.text("(To be completed by the applicant)",105,y,{align:"center"}); y+=5.5;
+    NF(false,8.5); doc.setFont("helvetica","italic");
+    doc.text("(For payments other than imports and remittances covering intermediary trade)",105,y,{align:"center"}); y+=6;
     doc.setFont("helvetica","normal");
-    NF(true,10); doc.text("Application for Remittance Abroad",105,y,{align:"center"}); y+=5;
-    LINE(M,y,M+RW,y); y+=5;
+    NF(true,11); doc.text("Application for Remittance Abroad",105,y,{align:"center"}); y+=6;
+    LINE(M,y,M+RW,y); y+=6;
 
     // ── Top section — always kept blank (filled in by the Authorised Dealer) ──
-    NF(false,9);
-    doc.text("AD Code No.",M,y); UNDERLINE(M+22,y,RW-22); y+=5;
-    doc.text("Form No.",M,y); UNDERLINE(M+18,y,RW-18); y+=3.5;
-    NF(false,7.5); doc.setFont("helvetica","italic");
+    NF(false,10);
+    doc.text("AD Code No.",M,y); UNDERLINE(M+24,y,RW-24); y+=6;
+    doc.text("Form No.",M,y); UNDERLINE(M+20,y,RW-20); y+=4.5;
+    NF(false,8.5); doc.setFont("helvetica","italic");
     doc.text("(To be filled in by the Authorised Dealer)",M+RW,y,{align:"right"});
-    doc.setFont("helvetica","normal"); y+=5;
-    NF(false,9);
-    doc.text("Currency",M,y); UNDERLINE(M+14,y,20);
-    doc.text("Amount",M+38,y); UNDERLINE(M+50,y,30);
-    doc.text("Equivalent to Rs.",M+84,y); UNDERLINE(M+108,y,RW-88); y+=3.5;
-    NF(false,7.5); doc.setFont("helvetica","italic");
+    doc.setFont("helvetica","normal"); y+=6;
+    NF(false,10);
+    doc.text("Currency",M,y); UNDERLINE(M+16,y,20);
+    doc.text("Amount",M+42,y); UNDERLINE(M+56,y,32);
+    const eqLabel="Equivalent to Rs.";
+    const eqX=M+94;
+    doc.text(eqLabel,eqX,y);
+    const eqLineX=eqX+TW(eqLabel,10)+2;
+    UNDERLINE(eqLineX,y,(M+RW)-eqLineX); // ends exactly at the right margin — never past the page edge
+    y+=4.5;
+    NF(false,8.5); doc.setFont("helvetica","italic");
     doc.text("(To be completed by the Authorised Dealer)",M+RW,y,{align:"right"});
-    doc.setFont("helvetica","normal"); y+=5;
-    LINE(M,y,M+RW,y); y+=5;
+    doc.setFont("helvetica","normal"); y+=6;
+    LINE(M,y,M+RW,y); y+=6;
 
     // ── Applicant details — Devratan's own details ─────────────────────────────
-    NF(false,9);
-    doc.text("I/We",M,y); UNDERLINE(M+11,y,RW-11);
-    NF(true,9); doc.text(f.applicant_name,M+12,y-0.8,{maxWidth:RW-13});
-    y+=3.5; NF(false,7.5); doc.setFont("helvetica","italic");
-    doc.text("(Name of applicant remitter)",M,y); doc.setFont("helvetica","normal"); y+=5;
-    NF(false,9);
-    doc.text("PAN No.",M,y); UNDERLINE(M+16,y,RW-16);
-    NF(true,9); doc.text(f.applicant_pan,M+17,y-0.8); y+=5.5;
-    NF(false,9);
+    NF(false,10);
+    doc.text("I/We",M,y); UNDERLINE(M+12,y,RW-12);
+    NF(true,10); doc.text(f.applicant_name,M+13,y-0.8,{maxWidth:RW-14});
+    y+=4.5; NF(false,8.5); doc.setFont("helvetica","italic");
+    doc.text("(Name of applicant remitter)",105,y,{align:"center"}); doc.setFont("helvetica","normal"); y+=6;
+    NF(false,10);
+    doc.text("PAN No.",M,y); UNDERLINE(M+18,y,RW-18);
+    NF(true,10); doc.text(f.applicant_pan,M+19,y-0.8); y+=6.5;
+    NF(false,10);
     doc.text("Address",M,y);
-    const addrLines=doc.splitTextToSize(f.applicant_address,RW-16);
-    UNDERLINE(M+16,y,RW-16);
-    NF(true,8.5); doc.text(addrLines[0]||"",M+17,y-0.8,{maxWidth:RW-18});
-    y+=4.5;
+    const addrLines=doc.splitTextToSize(f.applicant_address,RW-18);
+    UNDERLINE(M+18,y,RW-18);
+    NF(true,9.5); doc.text(addrLines[0]||"",M+19,y-0.8,{maxWidth:RW-20});
+    y+=5;
     if(addrLines.length>1){
-      NF(true,8.5);
-      for(let i=1;i<addrLines.length;i++){ UNDERLINE(M,y,RW); doc.text(addrLines[i],M+1,y-0.8,{maxWidth:RW-2}); y+=4.5; }
+      NF(true,9.5);
+      for(let i=1;i<addrLines.length;i++){ UNDERLINE(M,y,RW); doc.text(addrLines[i],M+1,y-0.8,{maxWidth:RW-2}); y+=5; }
     }
-    NF(false,9);
-    doc.text("authorize",M,y); y+=5;
+    NF(false,10);
+    doc.text("authorize",M,y); y+=6;
     UNDERLINE(M,y,RW);
-    NF(true,9); doc.text(f.ad_branch_name,M+1,y-0.8);
-    y+=3.5; NF(false,7.5); doc.setFont("helvetica","italic");
-    doc.text("(Name of AD branch)",M,y); doc.setFont("helvetica","normal"); y+=5;
+    NF(true,10); doc.text(f.ad_branch_name,M+1,y-0.8);
+    y+=4.5; NF(false,8.5); doc.setFont("helvetica","italic");
+    doc.text("(Name of AD branch)",M,y); doc.setFont("helvetica","normal"); y+=6;
 
-    NF(false,9);
-    y=WRAP("To debit my Savings Bank/ Current/ RFC/ EEFC A/c. No. "+f.account_no+" with yourselves together with their charges and",M,y,RW,4.5);
-    y+=3;
+    NF(false,10);
+    y=WRAP("To debit my Savings Bank/ Current/ RFC/ EEFC A/c. No. "+f.account_no+" with yourselves together with their charges and",M,y,RW,5);
+    y+=4;
 
     // ── Points a-d — a, c, d stay permanently blank per the bank's own template;
     // only b (direct remittance) carries our actual beneficiary details. ──────
-    y=chkPg(y,10);
-    NF(false,8.5);
-    doc.text("*  a)  Issue a draft : Beneficiary's Name",M,y); UNDERLINE(M+82,y,RW-82); y+=4.5;
-    doc.text("Address",M+18,y); UNDERLINE(M+30,y,RW-30); y+=5.5;
+    y=chkPg(y,12);
+    NF(false,9.5);
+    doc.text("*  a)  Issue a draft : Beneficiary's Name",M,y); UNDERLINE(M+88,y,RW-88); y+=5;
+    doc.text("Address",M+18,y); UNDERLINE(M+32,y,RW-32); y+=6.5;
 
-    y=chkPg(y,20);
-    doc.text("*  b)  Effect the foreign exchange remittance directly \u2013",M,y); y+=4.5;
-    NF(true,8.5);
-    doc.text("1)  Beneficiary's Name",M+10,y); UNDERLINE(M+52,y,RW-52-10);
-    doc.text(f.beneficiary_name,M+53,y-0.8,{maxWidth:RW-55}); y+=4.5;
+    y=chkPg(y,24);
+    doc.text("*  b)  Effect the foreign exchange remittance directly \u2013",M,y); y+=5;
+    NF(true,9.5);
+    doc.text("1)  Beneficiary's Name",M+10,y); UNDERLINE(M+56,y,RW-56-10);
+    doc.text(f.beneficiary_name,M+57,y-0.8,{maxWidth:RW-59}); y+=5;
     const bankLine="2)  Name and address of the bank";
     doc.text(bankLine,M+10,y);
     const bankVal=f.bank_name+(f.bank_address?", "+f.bank_address:"");
-    const bankValLines=doc.splitTextToSize(bankVal,RW-64);
-    UNDERLINE(M+64,y,RW-64-10); doc.text(bankValLines[0]||"",M+65,y-0.8,{maxWidth:RW-66});
-    y+=4.5;
-    for(let i=1;i<bankValLines.length;i++){ UNDERLINE(M+10,y,RW-10); doc.text(bankValLines[i],M+11,y-0.8,{maxWidth:RW-12}); y+=4.5; }
-    doc.text("3)  Account No.",M+10,y); UNDERLINE(M+38,y,RW-38-10);
-    doc.text(f.account_number,M+39,y-0.8); y+=5.5;
+    const bankValLines=doc.splitTextToSize(bankVal,RW-70);
+    UNDERLINE(M+70,y,RW-70-10); doc.text(bankValLines[0]||"",M+71,y-0.8,{maxWidth:RW-73});
+    y+=5;
+    for(let i=1;i<bankValLines.length;i++){ UNDERLINE(M+10,y,RW-10); doc.text(bankValLines[i],M+11,y-0.8,{maxWidth:RW-12}); y+=5; }
+    doc.text("3)  Account No.",M+10,y); UNDERLINE(M+40,y,RW-40-10);
+    doc.text(f.account_number,M+41,y-0.8); y+=6.5;
+    NF(false,9.5);
+
+    y=chkPg(y,12);
+    doc.text("*  c)  Issue travelers cheques for",M,y); UNDERLINE(M+70,y,RW-70); y+=6.5;
+    doc.text("*  d)  Issue foreign currency notes for",M,y); UNDERLINE(M+76,y,RW-76); y+=5;
+    doc.text("Amount (specify currency)",M+18,y); UNDERLINE(M+68,y,RW-68); y+=6;
+
     NF(false,8.5);
-
-    y=chkPg(y,10);
-    doc.text("*  c)  Issue travelers cheques for",M,y); UNDERLINE(M+66,y,RW-66); y+=5.5;
-    doc.text("*  d)  Issue foreign currency notes for",M,y); UNDERLINE(M+72,y,RW-72); y+=4.5;
-    doc.text("Amount (specify currency)",M+18,y); UNDERLINE(M+65,y,RW-65); y+=5;
-
-    NF(false,7.5);
-    y=WRAP("* (Strike out whichever is not applicable) for the purpose/s indicated below",M,y,RW,3.6);
-    y+=4;
+    y=WRAP("* (Strike out whichever is not applicable) for the purpose/s indicated below",M,y,RW,4);
+    y+=5;
 
     // ── Purpose table — filled in on the portal, printed exactly in this column layout ──
-    y=chkPg(y,20);
+    y=chkPg(y,22);
     const pCols=[16,32,26,RW-16-32-26];
-    NF(true,7.5);
+    NF(true,8.5);
     let px=M;
     ["Sr.\nNo.","Whether under\nLRS (Yes/No)","Purpose\nCode","Description\n(As per the Annex)"].forEach((h,ci)=>{
       const hl=h.split("\n");
-      RECT(px,y,pCols[ci],9);
-      doc.text(hl,px+1,y+3.2,{maxWidth:pCols[ci]-2});
+      RECT(px,y,pCols[ci],10);
+      doc.text(hl,px+1,y+3.6,{maxWidth:pCols[ci]-2});
       px+=pCols[ci];
     });
-    y+=9;
-    NF(false,8);
+    y+=10;
+    NF(false,9);
     f.purpose_rows.forEach((r,i)=>{
       const descLines=doc.splitTextToSize(r.description||"",pCols[3]-2);
-      const rh=Math.max(6,descLines.length*3.6+2);
+      const rh=Math.max(7,descLines.length*4+2.5);
       y=chkPg(y,rh);
       px=M;
-      RECT(px,y,pCols[0],rh); doc.text(String(i+1),px+1,y+4); px+=pCols[0];
-      RECT(px,y,pCols[1],rh); doc.text(r.lrs||"No",px+1,y+4); px+=pCols[1];
-      RECT(px,y,pCols[2],rh); doc.text(r.code||"",px+1,y+4); px+=pCols[2];
-      RECT(px,y,pCols[3],rh); doc.text(descLines,px+1,y+4);
+      RECT(px,y,pCols[0],rh); doc.text(String(i+1),px+1,y+4.5); px+=pCols[0];
+      RECT(px,y,pCols[1],rh); doc.text(r.lrs||"No",px+1,y+4.5); px+=pCols[1];
+      RECT(px,y,pCols[2],rh); doc.text(r.code||"",px+1,y+4.5); px+=pCols[2];
+      RECT(px,y,pCols[3],rh); doc.text(descLines,px+1,y+4.5);
       y+=rh;
     });
-    y+=3;
+    y+=4;
 
-    NF(false,7.5); doc.setFont("helvetica","italic");
-    y=WRAP("(Remitter should put a tick (\u221a) against an appropriate purpose code. In case of doubt/ difficulty, the AD bank should be consulted).",M,y,RW,3.6);
+    NF(false,8.5); doc.setFont("helvetica","italic");
+    y=WRAP("(Remitter should put a tick mark against an appropriate purpose code. In case of doubt/ difficulty, the AD bank should be consulted).",M,y,RW,4);
     doc.setFont("helvetica","normal");
-    y+=6;
+    y+=7;
 
     // ── Bottom-of-page footnotes — kept verbatim from the bank's template ──────
-    y=chkPg(y,14);
-    NF(false,6); doc.setTextColor(90,90,90);
-    y=WRAP("15 Inserted vide AP (Dir) series Circular 50 dated February 11, 2016. Prior to insertion it read as Annex 1, which has since been replaced with effect from the same date.",M,y,RW,2.8);
-    y=WRAP("16 Modified vide AP (DIR) Series Circular No. 32 dated June 19, 2018. Prior to modification, it read \u201cPAN No. (For remittances exceeding USD 25,000 and for all capital account transactions)\u201d",M,y,RW,2.8);
+    y=chkPg(y,16);
+    NF(false,6.5); doc.setTextColor(90,90,90);
+    y=WRAP("15 Inserted vide AP (Dir) series Circular 50 dated February 11, 2016. Prior to insertion it read as Annex 1, which has since been replaced with effect from the same date.",M,y,RW,3.2);
+    y=WRAP("16 Modified vide AP (DIR) Series Circular No. 32 dated June 19, 2018. Prior to modification, it read \u201cPAN No. (For remittances exceeding USD 25,000 and for all capital account transactions)\u201d",M,y,RW,3.2);
     doc.setTextColor(0,0,0);
 
     // ── PAGE 2 — Declaration (verbatim wording) + AD Certificate (left blank) ──
     doc.addPage();
     y=20;
-    NF(true,11); doc.text("Declaration",M,y); y+=5;
-    NF(false,8.5); doc.setFont("helvetica","italic");
-    doc.text("(Under FEMA 1999)",M,y); doc.setFont("helvetica","normal"); y+=6;
+    NF(true,12); doc.text("Declaration",M,y); y+=5.5;
+    NF(false,9); doc.setFont("helvetica","italic");
+    doc.text("(Under FEMA 1999)",M,y); doc.setFont("helvetica","normal"); y+=6.5;
 
-    NF(false,9);
-    y=WRAP("1. # I, "+f.declarant_name+" (Name), hereby declare that the total amount of foreign exchange purchased from or remitted through, all sources in India during the financial year including this application is within the overall limit of the Liberalised Remittance Scheme prescribed by the Reserve Bank of India and certify that the source of funds for making the said remittance belongs to me and the foreign exchange will not be used for prohibited purposes.",M,y,RW,4.5);
-    y+=4;
-    y=WRAP("Details of the remittances made/transactions effected under the Liberalised Remittance Scheme in the current financial year (April- March) \u2026\u2026..",M,y,RW,4.5);
-    y+=3;
+    NF(false,9.5);
+    // Point 1 always leaves the applicant's name blank — a physical signing blank,
+    // not auto-filled — per the bank's own template.
+    y=WRAP("1. # I, __________________________ (Name), hereby declare that the total amount of foreign exchange purchased from or remitted through, all sources in India during the financial year including this application is within the overall limit of the Liberalised Remittance Scheme prescribed by the Reserve Bank of India and certify that the source of funds for making the said remittance belongs to me and the foreign exchange will not be used for prohibited purposes.",M,y,RW,4.8);
+    y+=4.5;
+    y=WRAP("Details of the remittances made/transactions effected under the Liberalised Remittance Scheme in the current financial year (April- March) \u2026\u2026..",M,y,RW,4.8);
+    y+=3.5;
 
     // Blank LRS transactions table — headers only, no data (left for the applicant to fill by hand)
-    y=chkPg(y,26);
+    y=chkPg(y,28);
     const lCols=[16,26,26,RW-16-26-26];
-    NF(true,7.5);
+    NF(true,8);
     let lx=M;
     ["Sl.\nNo","Date","Amount","Name and address of AD branch/FFMC through\nwhich the transaction has been effected"].forEach((h,ci)=>{
       const hl=h.split("\n");
-      RECT(lx,y,lCols[ci],9);
-      doc.text(hl,lx+1,y+3.2,{maxWidth:lCols[ci]-2});
+      RECT(lx,y,lCols[ci],9.5);
+      doc.text(hl,lx+1,y+3.5,{maxWidth:lCols[ci]-2});
       lx+=lCols[ci];
     });
-    y+=9;
-    NF(false,8);
+    y+=9.5;
+    NF(false,8.5);
     for(let i=0;i<3;i++){
       lx=M;
-      lCols.forEach(w=>{RECT(lx,y,w,7);lx+=w;});
-      y+=7;
+      lCols.forEach(w=>{RECT(lx,y,w,7.5);lx+=w;});
+      y+=7.5;
     }
-    y+=5;
+    y+=5.5;
 
-    y=chkPg(y,20);
-    y=WRAP("2. # The total amount of foreign exchange purchased from or remitted through, all sources in India during this calendar year including this application is within USD _______________________ (USD ____________) the annual limit prescribed by Reserve Bank of India for the said purpose.",M,y,RW,4.5);
-    y+=4;
-    y=WRAP("3. # Foreign exchange purchased from you is for the purpose indicated above.",M,y,RW,4.5);
-    y+=3;
-    NF(false,7.5); doc.text("# (Strike out whichever is not applicable )",M,y); y+=8;
+    y=chkPg(y,22);
+    y=WRAP("2. # The total amount of foreign exchange purchased from or remitted through, all sources in India during this calendar year including this application is within USD _______________________ (USD ____________) the annual limit prescribed by Reserve Bank of India for the said purpose.",M,y,RW,4.8);
+    y+=4.5;
+    y=WRAP("3. # Foreign exchange purchased from you is for the purpose indicated above.",M,y,RW,4.8);
+    y+=3.5;
+    NF(false,8); doc.text("# (Strike out whichever is not applicable )",M,y); y+=8.5;
 
-    NF(false,9);
-    doc.text("Signature of the applicant :",M,y); UNDERLINE(M+58,y,RW-58); y+=5.5;
+    NF(false,9.5);
+    doc.text("Signature of the applicant :",M,y); UNDERLINE(M+62,y,RW-62); y+=6;
     doc.text("(Name) :",M,y);
-    NF(true,9); doc.text(f.declarant_name,M+18,y);
-    NF(false,9); doc.text("Date: "+f.date,M+RW-TW("Date: "+f.date,9),y); y+=10;
+    NF(true,9.5); doc.text(f.declarant_name,M+19,y);
+    NF(false,9.5); doc.text("Date: "+f.date,M+RW-TW("Date: "+f.date,9.5),y); y+=10.5;
 
-    LINE(M,y,M+RW,y); y+=6;
+    LINE(M,y,M+RW,y); y+=6.5;
 
     // Certificate by the Authorised Dealer — always left blank, bank fills this in
-    y=chkPg(y,40);
-    NF(true,10); doc.text("Certificate by the Authorised Dealer",M,y); y+=5.5;
-    NF(false,9);
-    y=WRAP("This is to certify that the remittance is not being made by/ to ineligible entities and that the remittance is in conformity with the instructions issued by the Reserve Bank from time to time under the Scheme.",M,y,RW,4.5);
-    y+=6;
-    doc.text("Name and designation of the authorised official:",M,y); UNDERLINE(M+RW-45,y,45); y+=7;
-    doc.text("Stamp and seal",M,y); y+=8;
-    doc.text("Signature:",M,y); UNDERLINE(M+18,y,RW-18); y+=6;
-    doc.text("Date:",M,y); UNDERLINE(M+12,y,60); y+=6;
-    doc.text("Place:",M,y); UNDERLINE(M+14,y,60); y+=4;
+    y=chkPg(y,42);
+    NF(true,11); doc.text("Certificate by the Authorised Dealer",M,y); y+=6;
+    NF(false,9.5);
+    y=WRAP("This is to certify that the remittance is not being made by/ to ineligible entities and that the remittance is in conformity with the instructions issued by the Reserve Bank from time to time under the Scheme.",M,y,RW,4.8);
+    y+=6.5;
+    doc.text("Name and designation of the authorised official:",M,y); UNDERLINE(M+RW-45,y,45); y+=7.5;
+    doc.text("Stamp and seal",M,y); y+=8.5;
+    doc.text("Signature:",M,y); UNDERLINE(M+20,y,RW-20); y+=6.5;
+    doc.text("Date:",M,y); UNDERLINE(M+14,y,60); y+=6.5;
+    doc.text("Place:",M,y); UNDERLINE(M+16,y,60); y+=4.5;
 
-    pdfFooter();
     doc.save("SBI_Form_A2.pdf");
   };
 
