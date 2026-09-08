@@ -580,7 +580,7 @@ const exportBCPDF = (bc) => {
 };
 
 // ─── Export Modal ─────────────────────────────────────────────────────────────
-function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[], allBCs=[] }) {
+function ExportModal({ type, data, onClose, getBC, allBRCs=[], allIRMs=[], allBCs=[], ships=[], bcs=[], standaloneBRCs=[], standaloneIRMs=[] }) {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [fmt, setFmt] = useState("csv");
@@ -4765,7 +4765,7 @@ function BankingFormsTab({ships, buyers, bcs}){
       {activeForm==="inward_other" && <InwardRemittanceOtherForm/>}
       {activeForm==="bc_form"  && <ExportBCForm ships={ships} buyers={buyers}/>}
       {activeForm==="lodgement" && <LodgementExportBillsForm/>}
-      {activeForm==="a2"       && <FormA2 ships={ships}/>}
+      {activeForm==="a2"       && <FormA2/>}
       {activeForm==="epc"      && <EPCForm ships={ships}/>}
       {activeForm==="ibl"      && <IBLForm ships={ships} buyers={buyers}/>}
       {activeForm==="inward"   && <InwardRemittanceLetter ships={ships}/>}
@@ -6909,42 +6909,39 @@ function LodgementExportBillsForm(){
 
 
 
-function FormA2({ships}){
+function FormA2(){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
-  const toDisplay=iso=>{if(!iso)return"";const[y,m,d]=iso.split("-");return`${d}.${m}.${y}`;};
-  const toISO=dd=>{if(!dd||!dd.includes("."))return"";const[d,m,y]=dd.split(".");return`${y}-${m}-${d}`;};
 
   const [f,setF]=useState({
     date:today,
-    applicant_name:"Devratan Enterprises LLP",
-    applicant_address:"Off No 206, 2nd Floor, Indore Trade Center, Madhumilan Square, Indore MP 452001",
+    applicant_name:COMPANIES.devratan.name,
+    applicant_pan:"AARFD8883D",
+    applicant_address:COMPANIES.devratan.address,
+    ad_branch_name:"SBI IFB Branch, Indore",
     account_no:"41289547389",
-    amount_ccy:"USD", amount:"",
-    purpose:"", purpose_code:"S0204",
-    charges:"OUR",
-    remittance_type:"direct",  // "draft" | "direct" | "tc" | "notes"
     beneficiary_name:"",
-    beneficiary_address:"",
     bank_name:"",
     bank_address:"",
     account_number:"",
-    swift_code:"",
-    declarant_name:"AKSHAY MITTAL",
+    purpose_rows:[{lrs:"No",code:"",description:""}],
+    declarant_name:"Akshay Mittal",
   });
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+  const DateInput=({value,onChange})=>(<SmartDate value={value} onChange={onChange}/>);
+
+  const addPurposeRow=()=>{
+    if(f.purpose_rows.length>=8) return;
+    setF(p=>({...p,purpose_rows:[...p.purpose_rows,{lrs:"No",code:"",description:""}]}));
+  };
+  const updPurposeRow=(i,k,v)=>setF(p=>{const arr=[...p.purpose_rows];arr[i]={...arr[i],[k]:v};return{...p,purpose_rows:arr};});
+  const delPurposeRow=(i)=>setF(p=>({...p,purpose_rows:p.purpose_rows.filter((_,j)=>j!==i)}));
 
   const exportPDF=()=>{
     const missing=[];
-    if(!f.amount) missing.push("Amount in FCY");
-    if(!f.purpose) missing.push("Purpose");
-    if(f.remittance_type==="direct"||f.remittance_type==="draft"){
-      if(!f.beneficiary_name) missing.push("Beneficiary Name");
-      if(f.remittance_type==="direct"){
-        if(!f.bank_name) missing.push("Bank Name");
-        if(!f.account_number) missing.push("Account Number");
-        if(!f.swift_code) missing.push("SWIFT Code");
-      }
-    }
+    if(!f.beneficiary_name) missing.push("Beneficiary Name (point b)");
+    if(!f.bank_name) missing.push("Bank Name (point b)");
+    if(!f.account_number) missing.push("Beneficiary Account No. (point b)");
+    if(f.purpose_rows.some(r=>!r.code||!r.description)) missing.push("Purpose Code / Description (all rows)");
     if(missing.length){alert("Please fill mandatory fields before exporting PDF:\n\u2022 "+missing.join("\n\u2022 "));return;}
     const JPDF=getPDF(); if(!JPDF) return;
     const doc=new JPDF({orientation:"portrait",unit:"mm",format:"a4"});
@@ -6953,7 +6950,9 @@ function FormA2({ships}){
     const TW=(t,sz)=>doc.getStringUnitWidth(String(t||""))*(sz||9)/doc.internal.scaleFactor;
     const WRAP=(t,x,y2,mw,lh)=>{const ls=doc.splitTextToSize(String(t||""),mw);doc.text(ls,x,y2);return y2+ls.length*(lh||4.5);};
     const LINE=(x1,y1,x2,y2)=>{doc.setDrawColor(100,100,100);doc.setLineWidth(0.25);doc.line(x1,y1,x2,y2);};
+    const UNDERLINE=(x,y2,w)=>{doc.setDrawColor(60,60,60);doc.setLineWidth(0.2);doc.line(x,y2+0.8,x+w,y2+0.8);};
     const chkPg=(yPos,need)=>{if(yPos+(need||8)>282){doc.addPage();return 20;}return yPos;};
+    const RECT=(x,y2,w,h)=>{doc.setDrawColor(80,80,80);doc.setLineWidth(0.2);doc.rect(x,y2,w,h);};
     const pdfFooter=()=>{
       const tp=doc.getNumberOfPages();
       for(let i=1;i<=tp;i++){
@@ -6964,179 +6963,261 @@ function FormA2({ships}){
       }
     };
 
-    let y=18;
+    let y=16;
 
-    // ── Title block — centred ────────────────────────────────────────────────
-    NF(true,13); doc.text("Form A2",105,y,{align:"center"}); y+=7;
-    NF(true,10); doc.text("Application cum Declaration",105,y,{align:"center"}); y+=5;
-    NF(false,9); doc.text("(To be completed by the applicant)",105,y,{align:"center"}); y+=5;
-    NF(true,9); doc.text("Application for drawal of foreign exchange",105,y,{align:"center"}); y+=7;
+    // ── Title block — centred, matching the RBI-prescribed layout ──────────────
+    NF(true,13); doc.text("FORM A2",105,y,{align:"center"}); y+=6;
+    NF(false,9); doc.text("(To be completed by the applicant)",105,y,{align:"center"}); y+=4.5;
+    NF(false,7.5); doc.setFont("helvetica","italic");
+    doc.text("(For payments other than imports and remittances covering intermediary trade)",105,y,{align:"center"}); y+=5;
+    doc.setFont("helvetica","normal");
+    NF(true,10); doc.text("Application for Remittance Abroad",105,y,{align:"center"}); y+=5;
     LINE(M,y,M+RW,y); y+=5;
 
-    // ── Details of the applicant ─────────────────────────────────────────────
-    NF(true,9); doc.text("Details of the applicant -",M,y); y+=5;
+    // ── Top section — always kept blank (filled in by the Authorised Dealer) ──
     NF(false,9);
-    doc.text("Name     :  "+f.applicant_name,M+5,y); y+=5;
-    const addrLines=doc.splitTextToSize("Address  :  "+f.applicant_address,RW-5);
-    doc.text(addrLines,M+5,y); y+=addrLines.length*4.5+2;
-    doc.text("Account No.:  "+f.account_no,M+5,y); y+=6;
-    LINE(M,y,M+RW,y); y+=5;
-
-    // ── Details of the foreign exchange required ─────────────────────────────
-    NF(true,9); doc.text("Details of the foreign exchange required",M,y); y+=5;
+    doc.text("AD Code No.",M,y); UNDERLINE(M+22,y,RW-22); y+=5;
+    doc.text("Form No.",M,y); UNDERLINE(M+18,y,RW-18); y+=3.5;
+    NF(false,7.5); doc.setFont("helvetica","italic");
+    doc.text("(To be filled in by the Authorised Dealer)",M+RW,y,{align:"right"});
+    doc.setFont("helvetica","normal"); y+=5;
     NF(false,9);
-    doc.text("Amount (Specify currency) : ",M+5,y);
-    NF(true,9); doc.text(f.amount_ccy+" "+f.amount,M+5+TW("Amount (Specify currency) : ",9),y);
-    NF(false,9); y+=5;
-    y=WRAP("Purpose : "+f.purpose+(f.purpose_code?" ("+f.purpose_code+")":""),M+5,y,RW-5,4.5);
-    y+=2;
-    // Charges in BOLD
-    doc.text("CHARGES : ",M+5,y);
-    NF(true,9); doc.text(f.charges||"OUR",M+5+TW("CHARGES : ",9),y);
-    NF(false,9); y+=6;
+    doc.text("Currency",M,y); UNDERLINE(M+14,y,20);
+    doc.text("Amount",M+38,y); UNDERLINE(M+50,y,30);
+    doc.text("Equivalent to Rs.",M+84,y); UNDERLINE(M+108,y,RW-88); y+=3.5;
+    NF(false,7.5); doc.setFont("helvetica","italic");
+    doc.text("(To be completed by the Authorised Dealer)",M+RW,y,{align:"right"});
+    doc.setFont("helvetica","normal"); y+=5;
     LINE(M,y,M+RW,y); y+=5;
 
-    // ── Authorisation ────────────────────────────────────────────────────────
-    y=WRAP("I authorise you to debit my Saving Bank / Current / RFC / EEFC Account No. "+f.account_no+" together with your charges and",M,y,RW,4.5);
-    y+=4;
+    // ── Applicant details — Devratan's own details ─────────────────────────────
+    NF(false,9);
+    doc.text("I/We",M,y); UNDERLINE(M+11,y,RW-11);
+    NF(true,9); doc.text(f.applicant_name,M+12,y-0.8,{maxWidth:RW-13});
+    y+=3.5; NF(false,7.5); doc.setFont("helvetica","italic");
+    doc.text("(Name of applicant remitter)",M,y); doc.setFont("helvetica","normal"); y+=5;
+    NF(false,9);
+    doc.text("PAN No.",M,y); UNDERLINE(M+16,y,RW-16);
+    NF(true,9); doc.text(f.applicant_pan,M+17,y-0.8); y+=5.5;
+    NF(false,9);
+    doc.text("Address",M,y);
+    const addrLines=doc.splitTextToSize(f.applicant_address,RW-16);
+    UNDERLINE(M+16,y,RW-16);
+    NF(true,8.5); doc.text(addrLines[0]||"",M+17,y-0.8,{maxWidth:RW-18});
+    y+=4.5;
+    if(addrLines.length>1){
+      NF(true,8.5);
+      for(let i=1;i<addrLines.length;i++){ UNDERLINE(M,y,RW); doc.text(addrLines[i],M+1,y-0.8,{maxWidth:RW-2}); y+=4.5; }
+    }
+    NF(false,9);
+    doc.text("authorize",M,y); y+=5;
+    UNDERLINE(M,y,RW);
+    NF(true,9); doc.text(f.ad_branch_name,M+1,y-0.8);
+    y+=3.5; NF(false,7.5); doc.setFont("helvetica","italic");
+    doc.text("(Name of AD branch)",M,y); doc.setFont("helvetica","normal"); y+=5;
 
-    // Options a/b/c/d
-    const opts=[
-      {key:"draft",  label:"a) Issue a draft"},
-      {key:"direct", label:"b) Effect the foreign exchange remittance directly -"},
-      {key:"tc",     label:"c) Issue travellers cheques for"},
-      {key:"notes",  label:"d) Issue foreign currency notes for"},
-    ];
-    opts.forEach(opt=>{
-      const sel=f.remittance_type===opt.key;
-      NF(false,9);
-      const pfx=sel?"[*] ":"[ ] ";
-      y=chkPg(y,6);
-      if(opt.key==="draft"){
-        doc.text(pfx+opt.label,M+5,y); y+=4.5;
-        NF(false,9);
-        doc.text("Beneficiary Name: "+(sel?f.beneficiary_name:"_______________________"),M+12,y); y+=4.5;
-        doc.text("Address: "+(sel?f.beneficiary_address:"_________________________________________________"),M+12,y); y+=4.5;
-      } else if(opt.key==="direct"){
-        doc.text(pfx+opt.label,M+5,y); y+=4.5;
-        // All details under direct remittance in BOLD
-        NF(true,9);
-        doc.text("Beneficiary Name: "+(sel?f.beneficiary_name:"_______________________"),M+12,y); y+=4.5;
-        const bankLine="Name and address of Bank: "+(sel?(f.bank_name+(f.bank_address?", "+f.bank_address:"")):"_________________________________________________");
-        y=WRAP(bankLine,M+12,y,RW-12,4.5); y+=1;
-        doc.text("Account No.: "+(sel?f.account_number:"___________________")+"     SWIFT: "+(sel?f.swift_code:"___________________"),M+12,y); y+=4.5;
-        NF(false,9);
-      } else if(opt.key==="tc"){
-        doc.text(pfx+opt.label+" "+(sel?f.amount_ccy+" "+f.amount:"_____________________"),M+5,y); y+=4.5;
-      } else {
-        doc.text(pfx+opt.label+" "+(sel?f.amount_ccy+" "+f.amount:"_____________________"),M+5,y); y+=4.5;
-      }
-    });
-    y+=2;
-    NF(false,7.5); doc.text("(Strike out whichever is not applicable)",M,y); y+=6;
-    LINE(M,y,M+RW,y); y+=5;
-
-    // ── Signature block ──────────────────────────────────────────────────────
-    y=chkPg(y,10);
-    NF(false,9); doc.text("Signature: ________________________________",M,y); y+=6;
-    LINE(M,y,M+RW,y); y+=5;
-
-    // ── Declaration ──────────────────────────────────────────────────────────
-    y=chkPg(y,45);
-    NF(true,10); doc.text("Declaration",M,y); y+=5;
-    NF(false,9); doc.text("(Under FEMA 1999)",M,y); y+=5;
-    NF(false,9); doc.text("I, "+f.applicant_name+" declare that –",M,y); y+=6;
-    // Bullet 1
-    NF(false,9); doc.text("-",M+4,y);
-    y=WRAP("The total amount of foreign exchange purchased from or remitted through, all sources in India during this calendar year including this application is within the annual limit prescribed by Reserve Bank of India for the said purpose.",M+10,y,RW-10,4.5);
+    NF(false,9);
+    y=WRAP("To debit my Savings Bank/ Current/ RFC/ EEFC A/c. No. "+f.account_no+" with yourselves together with their charges and",M,y,RW,4.5);
     y+=3;
-    // Bullet 2
-    NF(false,9); doc.text("-",M+4,y);
-    y=WRAP("Foreign exchange purchased from you is for the purpose indicated above.",M+10,y,RW-10,4.5);
+
+    // ── Points a-d — a, c, d stay permanently blank per the bank's own template;
+    // only b (direct remittance) carries our actual beneficiary details. ──────
+    y=chkPg(y,10);
+    NF(false,8.5);
+    doc.text("*  a)  Issue a draft : Beneficiary's Name",M,y); UNDERLINE(M+82,y,RW-82); y+=4.5;
+    doc.text("Address",M+18,y); UNDERLINE(M+30,y,RW-30); y+=5.5;
+
+    y=chkPg(y,20);
+    doc.text("*  b)  Effect the foreign exchange remittance directly \u2013",M,y); y+=4.5;
+    NF(true,8.5);
+    doc.text("1)  Beneficiary's Name",M+10,y); UNDERLINE(M+52,y,RW-52-10);
+    doc.text(f.beneficiary_name,M+53,y-0.8,{maxWidth:RW-55}); y+=4.5;
+    const bankLine="2)  Name and address of the bank";
+    doc.text(bankLine,M+10,y);
+    const bankVal=f.bank_name+(f.bank_address?", "+f.bank_address:"");
+    const bankValLines=doc.splitTextToSize(bankVal,RW-64);
+    UNDERLINE(M+64,y,RW-64-10); doc.text(bankValLines[0]||"",M+65,y-0.8,{maxWidth:RW-66});
+    y+=4.5;
+    for(let i=1;i<bankValLines.length;i++){ UNDERLINE(M+10,y,RW-10); doc.text(bankValLines[i],M+11,y-0.8,{maxWidth:RW-12}); y+=4.5; }
+    doc.text("3)  Account No.",M+10,y); UNDERLINE(M+38,y,RW-38-10);
+    doc.text(f.account_number,M+39,y-0.8); y+=5.5;
+    NF(false,8.5);
+
+    y=chkPg(y,10);
+    doc.text("*  c)  Issue travelers cheques for",M,y); UNDERLINE(M+66,y,RW-66); y+=5.5;
+    doc.text("*  d)  Issue foreign currency notes for",M,y); UNDERLINE(M+72,y,RW-72); y+=4.5;
+    doc.text("Amount (specify currency)",M+18,y); UNDERLINE(M+65,y,RW-65); y+=5;
+
+    NF(false,7.5);
+    y=WRAP("* (Strike out whichever is not applicable) for the purpose/s indicated below",M,y,RW,3.6);
     y+=4;
-    NF(false,8); doc.text("(Strike out whichever is not applicable)",M,y); y+=10;
 
-    // Sign / Date / Name
+    // ── Purpose table — filled in on the portal, printed exactly in this column layout ──
+    y=chkPg(y,20);
+    const pCols=[16,32,26,RW-16-32-26];
+    NF(true,7.5);
+    let px=M;
+    ["Sr.\nNo.","Whether under\nLRS (Yes/No)","Purpose\nCode","Description\n(As per the Annex)"].forEach((h,ci)=>{
+      const hl=h.split("\n");
+      RECT(px,y,pCols[ci],9);
+      doc.text(hl,px+1,y+3.2,{maxWidth:pCols[ci]-2});
+      px+=pCols[ci];
+    });
+    y+=9;
+    NF(false,8);
+    f.purpose_rows.forEach((r,i)=>{
+      const descLines=doc.splitTextToSize(r.description||"",pCols[3]-2);
+      const rh=Math.max(6,descLines.length*3.6+2);
+      y=chkPg(y,rh);
+      px=M;
+      RECT(px,y,pCols[0],rh); doc.text(String(i+1),px+1,y+4); px+=pCols[0];
+      RECT(px,y,pCols[1],rh); doc.text(r.lrs||"No",px+1,y+4); px+=pCols[1];
+      RECT(px,y,pCols[2],rh); doc.text(r.code||"",px+1,y+4); px+=pCols[2];
+      RECT(px,y,pCols[3],rh); doc.text(descLines,px+1,y+4);
+      y+=rh;
+    });
+    y+=3;
+
+    NF(false,7.5); doc.setFont("helvetica","italic");
+    y=WRAP("(Remitter should put a tick (\u221a) against an appropriate purpose code. In case of doubt/ difficulty, the AD bank should be consulted).",M,y,RW,3.6);
+    doc.setFont("helvetica","normal");
+    y+=6;
+
+    // ── Bottom-of-page footnotes — kept verbatim from the bank's template ──────
+    y=chkPg(y,14);
+    NF(false,6); doc.setTextColor(90,90,90);
+    y=WRAP("15 Inserted vide AP (Dir) series Circular 50 dated February 11, 2016. Prior to insertion it read as Annex 1, which has since been replaced with effect from the same date.",M,y,RW,2.8);
+    y=WRAP("16 Modified vide AP (DIR) Series Circular No. 32 dated June 19, 2018. Prior to modification, it read \u201cPAN No. (For remittances exceeding USD 25,000 and for all capital account transactions)\u201d",M,y,RW,2.8);
+    doc.setTextColor(0,0,0);
+
+    // ── PAGE 2 — Declaration (verbatim wording) + AD Certificate (left blank) ──
+    doc.addPage();
+    y=20;
+    NF(true,11); doc.text("Declaration",M,y); y+=5;
+    NF(false,8.5); doc.setFont("helvetica","italic");
+    doc.text("(Under FEMA 1999)",M,y); doc.setFont("helvetica","normal"); y+=6;
+
     NF(false,9);
-    doc.text("Signature: ________________________________",M,y);
-    doc.text("Date: "+f.date,M+RW-TW("Date: "+f.date,9),y); y+=6;
-    doc.text("Name: "+f.declarant_name,M,y); y+=8;
-    LINE(M,y,M+RW,y); y+=3;
+    y=WRAP("1. # I, "+f.declarant_name+" (Name), hereby declare that the total amount of foreign exchange purchased from or remitted through, all sources in India during the financial year including this application is within the overall limit of the Liberalised Remittance Scheme prescribed by the Reserve Bank of India and certify that the source of funds for making the said remittance belongs to me and the foreign exchange will not be used for prohibited purposes.",M,y,RW,4.5);
+    y+=4;
+    y=WRAP("Details of the remittances made/transactions effected under the Liberalised Remittance Scheme in the current financial year (April- March) \u2026\u2026..",M,y,RW,4.5);
+    y+=3;
 
-    // ── END — no purpose code table ──────────────────────────────────────────
+    // Blank LRS transactions table — headers only, no data (left for the applicant to fill by hand)
+    y=chkPg(y,26);
+    const lCols=[16,26,26,RW-16-26-26];
+    NF(true,7.5);
+    let lx=M;
+    ["Sl.\nNo","Date","Amount","Name and address of AD branch/FFMC through\nwhich the transaction has been effected"].forEach((h,ci)=>{
+      const hl=h.split("\n");
+      RECT(lx,y,lCols[ci],9);
+      doc.text(hl,lx+1,y+3.2,{maxWidth:lCols[ci]-2});
+      lx+=lCols[ci];
+    });
+    y+=9;
+    NF(false,8);
+    for(let i=0;i<3;i++){
+      lx=M;
+      lCols.forEach(w=>{RECT(lx,y,w,7);lx+=w;});
+      y+=7;
+    }
+    y+=5;
+
+    y=chkPg(y,20);
+    y=WRAP("2. # The total amount of foreign exchange purchased from or remitted through, all sources in India during this calendar year including this application is within USD _______________________ (USD ____________) the annual limit prescribed by Reserve Bank of India for the said purpose.",M,y,RW,4.5);
+    y+=4;
+    y=WRAP("3. # Foreign exchange purchased from you is for the purpose indicated above.",M,y,RW,4.5);
+    y+=3;
+    NF(false,7.5); doc.text("# (Strike out whichever is not applicable )",M,y); y+=8;
+
+    NF(false,9);
+    doc.text("Signature of the applicant :",M,y); UNDERLINE(M+58,y,RW-58); y+=5.5;
+    doc.text("(Name) :",M,y);
+    NF(true,9); doc.text(f.declarant_name,M+18,y);
+    NF(false,9); doc.text("Date: "+f.date,M+RW-TW("Date: "+f.date,9),y); y+=10;
+
+    LINE(M,y,M+RW,y); y+=6;
+
+    // Certificate by the Authorised Dealer — always left blank, bank fills this in
+    y=chkPg(y,40);
+    NF(true,10); doc.text("Certificate by the Authorised Dealer",M,y); y+=5.5;
+    NF(false,9);
+    y=WRAP("This is to certify that the remittance is not being made by/ to ineligible entities and that the remittance is in conformity with the instructions issued by the Reserve Bank from time to time under the Scheme.",M,y,RW,4.5);
+    y+=6;
+    doc.text("Name and designation of the authorised official:",M,y); UNDERLINE(M+RW-45,y,45); y+=7;
+    doc.text("Stamp and seal",M,y); y+=8;
+    doc.text("Signature:",M,y); UNDERLINE(M+18,y,RW-18); y+=6;
+    doc.text("Date:",M,y); UNDERLINE(M+12,y,60); y+=6;
+    doc.text("Place:",M,y); UNDERLINE(M+14,y,60); y+=4;
+
     pdfFooter();
     doc.save("SBI_Form_A2.pdf");
   };
 
-  const DateInput=({value,onChange})=>(<SmartDate value={value} onChange={onChange}/>);
-
   return(
     <div style={{background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
-      <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>📋 Form A2 — Application for Drawal of Foreign Exchange</h3>
-      <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>Plain A4 format — no header/footer · Purpose code table auto-printed on page 2</p>
+      <h3 style={{margin:"0 0 4px",color:"#1e3a5f",fontSize:15}}>📋 Form A2 — Application for Remittance Abroad</h3>
+      <p style={{margin:"0 0 16px",fontSize:11,color:"#64748b"}}>Plain A4 format, matching the RBI/SBI-prescribed layout \u2014 no letterhead</p>
 
-      <SectionHeader title="Applicant Details"/>
+      <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#92400e"}}>
+        The top "AD Code No. / Form No. / Currency-Amount" section is always left blank in the PDF — it's filled in by the bank, not by us. Points <strong>a) Draft</strong>, <strong>c) Travellers cheques</strong> and <strong>d) Currency notes</strong> also stay blank always; only <strong>b) Direct remittance</strong> is filled from this form.
+      </div>
+
+      <SectionHeader title="Applicant Details (Devratan)"/>
       <FRow label="Date" required><DateInput value={f.date} onChange={v=>sf("date",v)}/></FRow>
       <FRow label="Applicant Name"><FInput value={f.applicant_name} onChange={v=>sf("applicant_name",v)}/></FRow>
+      <FRow label="PAN No."><FInput value={f.applicant_pan} onChange={v=>sf("applicant_pan",v)}/></FRow>
       <FRow label="Address"><FTextarea value={f.applicant_address} onChange={v=>sf("applicant_address",v)}/></FRow>
-      <FRow label="Account No."><FInput value={f.account_no} onChange={v=>sf("account_no",v)}/></FRow>
+      <FRow label="Name of AD Branch"><FInput value={f.ad_branch_name} onChange={v=>sf("ad_branch_name",v)}/></FRow>
+      <FRow label="Debit Account No."><FInput value={f.account_no} onChange={v=>sf("account_no",v)}/></FRow>
 
-      <SectionHeader title="Foreign Exchange Details"/>
-      <FRow label="Amount in FCY" required>
-        <div style={{display:"flex",gap:6}}>
-          <select value={f.amount_ccy} onChange={e=>sf("amount_ccy",e.target.value)} style={{...iS,width:90,fontSize:12}}>
-            {["USD","EUR","GBP","JPY","AED","SGD","AUD","CNY"].map(c=><option key={c}>{c}</option>)}
-          </select>
-          <FInput value={f.amount} onChange={v=>sf("amount",v)} placeholder="e.g. 2187.00"/>
-        </div>
-      </FRow>
-      <FRow label="Purpose" required><FInput value={f.purpose} onChange={v=>sf("purpose",v)} placeholder="e.g. EXPORT OCEAN FREIGHT PAYMENT"/></FRow>
-      <FRow label="Purpose Code"><FInput value={f.purpose_code} onChange={v=>sf("purpose_code",v)} placeholder="e.g. S0204"/></FRow>
-      <FRow label="Charges">
-        <div style={{display:"flex",gap:10}}>
-          {["OUR","BEN","SHA"].map(opt=>(
-            <label key={opt} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer",
-              padding:"6px 14px",border:`2px solid ${f.charges===opt?"#1e3a5f":"#e2e8f0"}`,
-              borderRadius:6,background:f.charges===opt?"#eff6ff":"#f8fafc",fontWeight:f.charges===opt?700:400}}>
-              <input type="radio" name="charges" checked={f.charges===opt} onChange={()=>sf("charges",opt)} style={{accentColor:"#1e3a5f"}}/>{opt}
-            </label>
-          ))}
-        </div>
-      </FRow>
+      <SectionHeader title="Point (b) — Effect the Foreign Exchange Remittance Directly"/>
+      <FRow label="Beneficiary's Name" required><FInput value={f.beneficiary_name} onChange={v=>sf("beneficiary_name",v)}/></FRow>
+      <FRow label="Bank Name" required><FInput value={f.bank_name} onChange={v=>sf("bank_name",v)}/></FRow>
+      <FRow label="Bank Address"><FTextarea value={f.bank_address} onChange={v=>sf("bank_address",v)}/></FRow>
+      <FRow label="Beneficiary Account No." required><FInput value={f.account_number} onChange={v=>sf("account_number",v)}/></FRow>
 
-      <SectionHeader title="Remittance Type"/>
-      <FRow label="Type">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-          {[["draft","a) Issue a draft"],["direct","b) Direct remittance"],["tc","c) Travellers cheques"],["notes","d) Foreign currency notes"]].map(([val,lbl])=>(
-            <label key={val} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer",
-              padding:"6px 10px",border:`2px solid ${f.remittance_type===val?"#1e3a5f":"#e2e8f0"}`,
-              borderRadius:6,background:f.remittance_type===val?"#eff6ff":"#f8fafc",fontWeight:f.remittance_type===val?700:400}}>
-              <input type="radio" name="remit_type" checked={f.remittance_type===val} onChange={()=>sf("remittance_type",val)} style={{accentColor:"#1e3a5f"}}/>
-              {lbl}
-            </label>
-          ))}
-        </div>
-      </FRow>
+      <SectionHeader title="Purpose Codes (Sr. No. / LRS / Code / Description)"/>
+      <div style={{overflowX:"auto",marginBottom:8}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead>
+            <tr>{["Sr No","Whether under LRS","Purpose Code","Description (as per Annex)",""].map(h=>(
+              <th key={h} style={{border:"1px solid #e2e8f0",padding:"5px 6px",background:"#f1f5f9",textAlign:"left",fontSize:11}}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            {f.purpose_rows.map((r,i)=>(
+              <tr key={i}>
+                <td style={{border:"1px solid #e2e8f0",padding:4,textAlign:"center",width:30}}>{i+1}</td>
+                <td style={{border:"1px solid #e2e8f0",padding:3}}>
+                  <select value={r.lrs} onChange={e=>updPurposeRow(i,"lrs",e.target.value)} style={{...iS,fontSize:11}}>
+                    <option>No</option><option>Yes</option>
+                  </select>
+                </td>
+                <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={r.code} onChange={e=>updPurposeRow(i,"code",e.target.value)} placeholder="e.g. S0204" style={{...iS,fontSize:11}}/></td>
+                <td style={{border:"1px solid #e2e8f0",padding:3}}><input value={r.description} onChange={e=>updPurposeRow(i,"description",e.target.value)} placeholder="Description as per Annex" style={{...iS,fontSize:11}}/></td>
+                <td style={{border:"1px solid #e2e8f0",padding:3,textAlign:"center"}}>
+                  {f.purpose_rows.length>1&&<button onClick={()=>delPurposeRow(i)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:11}}>✕</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {f.purpose_rows.length<8?(
+        <button onClick={addPurposeRow}
+          style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,
+                  padding:"5px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+          + Add Purpose Code Row ({f.purpose_rows.length}/8)
+        </button>
+      ):<div style={{fontSize:11,color:"#64748b"}}>Maximum 8 rows added.</div>}
 
-      {(f.remittance_type==="draft"||f.remittance_type==="direct")&&(
-        <>
-          <SectionHeader title="Beneficiary Details"/>
-          <FRow label="Beneficiary Name" required><FInput value={f.beneficiary_name} onChange={v=>sf("beneficiary_name",v)}/></FRow>
-          <FRow label="Beneficiary Address"><FTextarea value={f.beneficiary_address} onChange={v=>sf("beneficiary_address",v)}/></FRow>
-          {f.remittance_type==="direct"&&<>
-            <FRow label="Bank Name" required><FInput value={f.bank_name} onChange={v=>sf("bank_name",v)}/></FRow>
-            <FRow label="Bank Address"><FTextarea value={f.bank_address} onChange={v=>sf("bank_address",v)}/></FRow>
-            <FRow label="Account Number" required><FInput value={f.account_number} onChange={v=>sf("account_number",v)}/></FRow>
-            <FRow label="SWIFT Code" required><FInput value={f.swift_code} onChange={v=>sf("swift_code",v)} placeholder="e.g. SBININBB"/>{!f.swift_code&&<p style={{color:"#dc2626",fontSize:11,margin:"3px 0 0"}}>Mandatory</p>}</FRow>
-          </>}
-        </>
-      )}
-
-      <SectionHeader title="Declaration"/>
-      <FRow label="Name of Declarant"><FInput value={f.declarant_name} onChange={v=>sf("declarant_name",v)}/></FRow>
+      <SectionHeader title="Page 2 — Declaration"/>
+      <p style={{fontSize:11,color:"#64748b",margin:"0 0 8px"}}>Everything else on page 2 (bank annual-limit blanks, the Authorised Dealer's certificate) stays blank on the printed form, exactly as in the bank's own template — only the name and date below are filled in.</p>
+      <FRow label="Name of Declarant" required><FInput value={f.declarant_name} onChange={v=>sf("declarant_name",v)}/></FRow>
 
       <div style={{marginTop:14,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:11,color:"#15803d"}}>
-        📄 PDF: Page 1 — Application form · Page 2+ — Purpose Code table (selected code <strong>{f.purpose_code}</strong> highlighted in green ✓)
+        📄 PDF: Page 1 — Application form (purpose table filled from above) &nbsp;|&nbsp; Page 2 — Declaration (name &amp; date filled, rest blank). Purpose Code appendix pages are not included.
       </div>
       <div style={{display:"flex",gap:10,marginTop:12,justifyContent:"flex-end"}}>
         <button onClick={exportPDF}
@@ -10806,7 +10887,6 @@ export default function App(){
                     <td style={{padding:"8px 10px",fontWeight:600,color:bal>0?"#dc2626":"#16a34a",fontSize:11}}>{fU(bal)}</td>
                     <td style={{padding:"8px 10px"}}>
                       <button onClick={()=>shareShip(s)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:11}}>📱</button>
-                      <button onClick={()=>debugPayment(s.invoice_no)} style={{background:"#fef9c3",color:"#854d0e",border:"none",borderRadius:5,padding:"3px 6px",cursor:"pointer",fontSize:10,marginLeft:3}}>🐛</button>
                     </td>
                   </tr>
                 );})}
@@ -11423,6 +11503,10 @@ export default function App(){
           allBRCs={[...bcs.flatMap(b=>b.brc_entries||[]),...standaloneBRCs]}
           allIRMs={[...bcs.flatMap(b=>b.irm_entries||[]),...standaloneIRMs]}
           allBCs={bcs}
+          ships={ships}
+          bcs={bcs}
+          standaloneBRCs={standaloneBRCs}
+          standaloneIRMs={standaloneIRMs}
         />
       )}
 
