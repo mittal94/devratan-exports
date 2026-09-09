@@ -3799,6 +3799,10 @@ function exportContractPDF(contract, buyer, consignee) {
   const buyerAddr  = contract.buyer_address  || buyer?.address     || "";
   const hasConsignee = !!(contract.consignee_id && contract.consignee_name);
   const consigneeAddr = contract.consignee_address || consignee?.address || "";
+  // Email/phone shown in continuation to the address, only when available.
+  const contactLine = p => [p?.email, p?.phone].filter(Boolean).join("  |  ");
+  const buyerContact = contactLine(buyer);
+  const consigneeContact = contactLine(consignee);
 
   // Build rows — 3 columns: label | name (bold) | address+clause
   const partyRows = [
@@ -3810,14 +3814,14 @@ function exportContractPDF(contract, buyer, consignee) {
     [
       { content: "BUYER", styles: { fontStyle: "bold", halign: "center", valign: "middle", fillColor: navy, textColor: white, fontSize: 8 } },
       { content: contract.buyer_name || "", styles: { fontStyle: "bold", textColor: navy, fillColor: cream, fontSize: 8.5 } },
-      { content: buyerAddr + "\n(Hereinafter referred to as \"the Buyer\")", styles: { fontSize: 7.8, fillColor: cream, textColor: [50, 50, 50] } },
+      { content: buyerAddr + (buyerContact ? "\n" + buyerContact : "") + "\n(Hereinafter referred to as \"the Buyer\")", styles: { fontSize: 7.8, fillColor: cream, textColor: [50, 50, 50] } },
     ],
   ];
   if (hasConsignee) {
     partyRows.push([
       { content: "CONSIGNEE", styles: { fontStyle: "bold", halign: "center", valign: "middle", fillColor: navy, textColor: white, fontSize: 8 } },
       { content: contract.consignee_name || "", styles: { fontStyle: "bold", textColor: navy, fillColor: cream, fontSize: 8.5 } },
-      { content: consigneeAddr + "\n(Hereinafter referred to as \"the Consignee\")", styles: { fontSize: 7.8, fillColor: cream, textColor: [50, 50, 50] } },
+      { content: consigneeAddr + (consigneeContact ? "\n" + consigneeContact : "") + "\n(Hereinafter referred to as \"the Consignee\")", styles: { fontSize: 7.8, fillColor: cream, textColor: [50, 50, 50] } },
     ]);
   }
 
@@ -4275,9 +4279,10 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
   let y=50;
 
   // ── Parties ────────────────────────────────────────────────────────────────
+  const piContactLine = p => [p?.email, p?.phone].filter(Boolean).join("  |  ");
   const partyRows=[
     {lbl:"SELLER",name:seller.name,addr:seller.address},
-    {lbl:"BUYER",name:buyer?.buyer_name||"",addr:buyer?.address||""},
+    {lbl:"BUYER",name:buyer?.buyer_name||"",addr:[buyer?.address||"",piContactLine(buyer)].filter(Boolean).join("\n")},
   ];
   const lblW=18,nameW=52,addrW=pw-lblW-nameW;
   partyRows.forEach(row=>{
