@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Component } from "react";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://jqbagmezerzgewxaqtpt.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxYmFnbWV6ZXJ6Z2V3eGFxdHB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjMxMjIsImV4cCI6MjA5NTc5OTEyMn0.HAG23sw41cMXiyrnTC2-9dTZn5bO0oXMc69XKwB3IkU";
@@ -10229,6 +10229,36 @@ function PriceCalculator(){
 }
 
 export default function App(){
+  return <ErrorBoundary><AppInner/></ErrorBoundary>;
+}
+
+// Catches any uncaught render-time error anywhere in the app and shows a
+// recoverable message instead of a blank, unmounted page. This does not fix
+// the underlying cause of a crash — it only prevents "blank page until
+// reload" from being the only way the person finds out something broke.
+class ErrorBoundary extends Component{
+  constructor(props){super(props);this.state={error:null};}
+  static getDerivedStateFromError(error){return{error};}
+  componentDidCatch(error,info){ console.error("App crashed:",error,info); }
+  render(){
+    if(this.state.error){
+      return(
+        <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f8fafc",fontFamily:"system-ui, -apple-system, sans-serif"}}>
+          <div style={{background:"#fff",borderRadius:12,padding:32,maxWidth:420,textAlign:"center",boxShadow:"0 4px 20px rgba(0,0,0,0.1)"}}>
+            <div style={{fontSize:36,marginBottom:10}}>⚠️</div>
+            <h2 style={{margin:"0 0 8px",color:"#1e3a5f",fontSize:17}}>Something went wrong</h2>
+            <p style={{color:"#64748b",fontSize:13,margin:"0 0 6px"}}>The app hit an unexpected error and had to stop. Your data is safe — nothing was saved or deleted because of this.</p>
+            <p style={{color:"#94a3b8",fontSize:11,margin:"0 0 18px",wordBreak:"break-word"}}>{String(this.state.error?.message||this.state.error)}</p>
+            <button onClick={()=>window.location.reload()} style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"9px 20px",cursor:"pointer",fontWeight:700,fontSize:13}}>Reload App</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function AppInner(){
   const [session,setSession]=useState(()=>{
     try{
       // Version check — runs before any state is loaded
@@ -10301,6 +10331,7 @@ export default function App(){
   const [deleteId,setDeleteId]=useState(null);
   const [deleteBuyerConfirmId,setDeleteBuyerConfirmId]=useState(null); // buyer id pending admin password confirmation
   const [deleteBCConfirm,setDeleteBCConfirm]=useState(null); // bc object pending admin password confirmation
+  const [deleteContractConfirmId,setDeleteContractConfirmId]=useState(null); // contract id pending admin password confirmation
   const [search,setSearch]=useState("");
   const [sortCol,setSortCol]=useState("invoice_date");
   const [sortDir,setSortDir]=useState("desc");
@@ -10616,8 +10647,13 @@ export default function App(){
     setSaving(false);
   };
 
-  const deleteContract=async(id)=>{
-    if(!window.confirm("Delete this contract?"))return;
+  const deleteContract=(id)=>{
+    if(!isAdmin){alert("Only an admin can delete a contract.");return;}
+    setDeleteContractConfirmId(id);
+  };
+  const confirmDeleteContract=async()=>{
+    const id=deleteContractConfirmId;
+    setDeleteContractConfirmId(null);
     setSaving(true);
     try{await sb(`contracts?id=eq.${id}`,{method:"DELETE"});await loadAll();}
     catch(e){alert("Error: "+e.message);}
@@ -10625,7 +10661,6 @@ export default function App(){
   };
 
   const canManageContracts=userInfo&&(isAdmin||isSeniorAccountant||userInfo.role==="accountant"||isJuniorAccountant);
-  const canDeleteContracts=userInfo&&(isAdmin||isSeniorAccountant);
 
   const prepShipPayload=(form)=>{
     const payload={...form};
@@ -11469,7 +11504,7 @@ export default function App(){
                           <button onClick={()=>exportContractWord(c,buyer,buyers.find(b=>b.id===c.consignee_id)||null).catch(e=>{alert("Word export failed: "+e.message);console.error(e);})} style={{background:"rgba(99,179,237,0.25)",color:"#bfdbfe",border:"1px solid rgba(99,179,237,0.4)",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📝 Word</button>
                           <button onClick={()=>setPiModal({contract:c,buyer})} style={{background:"rgba(251,191,36,0.25)",color:"#fde68a",border:"1px solid rgba(251,191,36,0.4)",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>🧾 PI</button>
                           {canManageContracts&&<button onClick={()=>{setEditContract(c);setShowContractForm(true);}} style={{background:"rgba(255,255,255,0.15)",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
-                          {canDeleteContracts&&<button onClick={()=>deleteContract(c.id)} style={{background:"rgba(220,38,38,0.3)",color:"#fca5a5",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
+                          {isAdmin&&<button onClick={()=>deleteContract(c.id)} style={{background:"rgba(220,38,38,0.3)",color:"#fca5a5",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11}}>Del</button>}
                         </div>
                       </div>
                       <div style={{padding:"12px 16px"}}>
@@ -11651,6 +11686,7 @@ export default function App(){
       )}
       {deleteBuyerConfirmId&&<AdminDeleteConfirm userEmail={userInfo?.email} itemLabel="this buyer" onConfirm={confirmDeleteBuyer} onCancel={()=>setDeleteBuyerConfirmId(null)}/>}
       {deleteBCConfirm&&<AdminDeleteConfirm userEmail={userInfo?.email} itemLabel={`Bill Collection ${deleteBCConfirm.bc_no||""}`} onConfirm={confirmDeleteBC} onCancel={()=>setDeleteBCConfirm(null)}/>}
+      {deleteContractConfirmId&&<AdminDeleteConfirm userEmail={userInfo?.email} itemLabel="this contract" onConfirm={confirmDeleteContract} onCancel={()=>setDeleteContractConfirmId(null)}/>}
     </div>
   );
 }
