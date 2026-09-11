@@ -4820,6 +4820,43 @@ function ExportButtons({onPDF, onWord}){
   );
 }
 
+// ── Admin-only delete confirmation — re-verifies the admin's own login password
+// via Supabase auth (a fresh token-grant attempt) before the caller's onConfirm runs.
+function AdminDeleteConfirm({userEmail, itemLabel, onConfirm, onCancel}){
+  const [pwd,setPwd]=useState("");
+  const [error,setError]=useState("");
+  const [checking,setChecking]=useState(false);
+
+  const verify=async()=>{
+    if(!pwd){setError("Password is required.");return;}
+    setChecking(true); setError("");
+    try{
+      await authFetch("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email:userEmail,password:pwd})});
+      onConfirm();
+    }catch(e){
+      setError("Incorrect password.");
+      setChecking(false);
+    }
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999}} onClick={onCancel}>
+      <div style={{background:"#fff",borderRadius:12,padding:24,width:360,maxWidth:"90vw",boxShadow:"0 10px 40px rgba(0,0,0,0.25)"}} onClick={e=>e.stopPropagation()}>
+        <h3 style={{margin:"0 0 6px",fontSize:16,color:"#dc2626"}}>⚠️ Confirm Deletion</h3>
+        <p style={{fontSize:13,color:"#64748b",margin:"0 0 14px"}}>Deleting {itemLabel} is permanent and cannot be undone. Enter your login password to confirm.</p>
+        <input type="password" value={pwd} onChange={e=>{setPwd(e.target.value);setError("");}} placeholder="Your login password" style={iS} onKeyDown={e=>e.key==="Enter"&&verify()} autoFocus/>
+        {error&&<p style={{color:"#dc2626",fontSize:12,margin:"6px 0 0"}}>{error}</p>}
+        <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
+          <button onClick={onCancel} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:600,fontSize:13}}>Cancel</button>
+          <button onClick={verify} disabled={checking} style={{background:checking?"#fca5a5":"#dc2626",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:checking?"default":"pointer",fontWeight:700,fontSize:13}}>
+            {checking?"Verifying…":"Delete"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Form 1: Advance Payment Form ───────────────────────────────────────────────
 function AdvancePaymentForm({ships, buyers}){
   const today=new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric"}).replace(/\//g,".");
@@ -8085,7 +8122,7 @@ const INVOICE_EMPTY = {
   },
 };
 
-function InvoicingTab({buyers}){
+function InvoicingTab({buyers, userInfo}){
   const [view,setView]=useState("list"); // "list"|"form"
   const [invoices,setInvoices]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -8093,6 +8130,8 @@ function InvoicingTab({buyers}){
   const [form,setForm]=useState(JSON.parse(JSON.stringify(INVOICE_EMPTY)));
   const [saving,setSaving]=useState(false);
   const [activePartyTab,setActivePartyTab]=useState("exp");
+  const [deleteConfirmId,setDeleteConfirmId]=useState(null); // invoice id pending admin password confirmation
+  const isAdmin=userInfo?.role==="admin";
 
   useEffect(()=>{loadInvoices();},[]);
   const loadInvoices=async()=>{
@@ -8197,8 +8236,13 @@ function InvoicingTab({buyers}){
     setView("form");
   };
 
-  const deleteInvoice=async(id)=>{
-    if(!window.confirm("Delete this invoice?"))return;
+  const deleteInvoice=(id)=>{
+    if(!isAdmin){alert("Only an admin can delete a saved invoice.");return;}
+    setDeleteConfirmId(id);
+  };
+  const confirmDeleteInvoice=async()=>{
+    const id=deleteConfirmId;
+    setDeleteConfirmId(null);
     await sb(`invoices?id=eq.${id}`,{method:"DELETE"});
     await loadInvoices();
   };
@@ -8819,7 +8863,7 @@ function InvoicingTab({buyers}){
                       <td style={{padding:"8px 10px",fontWeight:600,color:"#15803d"}}>{ccy} {totAmt.toLocaleString("en-IN",{minimumFractionDigits:2})}</td>
                       <td style={{padding:"8px 4px",display:"flex",gap:4,justifyContent:"flex-end"}}>
                         <button onClick={()=>openEdit(inv)} style={{background:"#eff6ff",color:"#1d4ed8",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>
-                        <button onClick={()=>deleteInvoice(inv.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Del</button>
+                        {isAdmin&&<button onClick={()=>deleteInvoice(inv.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Del</button>}
                       </td>
                     </tr>
                   );
@@ -8829,6 +8873,7 @@ function InvoicingTab({buyers}){
           </div>
         )
       )}
+      {deleteConfirmId&&<AdminDeleteConfirm userEmail={userInfo?.email} itemLabel="this invoice" onConfirm={confirmDeleteInvoice} onCancel={()=>setDeleteConfirmId(null)}/>}
     </div>
   );
 
@@ -9069,13 +9114,15 @@ const VJRA_INVOICE_EMPTY = {
   },
 };
 
-function VJRAInvoicingTab({buyers}){
+function VJRAInvoicingTab({buyers, userInfo}){
   const [view,setView]=useState("list");
   const [invoices,setInvoices]=useState([]);
   const [loading,setLoading]=useState(true);
   const [editId,setEditId]=useState(null);
   const [form,setForm]=useState(JSON.parse(JSON.stringify(VJRA_INVOICE_EMPTY)));
   const [saving,setSaving]=useState(false);
+  const [deleteConfirmId,setDeleteConfirmId]=useState(null); // invoice id pending admin password confirmation
+  const isAdmin=userInfo?.role==="admin";
 
   const [devInvoices,setDevInvoices]=useState([]);
   useEffect(()=>{loadInvoices();loadDevInvoices();},[]);
@@ -9181,8 +9228,13 @@ function VJRAInvoicingTab({buyers}){
     setForm(merged); setEditId(inv.id); setView("form");
   };
 
-  const deleteInvoice=async(id)=>{
-    if(!window.confirm("Delete this VJRA invoice?"))return;
+  const deleteInvoice=(id)=>{
+    if(!isAdmin){alert("Only an admin can delete a saved invoice.");return;}
+    setDeleteConfirmId(id);
+  };
+  const confirmDeleteInvoice=async()=>{
+    const id=deleteConfirmId;
+    setDeleteConfirmId(null);
     await sb(`vjra_invoices?id=eq.${id}`,{method:"DELETE"});
     await loadInvoices();
   };
@@ -9659,7 +9711,7 @@ function VJRAInvoicingTab({buyers}){
                       <td style={{padding:"8px 10px",fontWeight:600,color:"#7c3aed"}}>{ccy} {totAmt.toLocaleString("en-IN",{minimumFractionDigits:2})}</td>
                       <td style={{padding:"8px 4px",display:"flex",gap:4,justifyContent:"flex-end"}}>
                         <button onClick={()=>openEdit(inv)} style={{background:"#f5f3ff",color:"#7c3aed",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>
-                        <button onClick={()=>deleteInvoice(inv.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Del</button>
+                        {isAdmin&&<button onClick={()=>deleteInvoice(inv.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Del</button>}
                       </td>
                     </tr>
                   );
@@ -9669,6 +9721,7 @@ function VJRAInvoicingTab({buyers}){
           </div>
         )
       )}
+      {deleteConfirmId&&<AdminDeleteConfirm userEmail={userInfo?.email} itemLabel="this VJRA invoice" onConfirm={confirmDeleteInvoice} onCancel={()=>setDeleteConfirmId(null)}/>}
     </div>
   );
 
@@ -11054,8 +11107,8 @@ export default function App(){
                 </button>
               ))}
             </div>
-            {invSubTab==="devratan"&&<InvoicingTab buyers={buyers}/>}
-            {invSubTab==="vjra"&&<VJRAInvoicingTab buyers={buyers}/>}
+            {invSubTab==="devratan"&&<InvoicingTab buyers={buyers} userInfo={userInfo}/>}
+            {invSubTab==="vjra"&&<VJRAInvoicingTab buyers={buyers} userInfo={userInfo}/>}
           </div>
         )}
         {tab==="calculator"&&isAdmin&&(
