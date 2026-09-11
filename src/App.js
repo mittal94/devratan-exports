@@ -2568,6 +2568,7 @@ function ContractFormModal({contract,buyers,userInfo,onSave,onClose,saving}){
     payment_condition:"",
     selected_docs:DEFAULT_DOCS,
     war_risk_clause:true,
+    sign_contract:true,
     other_doc_name:"",
     special_conditions:"",status:"draft"
   };
@@ -2591,6 +2592,7 @@ function ContractFormModal({contract,buyers,userInfo,onSave,onClose,saving}){
         items,
         selected_docs:contract.selected_docs||DEFAULT_DOCS,
         war_risk_clause:contract.war_risk_clause!==undefined?contract.war_risk_clause:true,
+        sign_contract:contract.sign_contract!==undefined?contract.sign_contract:true,
         seller_company:contract.seller_company||"devratan",
       };
     }
@@ -2807,6 +2809,21 @@ function ContractFormModal({contract,buyers,userInfo,onSave,onClose,saving}){
               <div style={{fontSize:11,color:"#a16207",marginTop:2}}>Any additional charges due to war, hostilities, geopolitical tensions shall be borne by the Buyer.</div>
             </div>
           </label>
+        </div>
+
+        <SH t="Sign Contract"/>
+        <div style={{background:"#f0fdf4",borderRadius:10,padding:12,marginBottom:12,border:"1px solid #86efac"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#15803d",marginBottom:8}}>Is this contract signed?</div>
+          <div style={{display:"flex",gap:10}}>
+            {[["Yes",true],["No",false]].map(([lbl,val])=>(
+              <label key={lbl} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer",
+                padding:"6px 16px",border:`2px solid ${(form.sign_contract!==false)===val?"#15803d":"#e2e8f0"}`,
+                borderRadius:6,background:(form.sign_contract!==false)===val?"#dcfce7":"#f8fafc",fontWeight:(form.sign_contract!==false)===val?700:400}}>
+                <input type="radio" name="sign_contract" checked={(form.sign_contract!==false)===val} onChange={()=>sf("sign_contract",val)} style={{accentColor:"#15803d"}}/>{lbl}
+              </label>
+            ))}
+          </div>
+          <div style={{fontSize:11,color:"#166534",marginTop:6}}>When set to Yes, the company seal is applied on the Contract and Proforma Invoice PDFs. When No, both are exported without the seal.</div>
         </div>
 
         <SH t="Special Conditions (Optional)"/>
@@ -4137,7 +4154,7 @@ function exportContractPDF(contract, buyer, consignee) {
     doc.setFont(undefined, "normal"); doc.setFontSize(7); doc.setTextColor(150, 150, 150);
     doc.text(label, x + sigW / 2, y + 4, { align: "center" });
 
-    if(isSeller){
+    if(isSeller && contract.sign_contract!==false){
       const sealImg = (seller === COMPANIES.vjra) ? VJRA_SEAL_B64 : SEAL_B64;
       const sealType = "PNG"; // both Devratan and VJRA seals are transparent PNGs
       // Devratan's image is signature + round stamp side by side (aspect ~1.63:1),
@@ -4488,7 +4505,7 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
   const piSealW=28;
   const piSealH=isVJRA?28:(piSealW/1.626);
   const piSealY=isVJRA?(y+12):(y+12+(20-piSealH)/2);
-  try{if(piSealImg)doc.addImage(piSealImg,piSealType,sigX+sigW/2-piSealW/2,piSealY,piSealW,piSealH);}catch(e){}
+  try{if(piSealImg&&contract.sign_contract!==false)doc.addImage(piSealImg,piSealType,sigX+sigW/2-piSealW/2,piSealY,piSealW,piSealH);}catch(e){}
   // Signature line
   doc.setDrawColor(...dgray); doc.setLineWidth(0.4);
   doc.line(sigX+8,y+43,sigX+sigW-8,y+43);
@@ -10282,6 +10299,8 @@ export default function App(){
   const [showImport,setShowImport]=useState(false);
   const [shareText,setShareText]=useState(null);
   const [deleteId,setDeleteId]=useState(null);
+  const [deleteBuyerConfirmId,setDeleteBuyerConfirmId]=useState(null); // buyer id pending admin password confirmation
+  const [deleteBCConfirm,setDeleteBCConfirm]=useState(null); // bc object pending admin password confirmation
   const [search,setSearch]=useState("");
   const [sortCol,setSortCol]=useState("invoice_date");
   const [sortDir,setSortDir]=useState("desc");
@@ -10513,12 +10532,28 @@ export default function App(){
     setSaving(false);
   };
 
-  const deleteBuyer=async(id)=>{
-    if(!window.confirm("Delete this buyer?"))return;
+  const deleteBuyer=(id)=>{
+    if(!isAdmin){alert("Only an admin can delete a buyer.");return;}
+    setDeleteBuyerConfirmId(id);
+  };
+  const confirmDeleteBuyer=async()=>{
+    const id=deleteBuyerConfirmId;
+    setDeleteBuyerConfirmId(null);
     setSaving(true);
     try{await sb(`buyers?id=eq.${id}`,{method:"DELETE"});await loadAll();}
     catch(e){alert("Error: "+e.message);}
     setSaving(false);
+  };
+
+  const confirmDeleteBC=async()=>{
+    const bc=deleteBCConfirm;
+    setDeleteBCConfirm(null);
+    try{
+      await sb(`brc_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});
+      await sb(`irm_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});
+      await sb(`bill_collections?id=eq.${bc.id}`,{method:"DELETE"});
+      await loadAll();
+    }catch(e){alert("Error: "+e.message);}
   };
 
   // ── Contract CRUD ───────────────────────────────────────────────────────────
@@ -11136,7 +11171,7 @@ export default function App(){
                       </div>
                       <div style={{display:"flex",gap:6}}>
                         {canManageContracts&&<button onClick={()=>{setEditBuyer(b);setShowBuyerForm(true);}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
-                        {canDeleteContracts&&<button onClick={()=>deleteBuyer(b.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
+                        {isAdmin&&<button onClick={()=>deleteBuyer(b.id)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
                       </div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:6,fontSize:11}}>
@@ -11348,15 +11383,7 @@ export default function App(){
                           <button onClick={()=>exportBCPDF(bc)} style={{background:"#eff6ff",color:"#0369a1",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📄 PDF</button>
                           <button onClick={()=>setBCDocsId(bc.id)} style={{background:"#f0fdf4",color:"#16a34a",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>📁 Docs</button>
                           {canEdit&&<button onClick={()=>{setEditBC(bc);setShowBC(true);}} style={{background:"#dbeafe",color:"#1d4ed8",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>}
-                          {canDelete&&<button onClick={async()=>{
-                            if(!window.confirm(`Delete BC ${bc.bc_no}?`))return;
-                            try{
-                              await sb(`brc_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});
-                              await sb(`irm_entries?bc_id=eq.${bc.id}`,{method:"DELETE"});
-                              await sb(`bill_collections?id=eq.${bc.id}`,{method:"DELETE"});
-                              await loadAll();
-                            }catch(e){alert("Error: "+e.message);}
-                          }} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
+                          {isAdmin&&<button onClick={()=>setDeleteBCConfirm(bc)} style={{background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Delete</button>}
                         </div>
                       </div>
                       {/* IRM + BRC summary inside BC card — derive from linked_brcs */}
@@ -11622,6 +11649,8 @@ export default function App(){
           </div>
         </div>
       )}
+      {deleteBuyerConfirmId&&<AdminDeleteConfirm userEmail={userInfo?.email} itemLabel="this buyer" onConfirm={confirmDeleteBuyer} onCancel={()=>setDeleteBuyerConfirmId(null)}/>}
+      {deleteBCConfirm&&<AdminDeleteConfirm userEmail={userInfo?.email} itemLabel={`Bill Collection ${deleteBCConfirm.bc_no||""}`} onConfirm={confirmDeleteBC} onCancel={()=>setDeleteBCConfirm(null)}/>}
     </div>
   );
 }
