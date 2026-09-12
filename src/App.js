@@ -10915,7 +10915,8 @@ function AppInner(){
       )}
       <div style={{background:"#fff",borderBottom:"1px solid #e2e8f0",display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
         {[["dashboard","📊 Dashboard"],["shipments","📦 Register"],
-          ...(!isJuniorAccountant?[["profitability","💰 P&L"],["bcmanager","🏦 Bill Coll."],["banking","🏛 Banking Forms"],["invoicing","📄 Invoicing"]]:[]),
+          ...(isAdmin?[["profitability","💰 P&L"]]:[]),
+          ...(!isJuniorAccountant?[["bcmanager","🏦 Bill Coll."],["banking","🏛 Banking Forms"],["invoicing","📄 Invoicing"]]:[]),
           ["buyers","👥 Buyers"],
           ...(!isJuniorAccountant||true?[["contracts","📋 Contracts"]]:[]),
           ...(isAdmin?[["calculator","🧮 Price Calc"]]:[]),
@@ -11151,7 +11152,7 @@ function AppInner(){
           </div>
         )}
 
-        {tab==="profitability"&&(
+        {tab==="profitability"&&isAdmin&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
               <div><h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>Profitability (P&L)</h2><p style={{margin:0,fontSize:11,color:"#64748b"}}>FY {fy}</p></div>
