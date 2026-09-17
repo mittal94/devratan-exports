@@ -2880,6 +2880,8 @@ function ProformaInvoiceModal({contract, buyer, onClose, onSave}) {
   );
   const [validityDate, setValidityDate] = useState(contract.pi_validity || fmt(defaultValidity));
   const [advancePct, setAdvancePct] = useState(contract.pi_advance_pct != null ? String(contract.pi_advance_pct) : "");
+  const hasConsignee = !!(contract.consignee_id && contract.consignee_name);
+  const [showConsignee, setShowConsignee] = useState(false);
 
   const seller = COMPANIES[(contract.seller_company||"devratan")] || COMPANIES.devratan;
   const bank   = BANK_DETAILS[(contract.seller_company||"devratan")] || BANK_DETAILS.devratan;
@@ -2936,6 +2938,19 @@ function ProformaInvoiceModal({contract, buyer, onClose, onSave}) {
           <div style={{fontSize:10,color:"#94a3b8",marginTop:3}}>Leave blank if not applicable</div>
         </div>
 
+        {/* Show Consignee toggle */}
+        {hasConsignee&&(
+          <div style={{background:"#eff6ff",borderRadius:8,padding:"10px 12px",marginBottom:14,border:"1px solid #bfdbfe"}}>
+            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+              <input type="checkbox" checked={showConsignee} onChange={e=>setShowConsignee(e.target.checked)} style={{width:15,height:15,cursor:"pointer"}}/>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:"#1d4ed8"}}>Show Consignee on PI</div>
+                <div style={{fontSize:10.5,color:"#3b82f6",marginTop:1}}>Adds a CONSIGNEE row ({contract.consignee_name}) alongside Buyer — useful when they're different parties.</div>
+              </div>
+            </label>
+          </div>
+        )}
+
         {/* Bank preview */}
         <div style={{background:"#eff6ff",borderRadius:8,padding:"10px 12px",marginBottom:16,fontSize:11}}>
           <div style={{fontWeight:700,color:"#1d4ed8",marginBottom:4}}>🏦 {bank.bankName} — {bank.branch}</div>
@@ -2946,7 +2961,7 @@ function ProformaInvoiceModal({contract, buyer, onClose, onSave}) {
           <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600}}>Cancel</button>
           <button
             onClick={()=>{
-              exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePct ? Number(advancePct) : null);
+              exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePct ? Number(advancePct) : null, showConsignee);
               if (onSave) onSave({ pi_no: piNo, pi_validity: validityDate, pi_advance_pct: advancePct ? Number(advancePct) : null });
               onClose();
             }}
@@ -4243,7 +4258,7 @@ function numberToWords(amount) {
   return result + " ONLY";
 }
 
-function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePct) {
+function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePct, showConsignee) {
   const JPDF = getPDF();
   if (!JPDF) { alert("PDF library not loaded."); return; }
   const doc = new JPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -4301,6 +4316,9 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
     {lbl:"SELLER",name:seller.name,addr:seller.address},
     {lbl:"BUYER",name:buyer?.buyer_name||"",addr:[buyer?.address||"",piContactLine(buyer)].filter(Boolean).join("\n")},
   ];
+  if(showConsignee && contract.consignee_name){
+    partyRows.push({lbl:"CONSIGNEE",name:contract.consignee_name,addr:contract.consignee_address||""});
+  }
   const lblW=18,nameW=52,addrW=pw-lblW-nameW;
   partyRows.forEach(row=>{
     const addrLines=doc.splitTextToSize(row.addr,addrW-4);
