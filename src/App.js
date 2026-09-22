@@ -260,6 +260,19 @@ const authFetch = async (path, opts = {}) => {
   return data;
 };
 
+// Sorts invoices by their invoice number, latest first — numeric-aware so
+// "...-14" correctly ranks above "...-9" (a plain string sort would put
+// "-14" before "-9" since '1' < '9' character-by-character).
+const naturalInvoiceSort=(a,b)=>{
+  const numA=(String(a.invoice_no||"").match(/(\d+)(?!.*\d)/)||[])[1];
+  const numB=(String(b.invoice_no||"").match(/(\d+)(?!.*\d)/)||[])[1];
+  if(numA&&numB){
+    const diff=parseInt(numB,10)-parseInt(numA,10);
+    if(diff!==0) return diff;
+  }
+  return String(b.invoice_no||"").localeCompare(String(a.invoice_no||""));
+};
+
 const COMPANIES = {
   devratan: {
     id: "devratan",
@@ -8173,7 +8186,7 @@ function InvoicingTab({buyers, userInfo}){
     setLoading(true);
     try{
       const r=await sb("invoices?select=id,invoice_no,invoice_date,contract_no,form_data&order=invoice_date.desc");
-      setInvoices(r||[]);
+      setInvoices((r||[]).sort(naturalInvoiceSort));
     }catch(e){console.error(e);}
     setLoading(false);
   };
@@ -9163,7 +9176,7 @@ function VJRAInvoicingTab({buyers, userInfo}){
   useEffect(()=>{loadInvoices();loadDevInvoices();},[]);
   const loadInvoices=async()=>{
     setLoading(true);
-    try{const r=await sb("vjra_invoices?select=id,invoice_no,invoice_date,linked_devratan_no,form_data&order=invoice_date.desc");setInvoices(r||[]);}
+    try{const r=await sb("vjra_invoices?select=id,invoice_no,invoice_date,linked_devratan_no,form_data&order=invoice_date.desc");setInvoices((r||[]).sort(naturalInvoiceSort));}
     catch(e){console.error(e);}
     setLoading(false);
   };
