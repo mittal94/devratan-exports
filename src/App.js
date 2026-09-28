@@ -4460,30 +4460,36 @@ function exportProformaInvoicePDF(contract, buyer, piNo, validityDate, advancePc
     ["SWIFT Code",bank?.swift||"SBININBB711"],
     ["Currency","USD"],
   ];
-  const sideRowH=6;
+  const sideRowMinH=6, sideLineH=3.4;
   const maxRows=Math.max(termRows.length,bankRows.length);
   for(let i=0;i<maxRows;i++){
     const bg=i%2===0?[249,251,255]:white;
+    const lBold=i===4; // payment terms bold
+    const rBold=bankRows[i]?["Beneficiary","Account No.","IBAN","SWIFT Code"].includes(bankRows[i][0]):false;
+    // Measure wrapped lines with the same font used to draw them, then size
+    // the row (both columns share it, so they stay aligned) to fit the tallest.
+    let lLines=[], rLines=[];
+    if(termRows[i]){ NF(lBold,7.5); lLines=doc.splitTextToSize(termRows[i][1],valColW_l-4); }
+    if(bankRows[i]){ NF(rBold,7.5); rLines=doc.splitTextToSize(bankRows[i][1],valColW_r-4); }
+    const rowH=Math.max(sideRowMinH,Math.max(lLines.length,rLines.length,1)*sideLineH+2.8);
     // Left col
     if(termRows[i]){
-      RECT(M,y,lblColW_l,sideRowH,lgray);
-      RECT(M+lblColW_l,y,valColW_l,sideRowH,bg);
+      RECT(M,y,lblColW_l,rowH,lgray);
+      RECT(M+lblColW_l,y,valColW_l,rowH,bg);
       NF(true,7,navy); doc.text(termRows[i][0],M+3,y+4.2);
-      const isBold=i===4; // payment terms bold
-      NF(isBold,7.5,isBold?navy:[0,0,0]);
-      doc.text(doc.splitTextToSize(termRows[i][1],valColW_l-4),M+lblColW_l+3,y+4.2);
+      NF(lBold,7.5,lBold?navy:[0,0,0]);
+      doc.text(lLines,M+lblColW_l+3,y+4.2);
     }
     // Right col
     if(bankRows[i]){
       const rx=M+lw+gap;
-      RECT(rx,y,lblColW_r,sideRowH,lgray);
-      RECT(rx+lblColW_r,y,valColW_r,sideRowH,bg);
+      RECT(rx,y,lblColW_r,rowH,lgray);
+      RECT(rx+lblColW_r,y,valColW_r,rowH,bg);
       NF(true,7,navy); doc.text(bankRows[i][0],rx+3,y+4.2);
-      const isBold=["Beneficiary","Account No.","IBAN","SWIFT Code"].includes(bankRows[i][0]);
-      NF(isBold,7.5,isBold?navy:[0,0,0]);
-      doc.text(doc.splitTextToSize(bankRows[i][1],valColW_r-4),rx+lblColW_r+3,y+4.2);
+      NF(rBold,7.5,rBold?navy:[0,0,0]);
+      doc.text(rLines,rx+lblColW_r+3,y+4.2);
     }
-    y+=sideRowH;
+    y+=rowH;
   }
   y+=3;
 
