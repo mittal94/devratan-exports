@@ -8840,16 +8840,6 @@ function InvoicingTab({buyers, userInfo}){
     y=renderParties(doc,form.parties.pl,M,y,RW,false,"","");
     y+=2; y=renderInfoRow(doc,M,y,RW); y+=3;
 
-    // Per Bag Net/Gross Wt — shown above the items table (whose last two columns
-    // are the Net/Gross Wt totals), only when there's exactly one item.
-    if(form.items.length===1){
-      const onlyItem=form.items[0];
-      const perBagNet=n(onlyItem.bag_net_wt), perBagGross=n(onlyItem.bag_gross_wt);
-      invNF(doc,true,8);
-      doc.text("Per Bag Net Wt: "+(perBagNet?perBagNet.toLocaleString("en-IN"):"—")+" Kg    |    Per Bag Gross Wt: "+(perBagGross?perBagGross.toLocaleString("en-IN"):"—")+" Kg",M,y);
-      y+=4.5;
-    }
-
     invNF(doc,true,8); doc.text("Items:",M,y); y+=3;
     const {y:y2,totalGross:plGross,totalNet:plNet}=renderItemsTable(doc,M,y,RW,false);
     y=y2+2;
