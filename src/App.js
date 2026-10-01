@@ -10041,6 +10041,9 @@ function MasterDropdown({label, value, onChange, options, onAddNew}){
 
 function BrokerPurchaseTab(){
   const n=v=>parseFloat(String(v||0).replace(/,/g,""))||0;
+  // SmartDate displays/returns DD.MM.YYYY; Postgres needs YYYY-MM-DD.
+  const toISO=v=>{if(!v)return "";if(v.includes("-"))return v;const p=v.split(".");return(p[2]&&p[1]&&p[0])?p[2]+"-"+p[1].padStart(2,"0")+"-"+p[0].padStart(2,"0"):"";};
+  const toDD=v=>{if(!v)return "";if(v.includes(".")||!v.includes("-"))return v;const p=v.split("-");return p[2]+"."+p[1]+"."+p[0];};
   const EMPTY={
     soda_date:"", broker_name:"", seller_name:"", item_name:"",
     soda_qty:"", loading_qty:"", soda_rate:"", brokerage_rate:"",
@@ -10090,7 +10093,7 @@ function BrokerPurchaseTab(){
     }
     setSaving(true);
     const payload={
-      soda_date:form.soda_date,
+      soda_date:toISO(form.soda_date),
       broker_name:form.broker_name,
       seller_name:form.seller_name,
       item_name:form.item_name,
@@ -10113,7 +10116,7 @@ function BrokerPurchaseTab(){
 
   const openEdit=(row)=>{
     setForm({
-      soda_date:row.soda_date||"",
+      soda_date:toDD(row.soda_date||""),
       broker_name:row.broker_name||"",
       seller_name:row.seller_name||"",
       item_name:row.item_name||"",
@@ -10226,7 +10229,7 @@ function BrokerPurchaseTab(){
                   {entries.map((e,i)=>(
                     <tr key={e.id} style={{borderBottom:"1px solid #f1f5f9"}}>
                       <td style={{padding:"7px 10px"}}>{i+1}</td>
-                      <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>{e.soda_date||"—"}</td>
+                      <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>{toDD(e.soda_date)||"—"}</td>
                       <td style={{padding:"7px 10px"}}>{e.broker_name}</td>
                       <td style={{padding:"7px 10px"}}>{e.seller_name}</td>
                       <td style={{padding:"7px 10px"}}>{e.item_name}</td>
