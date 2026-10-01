@@ -10176,7 +10176,7 @@ function BrokerPurchaseTab(){
             <h3 style={{margin:0,color:"#1e3a5f",fontSize:15}}>{editId?"Edit Entry":"New Entry"}</h3>
             <button onClick={resetForm} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:13}}>✕ Cancel</button>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12}}>
+          <div style={{maxWidth:640}}>
             <FRow label="Soda Date" required><SmartDate value={form.soda_date} onChange={v=>sf("soda_date",v)}/></FRow>
             <FRow label="Broker Name" required>
               <MasterDropdown label="broker" value={form.broker_name} onChange={v=>sf("broker_name",v)} options={brokers} onAddNew={addBroker}/>
@@ -10198,9 +10198,7 @@ function BrokerPurchaseTab(){
             <FRow label="Seller Side Brokerage (deduction)">
               <FInput value={form.seller_side_brokerage} onChange={v=>sf("seller_side_brokerage",v)} placeholder="Flat amount, if any — optional"/>
             </FRow>
-            <div style={{gridColumn:"1 / -1"}}>
-              <FRow label="Remark"><FTextarea value={form.remark} onChange={v=>sf("remark",v)}/></FRow>
-            </div>
+            <FRow label="Remark"><FTextarea value={form.remark} onChange={v=>sf("remark",v)}/></FRow>
           </div>
           <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
             <button onClick={resetForm} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600,fontSize:13}}>Cancel</button>
