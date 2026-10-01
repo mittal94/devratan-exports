@@ -10000,6 +10000,298 @@ const DEFAULT_PACKING_COSTS = [
   {id:18, label:"1KG Pouch in 20KG Cartoon",                                  cost:5100},
 ];
 
+// ── Broker Purchase Sheet ─────────────────────────────────────────────────────
+// A small reusable "dropdown + add new master entry" control, used for the
+// Broker/Seller/Item pickers below.
+function MasterDropdown({label, value, onChange, options, onAddNew}){
+  const [adding,setAdding]=useState(false);
+  const [newName,setNewName]=useState("");
+  const [busy,setBusy]=useState(false);
+  const submit=async()=>{
+    if(!newName.trim())return;
+    setBusy(true);
+    try{ await onAddNew(newName.trim()); setNewName(""); setAdding(false); }
+    catch(e){ alert("Error: "+e.message); }
+    setBusy(false);
+  };
+  return(
+    <div>
+      {!adding?(
+        <div style={{display:"flex",gap:6}}>
+          <select value={value} onChange={e=>onChange(e.target.value)} style={{...iS,flex:1}}>
+            <option value="">— Select —</option>
+            {options.map(o=><option key={o.id} value={o.name}>{o.name}</option>)}
+          </select>
+          <button type="button" onClick={()=>setAdding(true)} title={"Add new "+label}
+            style={{background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe",borderRadius:6,width:34,cursor:"pointer",fontWeight:700,fontSize:16}}>+</button>
+        </div>
+      ):(
+        <div style={{display:"flex",gap:6}}>
+          <input autoFocus value={newName} onChange={e=>setNewName(e.target.value)} placeholder={"New "+label+" name"}
+            style={{...iS,flex:1}} onKeyDown={e=>e.key==="Enter"&&submit()}/>
+          <button type="button" onClick={submit} disabled={busy}
+            style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:6,padding:"0 12px",cursor:"pointer",fontWeight:700,fontSize:12}}>{busy?"…":"Add"}</button>
+          <button type="button" onClick={()=>{setAdding(false);setNewName("");}}
+            style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:6,padding:"0 10px",cursor:"pointer",fontSize:12}}>✕</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BrokerPurchaseTab(){
+  const n=v=>parseFloat(String(v||0).replace(/,/g,""))||0;
+  const EMPTY={
+    soda_date:"", broker_name:"", seller_name:"", item_name:"",
+    soda_qty:"", loading_qty:"", soda_rate:"", brokerage_rate:"",
+    seller_side_brokerage:"", remark:"",
+  };
+
+  const [view,setView]=useState("list"); // "list" | "summary"
+  const [entries,setEntries]=useState([]);
+  const [brokers,setBrokers]=useState([]);
+  const [sellers,setSellers]=useState([]);
+  const [items,setItems]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [showForm,setShowForm]=useState(false);
+  const [editId,setEditId]=useState(null);
+  const [form,setForm]=useState(EMPTY);
+  const [saving,setSaving]=useState(false);
+
+  useEffect(()=>{loadAll();},[]);
+
+  const loadAll=async()=>{
+    setLoading(true);
+    try{
+      const [e,b,s,i]=await Promise.all([
+        sb("broker_purchases?select=*&order=soda_date.desc,id.desc"),
+        sb("broker_masters?select=*&order=name.asc"),
+        sb("seller_masters?select=*&order=name.asc"),
+        sb("item_masters?select=*&order=name.asc"),
+      ]);
+      setEntries(e||[]); setBrokers(b||[]); setSellers(s||[]); setItems(i||[]);
+    }catch(err){ console.error(err); }
+    setLoading(false);
+  };
+
+  const sf=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const resetForm=()=>{ setForm(EMPTY); setEditId(null); setShowForm(false); };
+
+  const addBroker=async(name)=>{ await sb("broker_masters",{method:"POST",body:JSON.stringify({name})}); await loadAll(); sf("broker_name",name); };
+  const addSeller=async(name)=>{ await sb("seller_masters",{method:"POST",body:JSON.stringify({name})}); await loadAll(); sf("seller_name",name); };
+  const addItem=async(name)=>{ await sb("item_masters",{method:"POST",body:JSON.stringify({name})}); await loadAll(); sf("item_name",name); };
+
+  const brokerageAmount=n(form.loading_qty)*n(form.brokerage_rate);
+
+  const saveEntry=async()=>{
+    if(!form.soda_date||!form.broker_name||!form.seller_name||!form.item_name||!form.loading_qty||!form.brokerage_rate){
+      alert("Please fill Soda Date, Broker, Seller, Item, Loading Qty and Brokerage Rate.");
+      return;
+    }
+    setSaving(true);
+    const payload={
+      soda_date:form.soda_date,
+      broker_name:form.broker_name,
+      seller_name:form.seller_name,
+      item_name:form.item_name,
+      soda_qty:form.soda_qty?n(form.soda_qty):null,
+      loading_qty:n(form.loading_qty),
+      soda_rate:form.soda_rate?n(form.soda_rate):null,
+      brokerage_rate:n(form.brokerage_rate),
+      brokerage_amount:brokerageAmount,
+      seller_side_brokerage:form.seller_side_brokerage?n(form.seller_side_brokerage):null,
+      remark:form.remark||null,
+    };
+    try{
+      if(editId){ await sb(`broker_purchases?id=eq.${editId}`,{method:"PATCH",body:JSON.stringify(payload)}); }
+      else { await sb("broker_purchases",{method:"POST",body:JSON.stringify(payload)}); }
+      await loadAll();
+      resetForm();
+    }catch(e){ alert("Error: "+e.message); }
+    setSaving(false);
+  };
+
+  const openEdit=(row)=>{
+    setForm({
+      soda_date:row.soda_date||"",
+      broker_name:row.broker_name||"",
+      seller_name:row.seller_name||"",
+      item_name:row.item_name||"",
+      soda_qty:row.soda_qty!=null?String(row.soda_qty):"",
+      loading_qty:row.loading_qty!=null?String(row.loading_qty):"",
+      soda_rate:row.soda_rate!=null?String(row.soda_rate):"",
+      brokerage_rate:row.brokerage_rate!=null?String(row.brokerage_rate):"",
+      seller_side_brokerage:row.seller_side_brokerage!=null?String(row.seller_side_brokerage):"",
+      remark:row.remark||"",
+    });
+    setEditId(row.id);
+    setShowForm(true);
+  };
+
+  // Broker-wise summary — recomputed live from loading qty × brokerage rate,
+  // never trusted from a possibly-stale stored value.
+  const summary=useMemo(()=>{
+    const map={};
+    entries.forEach(e=>{
+      const k=e.broker_name||"—";
+      if(!map[k]) map[k]={broker:k,count:0,sodaQty:0,loadingQty:0,brokerageAmt:0,sellerSideBrokerage:0};
+      map[k].count+=1;
+      map[k].sodaQty+=n(e.soda_qty);
+      map[k].loadingQty+=n(e.loading_qty);
+      map[k].brokerageAmt+=n(e.loading_qty)*n(e.brokerage_rate);
+      map[k].sellerSideBrokerage+=n(e.seller_side_brokerage);
+    });
+    return Object.values(map).sort((a,b)=>b.brokerageAmt-a.brokerageAmt);
+  },[entries]);
+
+  const grandTotal=useMemo(()=>summary.reduce((acc,s)=>({
+    count:acc.count+s.count, sodaQty:acc.sodaQty+s.sodaQty, loadingQty:acc.loadingQty+s.loadingQty,
+    brokerageAmt:acc.brokerageAmt+s.brokerageAmt, sellerSideBrokerage:acc.sellerSideBrokerage+s.sellerSideBrokerage,
+  }),{count:0,sodaQty:0,loadingQty:0,brokerageAmt:0,sellerSideBrokerage:0}),[summary]);
+
+  const fmt=v=>v?v.toLocaleString("en-IN",{maximumFractionDigits:2}):"—";
+
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
+        <div>
+          <h2 style={{margin:"0 0 2px",color:"#1e3a5f",fontSize:17}}>🤝 Broker Purchase Sheet</h2>
+          <p style={{margin:0,fontSize:11,color:"#64748b"}}>{entries.length} entries · admin only</p>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <div style={{display:"flex",background:"#f1f5f9",borderRadius:8,padding:3}}>
+            <button onClick={()=>setView("list")} style={{background:view==="list"?"#fff":"none",boxShadow:view==="list"?"0 1px 3px rgba(0,0,0,0.1)":"none",border:"none",borderRadius:6,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:12,color:view==="list"?"#1e3a5f":"#64748b"}}>Entries</button>
+            <button onClick={()=>setView("summary")} style={{background:view==="summary"?"#fff":"none",boxShadow:view==="summary"?"0 1px 3px rgba(0,0,0,0.1)":"none",border:"none",borderRadius:6,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:12,color:view==="summary"?"#1e3a5f":"#64748b"}}>Broker Summary</button>
+          </div>
+          {view==="list"&&<button onClick={()=>{resetForm();setShowForm(true);}}
+            style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+            + New Entry
+          </button>}
+        </div>
+      </div>
+
+      {showForm&&(
+        <div style={{background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:18}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <h3 style={{margin:0,color:"#1e3a5f",fontSize:15}}>{editId?"Edit Entry":"New Entry"}</h3>
+            <button onClick={resetForm} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:13}}>✕ Cancel</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12}}>
+            <FRow label="Soda Date" required><SmartDate value={form.soda_date} onChange={v=>sf("soda_date",v)}/></FRow>
+            <FRow label="Broker Name" required>
+              <MasterDropdown label="broker" value={form.broker_name} onChange={v=>sf("broker_name",v)} options={brokers} onAddNew={addBroker}/>
+            </FRow>
+            <FRow label="Seller Name" required>
+              <MasterDropdown label="seller" value={form.seller_name} onChange={v=>sf("seller_name",v)} options={sellers} onAddNew={addSeller}/>
+            </FRow>
+            <FRow label="Item" required>
+              <MasterDropdown label="item" value={form.item_name} onChange={v=>sf("item_name",v)} options={items} onAddNew={addItem}/>
+            </FRow>
+            <FRow label="Soda Qty (Qtl)"><FInput value={form.soda_qty} onChange={v=>sf("soda_qty",v)} placeholder="e.g. 500"/></FRow>
+            <FRow label="Loading Qty (Qtl)" required><FInput value={form.loading_qty} onChange={v=>sf("loading_qty",v)} placeholder="e.g. 495"/></FRow>
+            <FRow label="Soda Rate"><FInput value={form.soda_rate} onChange={v=>sf("soda_rate",v)} placeholder="Rate per Qtl"/></FRow>
+            <FRow label="Brokerage Rate (Per Qtl)" required><FInput value={form.brokerage_rate} onChange={v=>sf("brokerage_rate",v)} placeholder="e.g. 5"/></FRow>
+            <FRow label="Brokerage Amount">
+              <input value={brokerageAmount?brokerageAmount.toLocaleString("en-IN",{maximumFractionDigits:2}):""} readOnly
+                style={{...iS,background:"#f0fdf4",color:"#15803d",fontWeight:700,cursor:"default"}}/>
+            </FRow>
+            <FRow label="Seller Side Brokerage (deduction)">
+              <FInput value={form.seller_side_brokerage} onChange={v=>sf("seller_side_brokerage",v)} placeholder="Flat amount, if any — optional"/>
+            </FRow>
+            <div style={{gridColumn:"1 / -1"}}>
+              <FRow label="Remark"><FTextarea value={form.remark} onChange={v=>sf("remark",v)}/></FRow>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
+            <button onClick={resetForm} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 18px",cursor:"pointer",fontWeight:600,fontSize:13}}>Cancel</button>
+            <button onClick={saveEntry} disabled={saving}
+              style={{background:"linear-gradient(135deg,#1e3a5f,#16a34a)",color:"#fff",border:"none",borderRadius:8,padding:"8px 20px",cursor:"pointer",fontWeight:700,fontSize:13}}>
+              {saving?"Saving…":editId?"Update Entry":"Save Entry"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading?<div style={{textAlign:"center",padding:40,color:"#94a3b8"}}>Loading…</div>:
+        view==="list"?(
+          entries.length===0?<div style={{textAlign:"center",padding:40,color:"#94a3b8"}}>No entries yet.</div>:(
+            <div style={{overflowX:"auto",background:"#fff",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead>
+                  <tr style={{background:"#f8fafc",borderBottom:"2px solid #e2e8f0"}}>
+                    {["S.No","Soda Date","Broker","Seller","Item","Soda Qty","Loading Qty","Soda Rate","Brokerage Rate","Brokerage Amt","Seller Side Brok.","Remark",""].map(h=>(
+                      <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:"#374151",whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {entries.map((e,i)=>(
+                    <tr key={e.id} style={{borderBottom:"1px solid #f1f5f9"}}>
+                      <td style={{padding:"7px 10px"}}>{i+1}</td>
+                      <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>{e.soda_date||"—"}</td>
+                      <td style={{padding:"7px 10px"}}>{e.broker_name}</td>
+                      <td style={{padding:"7px 10px"}}>{e.seller_name}</td>
+                      <td style={{padding:"7px 10px"}}>{e.item_name}</td>
+                      <td style={{padding:"7px 10px"}}>{fmt(n(e.soda_qty))}</td>
+                      <td style={{padding:"7px 10px"}}>{fmt(n(e.loading_qty))}</td>
+                      <td style={{padding:"7px 10px"}}>{fmt(n(e.soda_rate))}</td>
+                      <td style={{padding:"7px 10px"}}>{fmt(n(e.brokerage_rate))}</td>
+                      <td style={{padding:"7px 10px",fontWeight:700,color:"#15803d"}}>{fmt(n(e.loading_qty)*n(e.brokerage_rate))}</td>
+                      <td style={{padding:"7px 10px",color:e.seller_side_brokerage?"#dc2626":"#94a3b8"}}>{e.seller_side_brokerage?fmt(n(e.seller_side_brokerage)):"—"}</td>
+                      <td style={{padding:"7px 10px",maxWidth:160,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={e.remark||""}>{e.remark||"—"}</td>
+                      <td style={{padding:"7px 10px"}}>
+                        <button onClick={()=>openEdit(e)} style={{background:"#eff6ff",color:"#1d4ed8",border:"none",borderRadius:5,padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Edit</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ):(
+          <div style={{overflowX:"auto",background:"#fff",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.07)"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead>
+                <tr style={{background:"#f8fafc",borderBottom:"2px solid #e2e8f0"}}>
+                  {["Broker","Entries","Total Soda Qty","Total Loading Qty","Total Brokerage Amt","Total Seller Side Brok."].map(h=>(
+                    <th key={h} style={{padding:"9px 10px",textAlign:"left",fontWeight:700,color:"#374151",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {summary.length===0?(
+                  <tr><td colSpan={6} style={{textAlign:"center",padding:30,color:"#94a3b8"}}>No entries yet.</td></tr>
+                ):summary.map(s=>(
+                  <tr key={s.broker} style={{borderBottom:"1px solid #f1f5f9"}}>
+                    <td style={{padding:"8px 10px",fontWeight:700,color:"#1e3a5f"}}>{s.broker}</td>
+                    <td style={{padding:"8px 10px"}}>{s.count}</td>
+                    <td style={{padding:"8px 10px"}}>{fmt(s.sodaQty)}</td>
+                    <td style={{padding:"8px 10px"}}>{fmt(s.loadingQty)}</td>
+                    <td style={{padding:"8px 10px",fontWeight:700,color:"#15803d"}}>{fmt(s.brokerageAmt)}</td>
+                    <td style={{padding:"8px 10px",color:s.sellerSideBrokerage?"#dc2626":"#94a3b8"}}>{s.sellerSideBrokerage?fmt(s.sellerSideBrokerage):"—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {summary.length>0&&(
+                <tfoot>
+                  <tr style={{background:"#f0fdf4",borderTop:"2px solid #bbf7d0",fontWeight:700}}>
+                    <td style={{padding:"9px 10px",color:"#15803d"}}>GRAND TOTAL</td>
+                    <td style={{padding:"9px 10px",color:"#15803d"}}>{grandTotal.count}</td>
+                    <td style={{padding:"9px 10px",color:"#15803d"}}>{fmt(grandTotal.sodaQty)}</td>
+                    <td style={{padding:"9px 10px",color:"#15803d"}}>{fmt(grandTotal.loadingQty)}</td>
+                    <td style={{padding:"9px 10px",color:"#15803d"}}>{fmt(grandTotal.brokerageAmt)}</td>
+                    <td style={{padding:"9px 10px",color:"#dc2626"}}>{grandTotal.sellerSideBrokerage?fmt(grandTotal.sellerSideBrokerage):"—"}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        )
+      }
+    </div>
+  );
+}
+
 function PriceCalculator(){
   const nv=v=>parseFloat(String(v||0).replace(/,/g,""))||0;
   const fmtINR=v=>v?v.toLocaleString("en-IN",{maximumFractionDigits:2}):"—";
@@ -10968,7 +11260,7 @@ function AppInner(){
           ...(!isJuniorAccountant?[["bcmanager","🏦 Bill Coll."],["banking","🏛 Banking Forms"],["invoicing","📄 Invoicing"]]:[]),
           ["buyers","👥 Buyers"],
           ...(!isJuniorAccountant||true?[["contracts","📋 Contracts"]]:[]),
-          ...(isAdmin?[["calculator","🧮 Price Calc"]]:[]),
+          ...(isAdmin?[["calculator","🧮 Price Calc"],["brokerpurchase","🤝 Broker Purchase"]]:[]),
         ].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)} style={{background:"none",border:"none",borderBottom:tab===k?"3px solid #1e3a5f":"3px solid transparent",color:tab===k?"#1e3a5f":"#64748b",padding:"11px 14px",cursor:"pointer",fontWeight:tab===k?700:500,fontSize:12,whiteSpace:"nowrap",flex:"1 0 auto"}}>{l}</button>
         ))}
@@ -11233,6 +11525,9 @@ function AppInner(){
         )}
         {tab==="calculator"&&isAdmin&&(
         <PriceCalculator/>
+      )}
+        {tab==="brokerpurchase"&&isAdmin&&(
+        <BrokerPurchaseTab/>
       )}
             {tab==="buyers"&&(
           <div>
